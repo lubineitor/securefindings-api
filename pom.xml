@@ -14,7 +14,7 @@
         <relativePath/>
     </parent>
 
-    <groupId>com.lubineitor</groupId>
+    <groupId>com.securefindings</groupId>
     <artifactId>securefindings-api</artifactId>
     <version>0.0.1-SNAPSHOT</version>
 
