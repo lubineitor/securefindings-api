@@ -1,5 +1,8 @@
 package com.securefindings.finding.api;
 
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -7,8 +10,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 
+import java.util.List;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
@@ -16,27 +19,31 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
-import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.securefindings.api.error.GlobalExceptionHandler;
+import com.securefindings.finding.application.FindingNotFoundException;
 import com.securefindings.finding.application.FindingService;
 import com.securefindings.finding.domain.Finding;
 import com.securefindings.finding.domain.FindingSeverity;
+import com.securefindings.finding.domain.FindingStatus;
 
 @WebMvcTest(FindingController.class)
-@Import({ FindingService.class, GlobalExceptionHandler.class })
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
+@Import(GlobalExceptionHandler.class)
 class FindingControllerTest {
 
         @Autowired
         private MockMvc mockMvc;
 
-        @Autowired
+        @MockitoBean
         private FindingService findingService;
 
         @Test
         void deberiaDevolverUnaListaVacia() throws Exception {
+                when(findingService.findAll())
+                                .thenReturn(List.of());
+
                 mockMvc.perform(get("/api/v1/findings"))
                                 .andExpect(status().isOk())
                                 .andExpect(content().json("[]"));
@@ -44,6 +51,17 @@ class FindingControllerTest {
 
         @Test
         void deberiaCrearUnHallazgo() throws Exception {
+                Finding finding = Finding.create(
+                                "SQL Injection",
+                                "Entrada de usuario sin validar",
+                                FindingSeverity.HIGH);
+
+                when(findingService.create(
+                                "SQL Injection",
+                                "Entrada de usuario sin validar",
+                                FindingSeverity.HIGH))
+                                .thenReturn(finding);
+
                 mockMvc.perform(post("/api/v1/findings")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
@@ -54,7 +72,7 @@ class FindingControllerTest {
                                                 }
                                                 """))
                                 .andExpect(status().isCreated())
-                                .andExpect(jsonPath("$.id").exists())
+                                .andExpect(jsonPath("$.id").value(finding.id().toString()))
                                 .andExpect(jsonPath("$.title").value("SQL Injection"))
                                 .andExpect(jsonPath("$.description")
                                                 .value("Entrada de usuario sin validar"))
@@ -97,14 +115,18 @@ class FindingControllerTest {
 
         @Test
         void deberiaObtenerUnHallazgoPorSuIdentificador() throws Exception {
-                Finding finding = findingService.create(
+                Finding finding = Finding.create(
                                 "Cross-Site Scripting",
                                 "Contenido no escapado correctamente",
                                 FindingSeverity.MEDIUM);
 
+                when(findingService.getById(finding.id()))
+                                .thenReturn(finding);
+
                 mockMvc.perform(get("/api/v1/findings/{id}", finding.id()))
                                 .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.id").value(finding.id().toString()))
+                                .andExpect(jsonPath("$.id")
+                                                .value(finding.id().toString()))
                                 .andExpect(jsonPath("$.title")
                                                 .value("Cross-Site Scripting"))
                                 .andExpect(jsonPath("$.severity").value("MEDIUM"))
@@ -115,19 +137,31 @@ class FindingControllerTest {
         void deberiaDevolver404SiElHallazgoNoExiste() throws Exception {
                 UUID id = UUID.randomUUID();
 
+                when(findingService.getById(id))
+                                .thenThrow(new FindingNotFoundException(id));
+
                 mockMvc.perform(get("/api/v1/findings/{id}", id))
                                 .andExpect(status().isNotFound())
-                                .andExpect(jsonPath("$.code").value("FINDING_NOT_FOUND"))
+                                .andExpect(jsonPath("$.code")
+                                                .value("FINDING_NOT_FOUND"))
                                 .andExpect(jsonPath("$.message")
                                                 .value("No se ha encontrado el hallazgo con identificador: " + id));
         }
 
         @Test
         void deberiaActualizarElEstadoDeUnHallazgo() throws Exception {
-                Finding finding = findingService.create(
+                Finding finding = Finding.create(
                                 "SQL Injection",
                                 "Entrada de usuario sin validar",
                                 FindingSeverity.HIGH);
+
+                Finding updatedFinding = finding.withStatus(
+                                FindingStatus.RESOLVED);
+
+                when(findingService.updateStatus(
+                                finding.id(),
+                                FindingStatus.RESOLVED))
+                                .thenReturn(updatedFinding);
 
                 mockMvc.perform(patch("/api/v1/findings/{id}/status", finding.id())
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -137,32 +171,44 @@ class FindingControllerTest {
                                                 }
                                                 """))
                                 .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.id").value(finding.id().toString()))
-                                .andExpect(jsonPath("$.status").value("RESOLVED"));
+                                .andExpect(jsonPath("$.id")
+                                                .value(finding.id().toString()))
+                                .andExpect(jsonPath("$.status")
+                                                .value("RESOLVED"));
         }
 
         @Test
         void deberiaRechazarActualizacionSinEstado() throws Exception {
-                Finding finding = findingService.create(
-                                "SQL Injection",
-                                "Entrada de usuario sin validar",
-                                FindingSeverity.HIGH);
+                UUID id = UUID.randomUUID();
 
-                mockMvc.perform(patch("/api/v1/findings/{id}/status", finding.id())
+                mockMvc.perform(patch("/api/v1/findings/{id}/status", id)
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("{}"))
                                 .andExpect(status().isBadRequest())
-                                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                                .andExpect(jsonPath("$.code")
+                                                .value("VALIDATION_ERROR"))
                                 .andExpect(jsonPath("$.errors.status")
                                                 .value("El estado es obligatorio"));
         }
 
         @Test
         void deberiaActualizarLosDatosDeUnHallazgo() throws Exception {
-                Finding finding = findingService.create(
+                Finding finding = Finding.create(
                                 "SQL Injection",
                                 "Entrada sin validar",
                                 FindingSeverity.HIGH);
+
+                Finding updatedFinding = finding.withDetails(
+                                "SQL Injection corregida",
+                                "Entrada validada correctamente",
+                                FindingSeverity.CRITICAL);
+
+                when(findingService.update(
+                                finding.id(),
+                                "SQL Injection corregida",
+                                "Entrada validada correctamente",
+                                FindingSeverity.CRITICAL))
+                                .thenReturn(updatedFinding);
 
                 mockMvc.perform(put("/api/v1/findings/{id}", finding.id())
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -174,23 +220,23 @@ class FindingControllerTest {
                                                 }
                                                 """))
                                 .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.id").value(finding.id().toString()))
+                                .andExpect(jsonPath("$.id")
+                                                .value(finding.id().toString()))
                                 .andExpect(jsonPath("$.title")
                                                 .value("SQL Injection corregida"))
                                 .andExpect(jsonPath("$.description")
                                                 .value("Entrada validada correctamente"))
-                                .andExpect(jsonPath("$.severity").value("CRITICAL"))
-                                .andExpect(jsonPath("$.status").value("OPEN"));
+                                .andExpect(jsonPath("$.severity")
+                                                .value("CRITICAL"))
+                                .andExpect(jsonPath("$.status")
+                                                .value("OPEN"));
         }
 
         @Test
         void deberiaEliminarUnHallazgo() throws Exception {
-                Finding finding = findingService.create(
-                                "SQL Injection",
-                                "Entrada sin validar",
-                                FindingSeverity.HIGH);
+                UUID id = UUID.randomUUID();
 
-                mockMvc.perform(delete("/api/v1/findings/{id}", finding.id()))
+                mockMvc.perform(delete("/api/v1/findings/{id}", id))
                                 .andExpect(status().isNoContent());
         }
 
@@ -199,8 +245,13 @@ class FindingControllerTest {
                         throws Exception {
                 UUID id = UUID.randomUUID();
 
+                doThrow(new FindingNotFoundException(id))
+                                .when(findingService)
+                                .deleteById(id);
+
                 mockMvc.perform(delete("/api/v1/findings/{id}", id))
                                 .andExpect(status().isNotFound())
-                                .andExpect(jsonPath("$.code").value("FINDING_NOT_FOUND"));
+                                .andExpect(jsonPath("$.code")
+                                                .value("FINDING_NOT_FOUND"));
         }
 }

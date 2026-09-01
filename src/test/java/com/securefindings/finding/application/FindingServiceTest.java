@@ -1,128 +1,192 @@
 package com.securefindings.finding.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.securefindings.finding.domain.Finding;
 import com.securefindings.finding.domain.FindingSeverity;
 import com.securefindings.finding.domain.FindingStatus;
+import com.securefindings.finding.persistence.FindingEntity;
+import com.securefindings.finding.persistence.FindingRepository;
 
+@ExtendWith(MockitoExtension.class)
 class FindingServiceTest {
 
-        private final FindingService findingService = new FindingService();
+        @Mock
+        private FindingRepository findingRepository;
+
+        @InjectMocks
+        private FindingService findingService;
 
         @Test
-        void deberiaCrearYListarUnHallazgo() {
+        void deberiaCrearYGuardarUnHallazgo() {
+                when(findingRepository.save(any(FindingEntity.class)))
+                                .thenAnswer(invocation -> invocation.getArgument(0));
+
                 Finding finding = findingService.create(
                                 "SQL Injection",
                                 "Entrada de usuario sin validar",
                                 FindingSeverity.HIGH);
 
+                assertEquals("SQL Injection", finding.title());
+                assertEquals(FindingSeverity.HIGH, finding.severity());
+                assertEquals(FindingStatus.OPEN, finding.status());
+
+                verify(findingRepository).save(any(FindingEntity.class));
+        }
+
+        @Test
+        void deberiaListarLosHallazgosGuardados() {
+                Finding firstFinding = Finding.create(
+                                "SQL Injection",
+                                "Entrada sin validar",
+                                FindingSeverity.HIGH);
+
+                Finding secondFinding = Finding.create(
+                                "XSS",
+                                "Contenido sin escapar",
+                                FindingSeverity.MEDIUM);
+
+                when(findingRepository.findAll())
+                                .thenReturn(List.of(
+                                                new FindingEntity(firstFinding),
+                                                new FindingEntity(secondFinding)));
+
                 List<Finding> findings = findingService.findAll();
 
-                assertNotNull(finding);
-                assertEquals(1, findings.size());
-                assertEquals(finding, findings.get(0));
-                assertEquals(FindingStatus.OPEN, finding.status());
+                assertEquals(
+                                List.of(firstFinding, secondFinding),
+                                findings);
+
+                verify(findingRepository).findAll();
         }
 
         @Test
         void deberiaEncontrarUnHallazgoPorSuIdentificador() {
-                Finding createdFinding = findingService.create(
+                Finding finding = Finding.create(
                                 "Cross-Site Scripting",
                                 "Contenido no escapado correctamente",
                                 FindingSeverity.MEDIUM);
 
+                when(findingRepository.findById(finding.id()))
+                                .thenReturn(Optional.of(new FindingEntity(finding)));
+
                 Finding foundFinding = findingService
-                                .findById(createdFinding.id())
+                                .findById(finding.id())
                                 .orElseThrow();
 
-                assertEquals(createdFinding, foundFinding);
+                assertEquals(finding, foundFinding);
         }
 
         @Test
         void deberiaDevolverResultadoVacioSiElHallazgoNoExiste() {
-                assertTrue(
-                                findingService.findById(UUID.randomUUID()).isEmpty());
+                UUID id = UUID.randomUUID();
+
+                when(findingRepository.findById(id))
+                                .thenReturn(Optional.empty());
+
+                assertTrue(findingService.findById(id).isEmpty());
         }
 
         @Test
         void deberiaLanzarExcepcionSiElHallazgoNoExiste() {
+                UUID id = UUID.randomUUID();
+
+                when(findingRepository.findById(id))
+                                .thenReturn(Optional.empty());
+
                 assertThrows(
                                 FindingNotFoundException.class,
-                                () -> findingService.getById(UUID.randomUUID()));
+                                () -> findingService.getById(id));
         }
 
         @Test
         void deberiaActualizarElEstadoDeUnHallazgo() {
-                Finding createdFinding = findingService.create(
-                                "Cross-Site Scripting",
-                                "Contenido no escapado correctamente",
-                                FindingSeverity.MEDIUM);
+                Finding finding = Finding.create(
+                                "SQL Injection",
+                                "Entrada sin validar",
+                                FindingSeverity.HIGH);
+
+                when(findingRepository.findById(finding.id()))
+                                .thenReturn(Optional.of(new FindingEntity(finding)));
+
+                when(findingRepository.save(any(FindingEntity.class)))
+                                .thenAnswer(invocation -> invocation.getArgument(0));
 
                 Finding updatedFinding = findingService.updateStatus(
-                                createdFinding.id(),
-                                FindingStatus.IN_PROGRESS);
+                                finding.id(),
+                                FindingStatus.RESOLVED);
 
-                assertEquals(createdFinding.id(), updatedFinding.id());
-                assertEquals(FindingStatus.IN_PROGRESS, updatedFinding.status());
-                assertEquals(createdFinding.title(), updatedFinding.title());
-                assertEquals(createdFinding.createdAt(), updatedFinding.createdAt());
-                assertEquals(
-                                updatedFinding,
-                                findingService.getById(createdFinding.id()));
+                assertEquals(finding.id(), updatedFinding.id());
+                assertEquals(FindingStatus.RESOLVED, updatedFinding.status());
+
+                verify(findingRepository).save(any(FindingEntity.class));
         }
 
         @Test
         void deberiaActualizarLosDatosDeUnHallazgo() {
-                Finding createdFinding = findingService.create(
+                Finding finding = Finding.create(
                                 "SQL Injection",
-                                "Entrada sin validar",
-                                FindingSeverity.HIGH);
+                                "Descripción inicial",
+                                FindingSeverity.MEDIUM);
+
+                when(findingRepository.findById(finding.id()))
+                                .thenReturn(Optional.of(new FindingEntity(finding)));
+
+                when(findingRepository.save(any(FindingEntity.class)))
+                                .thenAnswer(invocation -> invocation.getArgument(0));
 
                 Finding updatedFinding = findingService.update(
-                                createdFinding.id(),
-                                "SQL Injection corregida",
-                                "Entrada validada correctamente",
-                                FindingSeverity.CRITICAL);
+                                finding.id(),
+                                "SQL Injection corregido",
+                                "Descripción actualizada",
+                                FindingSeverity.HIGH);
 
-                assertEquals(createdFinding.id(), updatedFinding.id());
-                assertEquals(createdFinding.status(), updatedFinding.status());
-                assertEquals(createdFinding.createdAt(), updatedFinding.createdAt());
-                assertEquals("SQL Injection corregida", updatedFinding.title());
-                assertEquals(
-                                "Entrada validada correctamente",
-                                updatedFinding.description());
-                assertEquals(FindingSeverity.CRITICAL, updatedFinding.severity());
-                assertEquals(
-                                updatedFinding,
-                                findingService.getById(createdFinding.id()));
+                assertEquals("SQL Injection corregido", updatedFinding.title());
+                assertEquals("Descripción actualizada", updatedFinding.description());
+                assertEquals(FindingSeverity.HIGH, updatedFinding.severity());
+
+                verify(findingRepository).save(any(FindingEntity.class));
         }
 
         @Test
-        void deberiaEliminarUnHallazgo() {
-                Finding finding = findingService.create(
-                                "SQL Injection",
-                                "Entrada sin validar",
-                                FindingSeverity.HIGH);
+        void deberiaEliminarUnHallazgoExistente() {
+                UUID id = UUID.randomUUID();
 
-                findingService.deleteById(finding.id());
+                when(findingRepository.existsById(id))
+                                .thenReturn(true);
 
-                assertTrue(
-                                findingService.findById(finding.id()).isEmpty());
+                findingService.deleteById(id);
+
+                verify(findingRepository).deleteById(id);
         }
 
         @Test
         void deberiaLanzarExcepcionAlEliminarUnHallazgoInexistente() {
+                UUID id = UUID.randomUUID();
+
+                when(findingRepository.existsById(id))
+                                .thenReturn(false);
+
                 assertThrows(
                                 FindingNotFoundException.class,
-                                () -> findingService.deleteById(UUID.randomUUID()));
+                                () -> findingService.deleteById(id));
+
+                verify(findingRepository, never()).deleteById(id);
         }
 }
