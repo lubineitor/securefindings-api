@@ -19,8 +19,7 @@ public class FindingService {
     public Finding create(
             String title,
             String description,
-            FindingSeverity severity
-    ) {
+            FindingSeverity severity) {
         Finding finding = Finding.create(title, description, severity);
         findings.put(finding.id(), finding);
         return finding;
@@ -32,5 +31,10 @@ public class FindingService {
 
     public Optional<Finding> findById(UUID id) {
         return Optional.ofNullable(findings.get(id));
+    }
+
+    public Finding getById(UUID id) {
+        return findById(id)
+                .orElseThrow(() -> new FindingNotFoundException(id));
     }
 }

@@ -2,6 +2,7 @@ package com.securefindings.finding.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
@@ -52,6 +53,14 @@ class FindingServiceTest {
     void deberiaDevolverResultadoVacioSiElHallazgoNoExiste() {
         assertTrue(
                 findingService.findById(UUID.randomUUID()).isEmpty()
+        );
+    }
+
+    @Test
+    void deberiaLanzarExcepcionSiElHallazgoNoExiste() {
+        assertThrows(
+                FindingNotFoundException.class,
+                () -> findingService.getById(UUID.randomUUID())
         );
     }
 }
