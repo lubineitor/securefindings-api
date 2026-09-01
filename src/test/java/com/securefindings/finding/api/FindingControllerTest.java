@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 
 import java.util.UUID;
 
@@ -180,5 +181,26 @@ class FindingControllerTest {
                                                 .value("Entrada validada correctamente"))
                                 .andExpect(jsonPath("$.severity").value("CRITICAL"))
                                 .andExpect(jsonPath("$.status").value("OPEN"));
+        }
+
+        @Test
+        void deberiaEliminarUnHallazgo() throws Exception {
+                Finding finding = findingService.create(
+                                "SQL Injection",
+                                "Entrada sin validar",
+                                FindingSeverity.HIGH);
+
+                mockMvc.perform(delete("/api/v1/findings/{id}", finding.id()))
+                                .andExpect(status().isNoContent());
+        }
+
+        @Test
+        void deberiaDevolver404AlEliminarUnHallazgoInexistente()
+                        throws Exception {
+                UUID id = UUID.randomUUID();
+
+                mockMvc.perform(delete("/api/v1/findings/{id}", id))
+                                .andExpect(status().isNotFound())
+                                .andExpect(jsonPath("$.code").value("FINDING_NOT_FOUND"));
         }
 }

@@ -62,4 +62,12 @@ public class FindingService {
 
         return updatedFinding;
     }
+
+    public void deleteById(UUID id) {
+        Finding removedFinding = findings.remove(id);
+
+        if (removedFinding == null) {
+            throw new FindingNotFoundException(id);
+        }
+    }
 }
