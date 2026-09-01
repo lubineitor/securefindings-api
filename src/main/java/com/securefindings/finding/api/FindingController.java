@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.securefindings.finding.application.FindingService;
 import com.securefindings.finding.domain.Finding;
+import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/v1/findings")
@@ -30,11 +31,10 @@ public class FindingController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public Finding create(@RequestBody CreateFindingRequest request) {
+    public Finding create(@Valid @RequestBody CreateFindingRequest request) {
         return findingService.create(
                 request.title(),
                 request.description(),
-                request.severity()
-        );
+                request.severity());
     }
 }

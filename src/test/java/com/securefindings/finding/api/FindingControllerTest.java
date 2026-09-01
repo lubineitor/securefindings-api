@@ -8,17 +8,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.web.servlet.MockMvc;
 
-import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
-
+import com.securefindings.api.error.GlobalExceptionHandler;
 import com.securefindings.finding.application.FindingService;
 
 @WebMvcTest(FindingController.class)
-@Import(FindingService.class)
+@Import({FindingService.class, GlobalExceptionHandler.class})
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
 class FindingControllerTest {
 
@@ -49,5 +49,36 @@ class FindingControllerTest {
                 .andExpect(jsonPath("$.description").value("Entrada de usuario sin validar"))
                 .andExpect(jsonPath("$.severity").value("HIGH"))
                 .andExpect(jsonPath("$.status").value("OPEN"));
+    }
+
+    @Test
+    void deberiaRechazarUnTituloVacio() throws Exception {
+        mockMvc.perform(post("/api/v1/findings")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                    "title": " ",
+                                    "description": "Descripción válida",
+                                    "severity": "HIGH"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.errors.title").value("El título es obligatorio"));
+    }
+
+    @Test
+    void deberiaRechazarUnaPeticionSinSeveridad() throws Exception {
+        mockMvc.perform(post("/api/v1/findings")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                    "title": "SQL Injection",
+                                    "description": "Descripción válida"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.errors.severity").value("La severidad es obligatoria"));
     }
 }
