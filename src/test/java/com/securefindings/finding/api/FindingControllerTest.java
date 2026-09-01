@@ -1,19 +1,25 @@
 package com.securefindings.finding.api;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
-import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.http.MediaType;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.web.servlet.MockMvc;
+
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 
 import com.securefindings.finding.application.FindingService;
 
 @WebMvcTest(FindingController.class)
 @Import(FindingService.class)
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
 class FindingControllerTest {
 
     @Autowired
@@ -24,5 +30,24 @@ class FindingControllerTest {
         mockMvc.perform(get("/api/v1/findings"))
                 .andExpect(status().isOk())
                 .andExpect(content().json("[]"));
+    }
+
+    @Test
+    void deberiaCrearUnHallazgo() throws Exception {
+        mockMvc.perform(post("/api/v1/findings")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                    "title": "SQL Injection",
+                                    "description": "Entrada de usuario sin validar",
+                                    "severity": "HIGH"
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").exists())
+                .andExpect(jsonPath("$.title").value("SQL Injection"))
+                .andExpect(jsonPath("$.description").value("Entrada de usuario sin validar"))
+                .andExpect(jsonPath("$.severity").value("HIGH"))
+                .andExpect(jsonPath("$.status").value("OPEN"));
     }
 }
