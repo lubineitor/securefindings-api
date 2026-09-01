@@ -2,6 +2,7 @@ package com.securefindings.finding.application;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -27,5 +28,9 @@ public class FindingService {
 
     public List<Finding> findAll() {
         return List.copyOf(findings.values());
+    }
+
+    public Optional<Finding> findById(UUID id) {
+        return Optional.ofNullable(findings.get(id));
     }
 }
