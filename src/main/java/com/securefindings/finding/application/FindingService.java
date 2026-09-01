@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 
 import com.securefindings.finding.domain.Finding;
 import com.securefindings.finding.domain.FindingSeverity;
+import com.securefindings.finding.domain.FindingStatus;
 
 @Service
 public class FindingService {
@@ -36,5 +37,13 @@ public class FindingService {
     public Finding getById(UUID id) {
         return findById(id)
                 .orElseThrow(() -> new FindingNotFoundException(id));
+    }
+
+    public Finding updateStatus(UUID id, FindingStatus status) {
+        Finding currentFinding = getById(id);
+        Finding updatedFinding = currentFinding.withStatus(status);
+
+        findings.put(updatedFinding.id(), updatedFinding);
+        return updatedFinding;
     }
 }

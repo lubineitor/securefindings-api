@@ -23,8 +23,7 @@ class FindingServiceTest {
         Finding finding = findingService.create(
                 "SQL Injection",
                 "Entrada de usuario sin validar",
-                FindingSeverity.HIGH
-        );
+                FindingSeverity.HIGH);
 
         List<Finding> findings = findingService.findAll();
 
@@ -39,8 +38,7 @@ class FindingServiceTest {
         Finding createdFinding = findingService.create(
                 "Cross-Site Scripting",
                 "Contenido no escapado correctamente",
-                FindingSeverity.MEDIUM
-        );
+                FindingSeverity.MEDIUM);
 
         Finding foundFinding = findingService
                 .findById(createdFinding.id())
@@ -52,15 +50,33 @@ class FindingServiceTest {
     @Test
     void deberiaDevolverResultadoVacioSiElHallazgoNoExiste() {
         assertTrue(
-                findingService.findById(UUID.randomUUID()).isEmpty()
-        );
+                findingService.findById(UUID.randomUUID()).isEmpty());
     }
 
     @Test
     void deberiaLanzarExcepcionSiElHallazgoNoExiste() {
         assertThrows(
                 FindingNotFoundException.class,
-                () -> findingService.getById(UUID.randomUUID())
-        );
+                () -> findingService.getById(UUID.randomUUID()));
+    }
+
+    @Test
+    void deberiaActualizarElEstadoDeUnHallazgo() {
+        Finding createdFinding = findingService.create(
+                "Cross-Site Scripting",
+                "Contenido no escapado correctamente",
+                FindingSeverity.MEDIUM);
+
+        Finding updatedFinding = findingService.updateStatus(
+                createdFinding.id(),
+                FindingStatus.IN_PROGRESS);
+
+        assertEquals(createdFinding.id(), updatedFinding.id());
+        assertEquals(FindingStatus.IN_PROGRESS, updatedFinding.status());
+        assertEquals(createdFinding.title(), updatedFinding.title());
+        assertEquals(createdFinding.createdAt(), updatedFinding.createdAt());
+        assertEquals(
+                updatedFinding,
+                findingService.getById(createdFinding.id()));
     }
 }

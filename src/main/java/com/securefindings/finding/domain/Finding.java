@@ -11,8 +11,7 @@ public record Finding(
         FindingSeverity severity,
         FindingStatus status,
         Instant createdAt,
-        Instant updatedAt
-) {
+        Instant updatedAt) {
 
     public Finding {
         Objects.requireNonNull(id, "El identificador no puede ser nulo");
@@ -33,8 +32,7 @@ public record Finding(
     public static Finding create(
             String title,
             String description,
-            FindingSeverity severity
-    ) {
+            FindingSeverity severity) {
         Instant now = Instant.now();
 
         return new Finding(
@@ -44,7 +42,17 @@ public record Finding(
                 severity,
                 FindingStatus.OPEN,
                 now,
-                now
-        );
+                now);
+    }
+
+    public Finding withStatus(FindingStatus newStatus) {
+        return new Finding(
+                id,
+                title,
+                description,
+                severity,
+                newStatus,
+                createdAt,
+                Instant.now());
     }
 }
