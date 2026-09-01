@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -51,5 +52,16 @@ public class FindingController {
             @PathVariable UUID id,
             @Valid @RequestBody UpdateFindingStatusRequest request) {
         return findingService.updateStatus(id, request.status());
+    }
+
+    @PutMapping("/{id}")
+    public Finding update(
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdateFindingRequest request) {
+        return findingService.update(
+                id,
+                request.title(),
+                request.description(),
+                request.severity());
     }
 }

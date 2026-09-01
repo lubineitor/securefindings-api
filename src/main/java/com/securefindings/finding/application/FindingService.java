@@ -46,4 +46,20 @@ public class FindingService {
         findings.put(updatedFinding.id(), updatedFinding);
         return updatedFinding;
     }
+
+    public Finding update(
+            UUID id,
+            String title,
+            String description,
+            FindingSeverity severity) {
+        Finding currentFinding = getById(id);
+        Finding updatedFinding = currentFinding.withDetails(
+                title,
+                description,
+                severity);
+
+        findings.put(updatedFinding.id(), updatedFinding);
+
+        return updatedFinding;
+    }
 }

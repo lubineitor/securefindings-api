@@ -79,4 +79,30 @@ class FindingServiceTest {
                 updatedFinding,
                 findingService.getById(createdFinding.id()));
     }
+
+    @Test
+    void deberiaActualizarLosDatosDeUnHallazgo() {
+        Finding createdFinding = findingService.create(
+                "SQL Injection",
+                "Entrada sin validar",
+                FindingSeverity.HIGH);
+
+        Finding updatedFinding = findingService.update(
+                createdFinding.id(),
+                "SQL Injection corregida",
+                "Entrada validada correctamente",
+                FindingSeverity.CRITICAL);
+
+        assertEquals(createdFinding.id(), updatedFinding.id());
+        assertEquals(createdFinding.status(), updatedFinding.status());
+        assertEquals(createdFinding.createdAt(), updatedFinding.createdAt());
+        assertEquals("SQL Injection corregida", updatedFinding.title());
+        assertEquals(
+                "Entrada validada correctamente",
+                updatedFinding.description());
+        assertEquals(FindingSeverity.CRITICAL, updatedFinding.severity());
+        assertEquals(
+                updatedFinding,
+                findingService.getById(createdFinding.id()));
+    }
 }

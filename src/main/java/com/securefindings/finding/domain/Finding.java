@@ -55,4 +55,18 @@ public record Finding(
                 createdAt,
                 Instant.now());
     }
+
+    public Finding withDetails(
+            String newTitle,
+            String newDescription,
+            FindingSeverity newSeverity) {
+        return new Finding(
+                id,
+                newTitle,
+                newDescription,
+                newSeverity,
+                status,
+                createdAt,
+                Instant.now());
+    }
 }

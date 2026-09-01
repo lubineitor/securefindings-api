@@ -3,6 +3,7 @@ package com.securefindings.finding.api;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -153,5 +154,31 @@ class FindingControllerTest {
                                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
                                 .andExpect(jsonPath("$.errors.status")
                                                 .value("El estado es obligatorio"));
+        }
+
+        @Test
+        void deberiaActualizarLosDatosDeUnHallazgo() throws Exception {
+                Finding finding = findingService.create(
+                                "SQL Injection",
+                                "Entrada sin validar",
+                                FindingSeverity.HIGH);
+
+                mockMvc.perform(put("/api/v1/findings/{id}", finding.id())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                                {
+                                                    "title": "SQL Injection corregida",
+                                                    "description": "Entrada validada correctamente",
+                                                    "severity": "CRITICAL"
+                                                }
+                                                """))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.id").value(finding.id().toString()))
+                                .andExpect(jsonPath("$.title")
+                                                .value("SQL Injection corregida"))
+                                .andExpect(jsonPath("$.description")
+                                                .value("Entrada validada correctamente"))
+                                .andExpect(jsonPath("$.severity").value("CRITICAL"))
+                                .andExpect(jsonPath("$.status").value("OPEN"));
         }
 }
