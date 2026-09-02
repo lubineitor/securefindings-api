@@ -72,12 +72,16 @@ class FindingControllerTest {
                                                 }
                                                 """))
                                 .andExpect(status().isCreated())
-                                .andExpect(jsonPath("$.id").value(finding.id().toString()))
-                                .andExpect(jsonPath("$.title").value("SQL Injection"))
+                                .andExpect(jsonPath("$.id")
+                                                .value(finding.id().toString()))
+                                .andExpect(jsonPath("$.title")
+                                                .value("SQL Injection"))
                                 .andExpect(jsonPath("$.description")
                                                 .value("Entrada de usuario sin validar"))
-                                .andExpect(jsonPath("$.severity").value("HIGH"))
-                                .andExpect(jsonPath("$.status").value("OPEN"));
+                                .andExpect(jsonPath("$.severity")
+                                                .value("HIGH"))
+                                .andExpect(jsonPath("$.status")
+                                                .value("OPEN"));
         }
 
         @Test
@@ -92,7 +96,8 @@ class FindingControllerTest {
                                                 }
                                                 """))
                                 .andExpect(status().isBadRequest())
-                                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                                .andExpect(jsonPath("$.code")
+                                                .value("VALIDATION_ERROR"))
                                 .andExpect(jsonPath("$.errors.title")
                                                 .value("El título es obligatorio"));
         }
@@ -108,7 +113,8 @@ class FindingControllerTest {
                                                 }
                                                 """))
                                 .andExpect(status().isBadRequest())
-                                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                                .andExpect(jsonPath("$.code")
+                                                .value("VALIDATION_ERROR"))
                                 .andExpect(jsonPath("$.errors.severity")
                                                 .value("La severidad es obligatoria"));
         }
@@ -129,8 +135,10 @@ class FindingControllerTest {
                                                 .value(finding.id().toString()))
                                 .andExpect(jsonPath("$.title")
                                                 .value("Cross-Site Scripting"))
-                                .andExpect(jsonPath("$.severity").value("MEDIUM"))
-                                .andExpect(jsonPath("$.status").value("OPEN"));
+                                .andExpect(jsonPath("$.severity")
+                                                .value("MEDIUM"))
+                                .andExpect(jsonPath("$.status")
+                                                .value("OPEN"));
         }
 
         @Test
