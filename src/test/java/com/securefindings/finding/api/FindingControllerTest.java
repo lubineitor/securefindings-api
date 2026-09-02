@@ -37,7 +37,7 @@ import com.securefindings.security.SecurityConfig;
 
 @WebMvcTest(controllers = FindingController.class)
 @Import({ SecurityConfig.class, GlobalExceptionHandler.class })
-@WithMockUser(username = "analista")
+@WithMockUser(username = "analista", roles = "ANALYST")
 class FindingControllerTest {
 
         @Autowired
@@ -258,6 +258,7 @@ class FindingControllerTest {
         }
 
         @Test
+        @WithMockUser(username = "administrador", roles = "ADMIN")
         void deberiaEliminarUnHallazgo() throws Exception {
                 UUID id = UUID.randomUUID();
 
@@ -266,6 +267,7 @@ class FindingControllerTest {
         }
 
         @Test
+        @WithMockUser(username = "administrador", roles = "ADMIN")
         void deberiaDevolver404AlEliminarUnHallazgoInexistente()
                         throws Exception {
                 UUID id = UUID.randomUUID();
