@@ -10,17 +10,22 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 
 import java.util.List;
 import java.util.UUID;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.context.WebApplicationContext;
 
 import com.securefindings.api.error.GlobalExceptionHandler;
 import com.securefindings.finding.application.FindingNotFoundException;
@@ -28,13 +33,25 @@ import com.securefindings.finding.application.FindingService;
 import com.securefindings.finding.domain.Finding;
 import com.securefindings.finding.domain.FindingSeverity;
 import com.securefindings.finding.domain.FindingStatus;
+import com.securefindings.security.SecurityConfig;
 
-@WebMvcTest(FindingController.class)
-@Import(GlobalExceptionHandler.class)
+@WebMvcTest(controllers = FindingController.class)
+@Import({ SecurityConfig.class, GlobalExceptionHandler.class })
+@WithMockUser(username = "analista")
 class FindingControllerTest {
 
         @Autowired
+        private WebApplicationContext context;
+
         private MockMvc mockMvc;
+
+        @BeforeEach
+        void configurarMockMvc() {
+                mockMvc = MockMvcBuilders
+                                .webAppContextSetup(context)
+                                .apply(springSecurity())
+                                .build();
+        }
 
         @MockitoBean
         private FindingService findingService;
