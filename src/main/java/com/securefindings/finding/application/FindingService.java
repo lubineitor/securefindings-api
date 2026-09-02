@@ -45,14 +45,18 @@ public class FindingService {
     public List<Finding> findAll() {
         return findingRepository.findAll()
                 .stream()
-                .map(FindingEntity::toDomain)
+                .map(entity -> Objects.requireNonNull(
+                        entity,
+                        "El repositorio devolvió una entidad nula").toDomain())
                 .toList();
     }
 
     public Optional<Finding> findById(UUID id) {
         return findingRepository
                 .findById(id)
-                .map(FindingEntity::toDomain);
+                .map(entity -> Objects.requireNonNull(
+                        entity,
+                        "El repositorio devolvió una entidad nula").toDomain());
     }
 
     public Finding getById(UUID id) {
