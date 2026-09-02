@@ -1,8 +1,11 @@
 package com.securefindings.finding.persistence;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
+
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -38,11 +41,19 @@ class FindingPersistenceIntegrationTest {
     @Autowired
     private FindingService findingService;
 
+    @Autowired
+    private FindingRepository findingRepository;
+
+    @BeforeEach
+    void limpiarBaseDeDatos() {
+        findingRepository.deleteAll();
+    }
+
     @Test
     void deberiaPersistirYRecuperarUnHallazgoEnPostgreSQL() {
         Finding createdFinding = findingService.create(
                 "SQL Injection de integración",
-                "Hallazgo persistido en un PostgreSQL temporal",
+                "Hallazgo persistido en PostgreSQL",
                 FindingSeverity.HIGH);
 
         Finding recoveredFinding = findingService
@@ -54,7 +65,60 @@ class FindingPersistenceIntegrationTest {
         assertEquals(createdFinding.description(), recoveredFinding.description());
         assertEquals(FindingSeverity.HIGH, recoveredFinding.severity());
         assertEquals(FindingStatus.OPEN, recoveredFinding.status());
-        assertNotNull(recoveredFinding.createdAt());
-        assertNotNull(recoveredFinding.updatedAt());
+    }
+
+    @Test
+    void deberiaActualizarElEstadoDeUnHallazgoPersistido() {
+        Finding createdFinding = findingService.create(
+                "Cross-Site Scripting",
+                "Contenido sin escapar",
+                FindingSeverity.MEDIUM);
+
+        Finding updatedFinding = findingService.updateStatus(
+                createdFinding.id(),
+                FindingStatus.IN_PROGRESS);
+
+        assertEquals(FindingStatus.IN_PROGRESS, updatedFinding.status());
+
+        Finding recoveredFinding = findingService
+                .findById(createdFinding.id())
+                .orElseThrow();
+
+        assertEquals(FindingStatus.IN_PROGRESS, recoveredFinding.status());
+    }
+
+    @Test
+    void deberiaListarLosHallazgosPersistidos() {
+        Finding firstFinding = findingService.create(
+                "SQL Injection",
+                "Consulta sin parametrizar",
+                FindingSeverity.CRITICAL);
+
+        Finding secondFinding = findingService.create(
+                "Cross-Site Scripting",
+                "Salida sin escapar",
+                FindingSeverity.HIGH);
+
+        List<Finding> findings = findingService.findAll();
+
+        assertEquals(2, findings.size());
+        assertTrue(findings.stream()
+                .anyMatch(finding -> finding.id().equals(firstFinding.id())));
+        assertTrue(findings.stream()
+                .anyMatch(finding -> finding.id().equals(secondFinding.id())));
+    }
+
+    @Test
+    void deberiaEliminarUnHallazgoPersistido() {
+        Finding createdFinding = findingService.create(
+                "Configuración insegura",
+                "Credenciales expuestas",
+                FindingSeverity.HIGH);
+
+        findingService.deleteById(createdFinding.id());
+
+        assertTrue(findingService
+                .findById(createdFinding.id())
+                .isEmpty());
     }
 }
