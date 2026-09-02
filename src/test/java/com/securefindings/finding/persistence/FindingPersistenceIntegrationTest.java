@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.util.Objects;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -15,6 +16,9 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
+import com.securefindings.audit.domain.AuditAction;
+import com.securefindings.audit.persistence.FindingAuditEntity;
+import com.securefindings.audit.persistence.FindingAuditRepository;
 import com.securefindings.finding.application.FindingService;
 import com.securefindings.finding.domain.Finding;
 import com.securefindings.finding.domain.FindingSeverity;
@@ -24,101 +28,150 @@ import com.securefindings.finding.domain.FindingStatus;
 @SpringBootTest
 class FindingPersistenceIntegrationTest {
 
-    @SuppressWarnings("resource")
-    @Container
-    static final PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:17-alpine")
-            .withDatabaseName("securefindings_test")
-            .withUsername("securefindings_test")
-            .withPassword("securefindings_test");
+        @SuppressWarnings("resource")
+        @Container
+        static final PostgreSQLContainer postgres = new PostgreSQLContainer(
+                        "postgres:17-alpine")
+                        .withDatabaseName("securefindings_test")
+                        .withUsername("securefindings_test")
+                        .withPassword("securefindings_test");
 
-    @DynamicPropertySource
-    static void registerPostgresProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", postgres::getJdbcUrl);
-        registry.add("spring.datasource.username", postgres::getUsername);
-        registry.add("spring.datasource.password", postgres::getPassword);
-    }
+        @DynamicPropertySource
+        static void registerPostgresProperties(
+                        DynamicPropertyRegistry registry) {
 
-    @Autowired
-    private FindingService findingService;
+                registry.add("spring.datasource.url", postgres::getJdbcUrl);
+                registry.add("spring.datasource.username", postgres::getUsername);
+                registry.add("spring.datasource.password", postgres::getPassword);
+        }
 
-    @Autowired
-    private FindingRepository findingRepository;
+        @Autowired
+        private FindingService findingService;
 
-    @BeforeEach
-    void limpiarBaseDeDatos() {
-        findingRepository.deleteAll();
-    }
+        @Autowired
+        private FindingRepository findingRepository;
 
-    @Test
-    void deberiaPersistirYRecuperarUnHallazgoEnPostgreSQL() {
-        Finding createdFinding = findingService.create(
-                "SQL Injection de integración",
-                "Hallazgo persistido en PostgreSQL",
-                FindingSeverity.HIGH);
+        @Autowired
+        private FindingAuditRepository findingAuditRepository;
 
-        Finding recoveredFinding = findingService
-                .findById(createdFinding.id())
-                .orElseThrow();
+        @BeforeEach
+        void limpiarBaseDeDatos() {
+                findingAuditRepository.deleteAll();
+                findingRepository.deleteAll();
+        }
 
-        assertEquals(createdFinding.id(), recoveredFinding.id());
-        assertEquals(createdFinding.title(), recoveredFinding.title());
-        assertEquals(createdFinding.description(), recoveredFinding.description());
-        assertEquals(FindingSeverity.HIGH, recoveredFinding.severity());
-        assertEquals(FindingStatus.OPEN, recoveredFinding.status());
-    }
+        @Test
+        void deberiaPersistirYRecuperarUnHallazgoEnPostgreSQL() {
+                Finding createdFinding = findingService.create(
+                                "SQL Injection de integración",
+                                "Hallazgo persistido en PostgreSQL",
+                                FindingSeverity.HIGH);
 
-    @Test
-    void deberiaActualizarElEstadoDeUnHallazgoPersistido() {
-        Finding createdFinding = findingService.create(
-                "Cross-Site Scripting",
-                "Contenido sin escapar",
-                FindingSeverity.MEDIUM);
+                Finding recoveredFinding = findingService
+                                .findById(createdFinding.id())
+                                .orElseThrow();
 
-        Finding updatedFinding = findingService.updateStatus(
-                createdFinding.id(),
-                FindingStatus.IN_PROGRESS);
+                assertEquals(createdFinding.id(), recoveredFinding.id());
+                assertEquals(createdFinding.title(), recoveredFinding.title());
+                assertEquals(createdFinding.description(), recoveredFinding.description());
+                assertEquals(FindingSeverity.HIGH, recoveredFinding.severity());
+                assertEquals(FindingStatus.OPEN, recoveredFinding.status());
+        }
 
-        assertEquals(FindingStatus.IN_PROGRESS, updatedFinding.status());
+        @Test
+        void deberiaActualizarElEstadoDeUnHallazgoPersistido() {
+                Finding createdFinding = findingService.create(
+                                "Cross-Site Scripting",
+                                "Contenido sin escapar",
+                                FindingSeverity.MEDIUM);
 
-        Finding recoveredFinding = findingService
-                .findById(createdFinding.id())
-                .orElseThrow();
+                Finding updatedFinding = findingService.updateStatus(
+                                createdFinding.id(),
+                                FindingStatus.IN_PROGRESS);
 
-        assertEquals(FindingStatus.IN_PROGRESS, recoveredFinding.status());
-    }
+                assertEquals(FindingStatus.IN_PROGRESS, updatedFinding.status());
 
-    @Test
-    void deberiaListarLosHallazgosPersistidos() {
-        Finding firstFinding = findingService.create(
-                "SQL Injection",
-                "Consulta sin parametrizar",
-                FindingSeverity.CRITICAL);
+                Finding recoveredFinding = findingService
+                                .findById(createdFinding.id())
+                                .orElseThrow();
 
-        Finding secondFinding = findingService.create(
-                "Cross-Site Scripting",
-                "Salida sin escapar",
-                FindingSeverity.HIGH);
+                assertEquals(FindingStatus.IN_PROGRESS, recoveredFinding.status());
+        }
 
-        List<Finding> findings = findingService.findAll();
+        @Test
+        void deberiaListarLosHallazgosPersistidos() {
+                Finding firstFinding = findingService.create(
+                                "SQL Injection",
+                                "Consulta sin parametrizar",
+                                FindingSeverity.CRITICAL);
 
-        assertEquals(2, findings.size());
-        assertTrue(findings.stream()
-                .anyMatch(finding -> finding.id().equals(firstFinding.id())));
-        assertTrue(findings.stream()
-                .anyMatch(finding -> finding.id().equals(secondFinding.id())));
-    }
+                Finding secondFinding = findingService.create(
+                                "Cross-Site Scripting",
+                                "Salida sin escapar",
+                                FindingSeverity.HIGH);
 
-    @Test
-    void deberiaEliminarUnHallazgoPersistido() {
-        Finding createdFinding = findingService.create(
-                "Configuración insegura",
-                "Credenciales expuestas",
-                FindingSeverity.HIGH);
+                List<Finding> findings = findingService.findAll();
 
-        findingService.deleteById(createdFinding.id());
+                assertEquals(2, findings.size());
+                assertTrue(findings.stream()
+                                .anyMatch(finding -> finding.id().equals(firstFinding.id())));
+                assertTrue(findings.stream()
+                                .anyMatch(finding -> finding.id().equals(secondFinding.id())));
+        }
 
-        assertTrue(findingService
-                .findById(createdFinding.id())
-                .isEmpty());
-    }
+        @Test
+        void deberiaEliminarUnHallazgoPersistido() {
+                Finding createdFinding = findingService.create(
+                                "Configuración insegura",
+                                "Credenciales expuestas",
+                                FindingSeverity.HIGH);
+
+                findingService.deleteById(createdFinding.id());
+
+                assertTrue(findingService
+                                .findById(createdFinding.id())
+                                .isEmpty());
+        }
+
+        @Test
+        void deberiaPersistirLaAuditoriaDeLasOperaciones() {
+                Finding createdFinding = findingService.create(
+                                "SQL Injection auditado",
+                                "Hallazgo para comprobar auditoría",
+                                FindingSeverity.HIGH);
+
+                findingService.updateStatus(
+                                createdFinding.id(),
+                                FindingStatus.IN_PROGRESS);
+
+                findingService.deleteById(createdFinding.id());
+
+                List<FindingAuditEntity> auditEvents = findingAuditRepository
+                                .findByFindingIdOrderByOccurredAtAsc(
+                                                createdFinding.id());
+
+                assertEquals(3, auditEvents.size());
+
+                assertEquals(
+                                List.of(
+                                                AuditAction.CREATED,
+                                                AuditAction.UPDATED,
+                                                AuditAction.DELETED),
+                                auditEvents.stream()
+                                                .map(event -> Objects.requireNonNull(
+                                                                event,
+                                                                "El repositorio devolvió un evento de auditoría nulo")
+                                                                .getAction())
+                                                .toList());
+
+                assertTrue(auditEvents.stream()
+                                .allMatch(event -> "system".equals(event.getActor())));
+
+                assertTrue(auditEvents.stream()
+                                .allMatch(event -> event.getOccurredAt() != null));
+
+                assertTrue(findingService
+                                .findById(createdFinding.id())
+                                .isEmpty());
+        }
 }

@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -18,6 +20,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.securefindings.audit.application.AuditService;
+import com.securefindings.audit.domain.AuditAction;
 import com.securefindings.finding.domain.Finding;
 import com.securefindings.finding.domain.FindingSeverity;
 import com.securefindings.finding.domain.FindingStatus;
@@ -29,6 +33,9 @@ class FindingServiceTest {
 
         @Mock
         private FindingRepository findingRepository;
+
+        @Mock
+        private AuditService auditService;
 
         @InjectMocks
         private FindingService findingService;
@@ -48,6 +55,11 @@ class FindingServiceTest {
                 assertEquals(FindingStatus.OPEN, finding.status());
 
                 verify(findingRepository).save(any(FindingEntity.class));
+
+                verify(auditService).register(
+                                eq(finding.id()),
+                                eq(AuditAction.CREATED),
+                                anyString());
         }
 
         @Test
@@ -136,6 +148,11 @@ class FindingServiceTest {
                 assertEquals(FindingStatus.RESOLVED, updatedFinding.status());
 
                 verify(findingRepository).save(any(FindingEntity.class));
+
+                verify(auditService).register(
+                                eq(finding.id()),
+                                eq(AuditAction.UPDATED),
+                                anyString());
         }
 
         @Test
@@ -162,6 +179,11 @@ class FindingServiceTest {
                 assertEquals(FindingSeverity.HIGH, updatedFinding.severity());
 
                 verify(findingRepository).save(any(FindingEntity.class));
+
+                verify(auditService).register(
+                                eq(finding.id()),
+                                eq(AuditAction.UPDATED),
+                                anyString());
         }
 
         @Test
@@ -174,6 +196,11 @@ class FindingServiceTest {
                 findingService.deleteById(id);
 
                 verify(findingRepository).deleteById(id);
+
+                verify(auditService).register(
+                                eq(id),
+                                eq(AuditAction.DELETED),
+                                anyString());
         }
 
         @Test
@@ -188,5 +215,10 @@ class FindingServiceTest {
                                 () -> findingService.deleteById(id));
 
                 verify(findingRepository, never()).deleteById(id);
+
+                verify(auditService, never()).register(
+                                any(UUID.class),
+                                any(AuditAction.class),
+                                anyString());
         }
 }

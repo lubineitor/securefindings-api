@@ -5,9 +5,14 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.securefindings.audit.application.AuditService;
+import com.securefindings.audit.domain.AuditAction;
 import com.securefindings.finding.domain.Finding;
 import com.securefindings.finding.domain.FindingSeverity;
 import com.securefindings.finding.domain.FindingStatus;
@@ -18,10 +23,17 @@ import com.securefindings.finding.persistence.FindingRepository;
 @Transactional(readOnly = true)
 public class FindingService {
 
-    private final FindingRepository findingRepository;
+    private static final String SYSTEM_ACTOR = "system";
 
-    public FindingService(FindingRepository findingRepository) {
+    private final FindingRepository findingRepository;
+    private final AuditService auditService;
+
+    public FindingService(
+            FindingRepository findingRepository,
+            AuditService auditService) {
+
         this.findingRepository = Objects.requireNonNull(findingRepository);
+        this.auditService = Objects.requireNonNull(auditService);
     }
 
     @Transactional
@@ -35,11 +47,16 @@ public class FindingService {
                 description,
                 severity);
 
-        FindingEntity entity = new FindingEntity(finding);
-
-        return findingRepository
-                .save(entity)
+        Finding savedFinding = findingRepository
+                .save(new FindingEntity(finding))
                 .toDomain();
+
+        auditService.register(
+                savedFinding.id(),
+                AuditAction.CREATED,
+                currentActor());
+
+        return savedFinding;
     }
 
     public List<Finding> findAll() {
@@ -72,7 +89,14 @@ public class FindingService {
         Finding currentFinding = getById(id);
         Finding updatedFinding = currentFinding.withStatus(status);
 
-        return save(updatedFinding);
+        Finding savedFinding = save(updatedFinding);
+
+        auditService.register(
+                savedFinding.id(),
+                AuditAction.UPDATED,
+                currentActor());
+
+        return savedFinding;
     }
 
     @Transactional
@@ -88,7 +112,14 @@ public class FindingService {
                 description,
                 severity);
 
-        return save(updatedFinding);
+        Finding savedFinding = save(updatedFinding);
+
+        auditService.register(
+                savedFinding.id(),
+                AuditAction.UPDATED,
+                currentActor());
+
+        return savedFinding;
     }
 
     @Transactional
@@ -98,13 +129,44 @@ public class FindingService {
         }
 
         findingRepository.deleteById(id);
+
+        auditService.register(
+                id,
+                AuditAction.DELETED,
+                currentActor());
     }
 
     private Finding save(Finding finding) {
-        FindingEntity entity = new FindingEntity(finding);
-
         return findingRepository
-                .save(entity)
+                .save(new FindingEntity(finding))
                 .toDomain();
+    }
+
+    private String currentActor() {
+        Authentication authentication = SecurityContextHolder
+                .getContext()
+                .getAuthentication();
+
+        if (authentication == null
+                || !authentication.isAuthenticated()) {
+            return SYSTEM_ACTOR;
+        }
+
+        if (authentication instanceof JwtAuthenticationToken jwtAuthentication) {
+            String preferredUsername = jwtAuthentication
+                    .getToken()
+                    .getClaimAsString("preferred_username");
+
+            if (preferredUsername != null
+                    && !preferredUsername.isBlank()) {
+                return preferredUsername;
+            }
+        }
+
+        String name = authentication.getName();
+
+        return name == null || name.isBlank()
+                ? SYSTEM_ACTOR
+                : name;
     }
 }
