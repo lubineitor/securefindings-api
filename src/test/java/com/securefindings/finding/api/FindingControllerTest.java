@@ -7,7 +7,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
@@ -20,6 +19,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -58,12 +59,26 @@ class FindingControllerTest {
 
         @Test
         void deberiaDevolverUnaListaVacia() throws Exception {
-                when(findingService.findAll())
-                                .thenReturn(List.of());
+                when(findingService.findPage(
+                                0,
+                                20,
+                                null,
+                                null))
+                                .thenReturn(new PageImpl<>(
+                                                List.of(),
+                                                PageRequest.of(0, 20),
+                                                0));
 
                 mockMvc.perform(get("/api/v1/findings"))
                                 .andExpect(status().isOk())
-                                .andExpect(content().json("[]"));
+                                .andExpect(jsonPath("$.content").isArray())
+                                .andExpect(jsonPath("$.content").isEmpty())
+                                .andExpect(jsonPath("$.page").value(0))
+                                .andExpect(jsonPath("$.size").value(20))
+                                .andExpect(jsonPath("$.totalElements").value(0))
+                                .andExpect(jsonPath("$.totalPages").value(0))
+                                .andExpect(jsonPath("$.first").value(true))
+                                .andExpect(jsonPath("$.last").value(true));
         }
 
         @Test
