@@ -24,9 +24,18 @@ public class SecurityConfig {
                 http
                                 .csrf(csrf -> csrf.disable())
                                 .sessionManagement(session -> session
-                                                .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                                                .sessionCreationPolicy(
+                                                                SessionCreationPolicy.STATELESS))
                                 .authorizeHttpRequests(authorize -> authorize
-                                                .requestMatchers("/api/v1/health").permitAll()
+
+                                                .requestMatchers("/api/v1/health")
+                                                .permitAll()
+
+                                                .requestMatchers(
+                                                                "/v3/api-docs/**",
+                                                                "/swagger-ui/**",
+                                                                "/swagger-ui.html")
+                                                .permitAll()
 
                                                 .requestMatchers(
                                                                 HttpMethod.GET,
@@ -34,23 +43,34 @@ public class SecurityConfig {
                                                                 "/api/v1/findings/**")
                                                 .hasAnyRole("ANALYST", "ADMIN")
 
-                                                .requestMatchers(HttpMethod.POST, "/api/v1/findings")
+                                                .requestMatchers(
+                                                                HttpMethod.POST,
+                                                                "/api/v1/findings")
                                                 .hasAnyRole("ANALYST", "ADMIN")
 
-                                                .requestMatchers(HttpMethod.PUT, "/api/v1/findings/**")
+                                                .requestMatchers(
+                                                                HttpMethod.PUT,
+                                                                "/api/v1/findings/**")
                                                 .hasAnyRole("ANALYST", "ADMIN")
 
-                                                .requestMatchers(HttpMethod.PATCH, "/api/v1/findings/**")
+                                                .requestMatchers(
+                                                                HttpMethod.PATCH,
+                                                                "/api/v1/findings/**")
                                                 .hasAnyRole("ANALYST", "ADMIN")
 
-                                                .requestMatchers(HttpMethod.DELETE, "/api/v1/findings/**")
+                                                .requestMatchers(
+                                                                HttpMethod.DELETE,
+                                                                "/api/v1/findings/**")
                                                 .hasRole("ADMIN")
 
-                                                .anyRequest().authenticated())
+                                                .anyRequest()
+                                                .authenticated())
+
                                 .oauth2ResourceServer(oauth2 -> oauth2
                                                 .jwt(jwt -> jwt
                                                                 .jwtAuthenticationConverter(
                                                                                 jwtAuthenticationConverter)))
+
                                 .formLogin(form -> form.disable())
                                 .httpBasic(basic -> basic.disable());
 
