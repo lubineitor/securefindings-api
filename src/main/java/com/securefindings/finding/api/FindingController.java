@@ -22,6 +22,14 @@ import com.securefindings.finding.domain.Finding;
 import com.securefindings.finding.domain.FindingSeverity;
 import com.securefindings.finding.domain.FindingStatus;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -29,6 +37,7 @@ import jakarta.validation.constraints.Min;
 @Validated
 @RestController
 @RequestMapping("/api/v1/findings")
+@Tag(name = "Hallazgos", description = "Operaciones para gestionar hallazgos de seguridad")
 public class FindingController {
 
     private final FindingService findingService;
@@ -38,14 +47,21 @@ public class FindingController {
     }
 
     @GetMapping
+    @Operation(summary = "Listar hallazgos", description = "Devuelve una página de hallazgos "
+            + "con filtros opcionales")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Hallazgos recuperados correctamente", content = @Content(mediaType = "application/json", schema = @Schema(implementation = FindingPageResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Token ausente o inválido"),
+            @ApiResponse(responseCode = "403", description = "El usuario no tiene permisos")
+    })
     public FindingPageResponse findAll(
-            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @Parameter(description = "Número de página. Empieza en 0", example = "0", in = ParameterIn.QUERY) @RequestParam(defaultValue = "0") @Min(0) int page,
 
-            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size,
+            @Parameter(description = "Número máximo de elementos por página", example = "20", in = ParameterIn.QUERY) @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size,
 
-            @RequestParam(required = false) FindingSeverity severity,
+            @Parameter(description = "Filtrar por severidad", example = "HIGH", in = ParameterIn.QUERY) @RequestParam(required = false) FindingSeverity severity,
 
-            @RequestParam(required = false) FindingStatus status) {
+            @Parameter(description = "Filtrar por estado", example = "OPEN", in = ParameterIn.QUERY) @RequestParam(required = false) FindingStatus status) {
 
         Page<Finding> findingPage = findingService.findPage(
                 page,
@@ -57,12 +73,28 @@ public class FindingController {
     }
 
     @GetMapping("/{id}")
-    public Finding findById(@PathVariable UUID id) {
+    @Operation(summary = "Obtener un hallazgo", description = "Devuelve un hallazgo mediante su identificador")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Hallazgo encontrado", content = @Content(mediaType = "application/json", schema = @Schema(implementation = Finding.class))),
+            @ApiResponse(responseCode = "401", description = "Token ausente o inválido"),
+            @ApiResponse(responseCode = "403", description = "El usuario no tiene permisos"),
+            @ApiResponse(responseCode = "404", description = "El hallazgo no existe")
+    })
+    public Finding findById(
+            @Parameter(description = "Identificador del hallazgo", example = "3bfa1ad2-eee1-4ea5-ba7c-16b47d1da147", required = true) @PathVariable UUID id) {
+
         return findingService.getById(id);
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
+    @Operation(summary = "Crear un hallazgo", description = "Crea un nuevo hallazgo de seguridad")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Hallazgo creado correctamente", content = @Content(mediaType = "application/json", schema = @Schema(implementation = Finding.class))),
+            @ApiResponse(responseCode = "400", description = "Los datos enviados no son válidos"),
+            @ApiResponse(responseCode = "401", description = "Token ausente o inválido"),
+            @ApiResponse(responseCode = "403", description = "El usuario no tiene permisos")
+    })
     public Finding create(
             @Valid @RequestBody CreateFindingRequest request) {
 
@@ -73,8 +105,17 @@ public class FindingController {
     }
 
     @PatchMapping("/{id}/status")
+    @Operation(summary = "Actualizar el estado", description = "Cambia el estado de un hallazgo y registra "
+            + "la operación en auditoría")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Estado actualizado correctamente", content = @Content(mediaType = "application/json", schema = @Schema(implementation = Finding.class))),
+            @ApiResponse(responseCode = "400", description = "El estado enviado no es válido"),
+            @ApiResponse(responseCode = "401", description = "Token ausente o inválido"),
+            @ApiResponse(responseCode = "403", description = "El usuario no tiene permisos"),
+            @ApiResponse(responseCode = "404", description = "El hallazgo no existe")
+    })
     public Finding updateStatus(
-            @PathVariable UUID id,
+            @Parameter(description = "Identificador del hallazgo", required = true) @PathVariable UUID id,
             @Valid @RequestBody UpdateFindingStatusRequest request) {
 
         return findingService.updateStatus(
@@ -83,8 +124,17 @@ public class FindingController {
     }
 
     @PutMapping("/{id}")
+    @Operation(summary = "Actualizar un hallazgo", description = "Actualiza los datos de un hallazgo y registra "
+            + "la operación en auditoría")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Hallazgo actualizado correctamente", content = @Content(mediaType = "application/json", schema = @Schema(implementation = Finding.class))),
+            @ApiResponse(responseCode = "400", description = "Los datos enviados no son válidos"),
+            @ApiResponse(responseCode = "401", description = "Token ausente o inválido"),
+            @ApiResponse(responseCode = "403", description = "El usuario no tiene permisos"),
+            @ApiResponse(responseCode = "404", description = "El hallazgo no existe")
+    })
     public Finding update(
-            @PathVariable UUID id,
+            @Parameter(description = "Identificador del hallazgo", required = true) @PathVariable UUID id,
             @Valid @RequestBody UpdateFindingRequest request) {
 
         return findingService.update(
@@ -96,7 +146,17 @@ public class FindingController {
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void delete(@PathVariable UUID id) {
+    @Operation(summary = "Eliminar un hallazgo", description = "Elimina un hallazgo y conserva su evento "
+            + "de auditoría")
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Hallazgo eliminado correctamente"),
+            @ApiResponse(responseCode = "401", description = "Token ausente o inválido"),
+            @ApiResponse(responseCode = "403", description = "Solo un usuario ADMIN puede eliminar"),
+            @ApiResponse(responseCode = "404", description = "El hallazgo no existe")
+    })
+    public void delete(
+            @Parameter(description = "Identificador del hallazgo", required = true) @PathVariable UUID id) {
+
         findingService.deleteById(id);
     }
 }
