@@ -33,72 +33,76 @@ import com.securefindings.security.SecurityConfig;
 @WithMockUser(username = "analista", roles = "ANALYST")
 class FindingAuditControllerTest {
 
-    @Autowired
-    private WebApplicationContext webApplicationContext;
+        @Autowired
+        private WebApplicationContext webApplicationContext;
 
-    private MockMvc mockMvc;
+        private MockMvc mockMvc;
 
-    @MockitoBean
-    private AuditService auditService;
+        @MockitoBean
+        private AuditService auditService;
 
-    @MockitoBean
-    private JwtDecoder jwtDecoder;
+        @MockitoBean
+        private JwtDecoder jwtDecoder;
 
-    @BeforeEach
-    void configurarMockMvc() {
-        mockMvc = MockMvcBuilders
-                .webAppContextSetup(webApplicationContext)
-                .apply(springSecurity())
-                .build();
-    }
+        @BeforeEach
+        void configurarMockMvc() {
+                mockMvc = MockMvcBuilders
+                                .webAppContextSetup(webApplicationContext)
+                                .apply(springSecurity())
+                                .build();
+        }
 
-    @Test
-    void deberiaDevolverElHistorialDeUnHallazgo() throws Exception {
-        UUID findingId = UUID.randomUUID();
+        @Test
+        void deberiaDevolverElHistorialDeUnHallazgo() throws Exception {
+                UUID findingId = UUID.randomUUID();
 
-        when(auditService.findByFindingId(findingId))
-                .thenReturn(List.of(
-                        new FindingAuditEntity(
-                                UUID.randomUUID(),
-                                findingId,
-                                AuditAction.CREATED,
-                                "analista",
-                                Instant.parse("2026-09-03T10:00:00Z")),
-                        new FindingAuditEntity(
-                                UUID.randomUUID(),
-                                findingId,
-                                AuditAction.UPDATED,
-                                "analista",
-                                Instant.parse("2026-09-03T10:05:00Z"))));
+                when(auditService.findByFindingId(findingId))
+                                .thenReturn(List.of(
+                                                new FindingAuditEntity(
+                                                                UUID.randomUUID(),
+                                                                findingId,
+                                                                UUID.fromString(
+                                                                                "00000000-0000-0000-0000-000000000001"),
+                                                                AuditAction.CREATED,
+                                                                "analista",
+                                                                Instant.now()),
+                                                new FindingAuditEntity(
+                                                                UUID.randomUUID(),
+                                                                findingId,
+                                                                UUID.fromString(
+                                                                                "00000000-0000-0000-0000-000000000001"),
+                                                                AuditAction.UPDATED,
+                                                                "analista",
+                                                                Instant.now())));
 
-        mockMvc.perform(get(
-                "/api/v1/findings/{findingId}/audit",
-                findingId))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(2)))
-                .andExpect(jsonPath("$[0].findingId")
-                        .value(findingId.toString()))
-                .andExpect(jsonPath("$[0].action")
-                        .value("CREATED"))
-                .andExpect(jsonPath("$[0].actor")
-                        .value("analista"))
-                .andExpect(jsonPath("$[1].action")
-                        .value("UPDATED"));
-    }
+                mockMvc.perform(get(
+                                "/api/v1/findings/{findingId}/audit",
+                                findingId))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$", hasSize(2)))
+                                .andExpect(jsonPath("$[0].findingId")
+                                                .value(findingId.toString()))
+                                .andExpect(jsonPath("$[0].action")
+                                                .value("CREATED"))
+                                .andExpect(jsonPath("$[0].actor")
+                                                .value("analista"))
+                                .andExpect(jsonPath("$[1].action")
+                                                .value("UPDATED"));
+        }
 
-    @Test
-    void deberiaDevolverUnaListaVaciaSiNoHayAuditoria()
-            throws Exception {
+        @Test
+        void deberiaDevolverUnaListaVaciaSiNoHayAuditoria()
+                        throws Exception {
 
-        UUID findingId = UUID.randomUUID();
+                UUID findingId = UUID.randomUUID();
 
-        when(auditService.findByFindingId(findingId))
-                .thenReturn(List.of());
+                when(auditService.findByFindingId(findingId))
+                                .thenReturn(List.of());
 
-        mockMvc.perform(get(
-                "/api/v1/findings/{findingId}/audit",
-                findingId))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(0)));
-    }
+                mockMvc.perform(get(
+                                "/api/v1/findings/{findingId}/audit",
+                                findingId))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$", hasSize(0)));
+        }
 }

@@ -18,9 +18,15 @@ import com.securefindings.finding.domain.FindingStatus;
 @Table(name = "findings")
 public class FindingEntity {
 
+    private static final UUID SYSTEM_ORGANIZATION_ID = UUID.fromString(
+            "00000000-0000-0000-0000-000000000001");
+
     @Id
     @Column(name = "id", nullable = false, updatable = false)
     private UUID id;
+
+    @Column(name = "organization_id", nullable = false, updatable = false)
+    private UUID organizationId;
 
     @Column(name = "title", nullable = false, length = 200)
     private String title;
@@ -46,7 +52,15 @@ public class FindingEntity {
     }
 
     public FindingEntity(Finding finding) {
+        this(finding, SYSTEM_ORGANIZATION_ID);
+    }
+
+    public FindingEntity(
+            Finding finding,
+            UUID organizationId) {
+
         this.id = finding.id();
+        this.organizationId = organizationId;
         this.title = finding.title();
         this.description = finding.description();
         this.severity = finding.severity();
@@ -68,6 +82,10 @@ public class FindingEntity {
 
     public UUID getId() {
         return id;
+    }
+
+    public UUID getOrganizationId() {
+        return organizationId;
     }
 
     public String getTitle() {

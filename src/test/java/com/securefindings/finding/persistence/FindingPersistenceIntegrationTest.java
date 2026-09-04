@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,6 +28,9 @@ import com.securefindings.finding.domain.FindingStatus;
 @Testcontainers
 @SpringBootTest
 class FindingPersistenceIntegrationTest {
+
+        private static final UUID ORGANIZATION_ID = UUID.fromString(
+                        "00000000-0000-0000-0000-000000000001");
 
         @SuppressWarnings("resource")
         @Container
@@ -147,8 +151,9 @@ class FindingPersistenceIntegrationTest {
                 findingService.deleteById(createdFinding.id());
 
                 List<FindingAuditEntity> auditEvents = findingAuditRepository
-                                .findByFindingIdOrderByOccurredAtAsc(
-                                                createdFinding.id());
+                                .findByFindingIdAndOrganizationIdOrderByOccurredAtAsc(
+                                                createdFinding.id(),
+                                                ORGANIZATION_ID);
 
                 assertEquals(3, auditEvents.size());
 
