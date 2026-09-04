@@ -2,150 +2,149 @@
 
 ## Descripción
 
-SecureFindings API es un proyecto en desarrollo orientado a la gestión segura de hallazgos de seguridad.
+SecureFindings API es un proyecto en desarrollo para la gestión de hallazgos
+de seguridad.
 
-La aplicación incorpora controles relacionados con:
+La aplicación incorpora controles de autenticación, autorización, validación,
+persistencia, auditoría y aislamiento de datos por organización.
 
-- Autenticación.
-- Autorización.
-- Validación de entradas.
-- Control de acceso por organización.
-- Persistencia segura.
-- Auditoría.
-- Gestión de secretos.
-- Testing automatizado.
-- Seguridad de la infraestructura local.
+## Estado de seguridad
 
-## Estado del proyecto
+El proyecto está orientado actualmente a un entorno local y educativo.
 
-El proyecto se encuentra en desarrollo y está orientado principalmente a entornos locales, educativos y de portfolio.
-
-La configuración actual no debe considerarse preparada para producción sin realizar una revisión adicional de infraestructura, secretos, observabilidad, alta disponibilidad y configuración de Keycloak.
+La configuración actual no debe considerarse una configuración de producción.
+Antes de desplegar la aplicación en un entorno real sería necesario revisar
+los secretos, HTTPS, Keycloak, la infraestructura, la monitorización, las
+copias de seguridad y la gestión de usuarios.
 
 ## Autenticación
 
-La API utiliza Keycloak como proveedor de identidad.
+La autenticación se realiza mediante Keycloak.
 
-Spring Security funciona como OAuth2 Resource Server y valida los tokens JWT recibidos en las peticiones.
+La API funciona como OAuth2 Resource Server y valida los tokens JWT emitidos
+por el realm:
 
-El emisor configurado para el entorno local es:
+```text
+securefindings
+```
+
+Las peticiones protegidas deben enviar:
+
+```http
+Authorization: Bearer <access_token>
+```
+
+El issuer utilizado en el entorno local es:
 
 ```text
 http://localhost:8081/realms/securefindings
 ```
 
-Las peticiones protegidas deben incluir:
+La aplicación utiliza una arquitectura stateless:
 
-```http
-Authorization: Bearer <token>
-```
-
-El token debe proceder del realm `securefindings`.
-
-La API no utiliza:
-
-- Sesiones de usuario.
-- Form Login.
-- Autenticación HTTP Basic.
-
-La política de sesión es stateless.
+- No utiliza sesiones de aplicación.
+- No utiliza Form Login.
+- No utiliza HTTP Basic.
+- Valida los tokens mediante Spring Security.
 
 ## Autorización
 
 El acceso se controla mediante roles del realm de Keycloak.
 
-### Matriz de permisos
-
 | Operación | `ANALYST` | `ADMIN` |
 |---|---:|---:|
-| `GET /api/v1/findings` | Permitido | Permitido |
-| `GET /api/v1/findings/{id}` | Permitido | Permitido |
-| `POST /api/v1/findings` | Permitido | Permitido |
-| `PUT /api/v1/findings/{id}` | Permitido | Permitido |
-| `PATCH /api/v1/findings/{id}/status` | Permitido | Permitido |
-| `GET /api/v1/findings/{id}/audit` | Permitido | Permitido |
-| `DELETE /api/v1/findings/{id}` | Denegado | Permitido |
+| Consultar hallazgos | Permitido | Permitido |
+| Crear hallazgos | Permitido | Permitido |
+| Actualizar hallazgos | Permitido | Permitido |
+| Consultar auditoría | Permitido | Permitido |
+| Eliminar hallazgos | Denegado | Permitido |
 
-El endpoint siguiente es público:
+El endpoint de salud es público:
 
 ```http
 GET /api/v1/health
 ```
 
-Cualquier ruta no declarada explícitamente requiere autenticación.
+Las demás rutas requieren autenticación según la configuración de Spring
+Security.
 
 ## Aislamiento por organización
 
-La aplicación utiliza `organization_id` para separar los datos entre organizaciones.
+Cada hallazgo y cada evento de auditoría pertenece a una organización.
 
-Este valor debe llegar en un claim firmado del token JWT:
+La organización se obtiene del claim JWT:
 
 ```text
 organization_id
 ```
 
-El cliente no puede indicar la organización en el cuerpo de la petición ni seleccionar una organización arbitraria mediante un parámetro HTTP.
+Este valor no se acepta desde el cuerpo JSON ni desde parámetros enviados por
+el cliente.
 
-El flujo de validación es:
+El backend:
 
-1. Spring Security valida la firma y el emisor del token.
-2. `OrganizationContext` obtiene el claim `organization_id`.
-3. El claim se convierte a `UUID`.
-4. Se comprueba que la organización existe en PostgreSQL.
-5. Los repositorios filtran los datos por esa organización.
-6. Si el claim no existe, no es válido o la organización no existe, el acceso se rechaza.
+1. Obtiene el claim del JWT.
+2. Comprueba que tiene formato UUID.
+3. Comprueba que la organización existe.
+4. Utiliza la organización en las consultas de hallazgos.
+5. Utiliza la organización en las consultas de auditoría.
+6. Rechaza el acceso si el claim falta o es inválido.
 
-La organización de desarrollo utilizada por Flyway es:
+La organización utilizada en el entorno local es:
 
 ```text
 00000000-0000-0000-0000-000000000001
 ```
 
-El `organizationId` no forma parte del modelo público `Finding`.
+El `organizationId` no forma parte del modelo público `Finding`, evitando que
+el cliente pueda modificar o elegir el ámbito de sus datos.
 
-En las entidades de persistencia, la organización se almacena internamente y no se incluye en las respuestas JSON públicas.
+## Configuración de Keycloak
 
-## Auditoría
-
-La aplicación registra las principales operaciones realizadas sobre los hallazgos:
+El atributo de usuario configurado es:
 
 ```text
-CREATED
-UPDATED
-DELETED
+organization_id
 ```
 
-Cada evento de auditoría conserva:
+Los usuarios actuales tienen asignada la organización de desarrollo:
 
-- Identificador del evento.
-- Identificador del hallazgo.
-- Organización propietaria.
-- Acción ejecutada.
-- Usuario autenticado.
-- Fecha y hora de la operación.
-
-La consulta del historial también está filtrada por organización:
-
-```http
-GET /api/v1/findings/{id}/audit
+```text
+analista
+administrador
 ```
 
-Esto evita que un usuario consulte eventos pertenecientes a otra organización.
+El cliente utilizado para obtener tokens durante las pruebas es:
+
+```text
+securefindings-cli
+```
+
+El mapper copia el atributo del usuario al access token como claim:
+
+```text
+organization_id
+```
+
+El claim se incluye en el access token porque es el token que consume la API.
+La aplicación no utiliza introspección remota del token.
 
 ## Validación de entradas
 
-Las peticiones de creación y actualización se validan mediante Jakarta Validation.
+Las peticiones se validan mediante Jakarta Validation y mediante las
+restricciones del dominio.
 
-Se validan, entre otros aspectos:
+Se validan:
 
 - Título obligatorio.
 - Descripción obligatoria.
 - Longitudes máximas.
 - Severidad válida.
 - Estado válido.
-- Formato UUID de los identificadores.
+- Identificadores UUID.
+- Campos necesarios para cada operación.
 
-Los valores de severidad permitidos son:
+Severidades permitidas:
 
 ```text
 LOW
@@ -154,7 +153,7 @@ HIGH
 CRITICAL
 ```
 
-Los valores de estado permitidos son:
+Estados permitidos:
 
 ```text
 OPEN
@@ -163,28 +162,44 @@ RESOLVED
 FALSE_POSITIVE
 ```
 
-Las peticiones inválidas no deben llegar a la lógica de persistencia.
+## Auditoría
 
-## Persistencia
+La aplicación registra las operaciones principales sobre los hallazgos:
 
-La aplicación utiliza:
+```text
+CREATED
+UPDATED
+DELETED
+```
 
-- PostgreSQL.
-- Spring Data JPA.
-- Hibernate.
-- Flyway.
+Los eventos conservan:
 
-Hibernate se configura con:
+- Identificador del evento.
+- Identificador del hallazgo.
+- Organización.
+- Acción.
+- Usuario que ejecutó la operación.
+- Fecha y hora.
+
+La consulta también está filtrada por organización:
+
+```http
+GET /api/v1/findings/{id}/audit
+```
+
+Esto evita consultar eventos de otra organización.
+
+## Persistencia y Flyway
+
+La base de datos utilizada es PostgreSQL.
+
+Hibernate solo valida el esquema mediante:
 
 ```properties
 spring.jpa.hibernate.ddl-auto=validate
 ```
 
-Esto significa que Hibernate valida el esquema existente, pero no crea ni modifica tablas automáticamente.
-
-Flyway controla la evolución de la base de datos mediante migraciones versionadas.
-
-Las migraciones actuales son:
+Flyway controla las modificaciones mediante migraciones versionadas:
 
 ```text
 V1__crear_tabla_findings.sql
@@ -192,30 +207,25 @@ V2__crear_tabla_finding_audit.sql
 V3__crear_organizaciones_y_asignar_hallazgos.sql
 ```
 
-Las migraciones existentes no deben modificarse después de haber sido ejecutadas en una base de datos compartida. Los cambios posteriores deben realizarse mediante nuevas migraciones.
+No deben modificarse migraciones que ya hayan sido ejecutadas. Los nuevos
+cambios deben incluir una nueva migración.
 
 ## Gestión de secretos
 
-Las credenciales no deben escribirse directamente en:
+Las credenciales deben gestionarse mediante variables de entorno.
 
-- Código Java.
-- `application.properties`.
-- `compose.yml`.
-- Tests.
-- Documentación.
-- Issues o commits.
+No deben subirse al repositorio:
 
-La configuración local utiliza variables de entorno y un archivo `.env`.
+- Contraseñas.
+- Tokens JWT.
+- Secretos de clientes.
+- Claves privadas.
+- Archivos `.env`.
+- Datos reales de usuarios.
+- Información sensible de bases de datos.
 
-El archivo `.env` debe permanecer fuera del control de versiones.
-
-La plantilla pública es:
-
-```text
-.env.example
-```
-
-Esta plantilla debe contener únicamente nombres de variables y valores de ejemplo que no sean secretos reales.
+El archivo `.env.example` solo debe contener nombres de variables y valores de
+ejemplo.
 
 ## Docker
 
@@ -225,113 +235,107 @@ El entorno local utiliza Docker Compose mediante:
 compose.yml
 ```
 
-Los servicios principales son:
+Los servicios principales son PostgreSQL y Keycloak.
 
-- PostgreSQL.
-- Keycloak.
-
-Los puertos están vinculados a `localhost` para evitar exponerlos innecesariamente en la red local:
+Los puertos se vinculan a localhost:
 
 ```text
 127.0.0.1:5432
 127.0.0.1:8081
 ```
 
-Keycloak utiliza actualmente:
+Esto evita exponer directamente estos servicios a otras interfaces de red.
 
-```yaml
-command: ["start-dev"]
-```
+Keycloak utiliza `start-dev`, una configuración válida para desarrollo local,
+pero no adecuada como configuración final de producción.
 
-Esta configuración es válida para desarrollo local, pero no debe utilizarse como configuración final de producción.
+## Errores de seguridad
 
-## Seguridad de la API
+La API diferencia los principales errores:
 
-La configuración de Spring Security:
+| Código | Significado |
+|---|---|
+| `400` | Petición inválida |
+| `401` | Token ausente o no válido |
+| `403` | Usuario sin permisos o sin organización válida |
+| `404` | Recurso no encontrado |
+| `204` | Operación realizada sin contenido de respuesta |
 
-- Desactiva CSRF porque la API utiliza autenticación stateless mediante bearer tokens.
-- Desactiva Form Login.
-- Desactiva HTTP Basic.
-- No utiliza sesiones persistentes.
-- Requiere autenticación para las rutas protegidas.
-- Aplica autorización basada en roles.
-- Valida tokens JWT mediante el issuer configurado.
-- Utiliza el claim `preferred_username` como identidad principal.
+Los errores funcionales utilizan respuestas controladas para no exponer
+información interna innecesaria.
 
-Swagger y OpenAPI están permitidos para facilitar la documentación local de la API. En un entorno productivo debe revisarse si deben permanecer expuestos.
+## Testing
 
-## Errores y respuestas
+La aplicación contiene tests para comprobar:
 
-La API utiliza respuestas controladas para los errores funcionales.
-
-Ejemplo de hallazgo inexistente:
-
-```json
-{
-  "code": "FINDING_NOT_FOUND",
-  "message": "No se ha encontrado el hallazgo",
-  "errors": {}
-}
-```
-
-Los errores de autenticación y autorización deben diferenciarse:
-
-- `401 Unauthorized`: falta autenticación o el token no es válido.
-- `403 Forbidden`: el usuario está autenticado, pero no tiene permisos.
-- `404 Not Found`: el recurso no existe dentro del contexto autorizado.
-- `400 Bad Request`: la petición no cumple las validaciones.
-
-## Testing de seguridad
-
-La aplicación dispone de tests para comprobar:
-
+- Reglas del dominio.
+- Servicios de aplicación.
+- Controladores REST.
 - Configuración de Spring Security.
-- Acceso permitido a usuarios `ANALYST`.
-- Acceso permitido a usuarios `ADMIN`.
-- Prohibición de eliminación para `ANALYST`.
-- Validación de peticiones.
+- Roles `ANALYST` y `ADMIN`.
 - Aislamiento por organización.
 - Persistencia de hallazgos.
 - Persistencia de auditoría.
 - Consulta del historial.
+- Integración con PostgreSQL.
 
-Ejecutar la suite completa:
+Ejecutar la suite:
 
 ```powershell
 .\mvnw.cmd clean test
 ```
 
-## Buenas prácticas para desarrollo
+## Buenas prácticas
 
-Antes de realizar un commit:
+Durante el desarrollo:
 
-- No incluir `.env`.
-- No incluir tokens JWT.
-- No incluir contraseñas.
-- No incluir datos personales reales.
-- No modificar migraciones Flyway ya ejecutadas.
-- Mantener los tests actualizados.
-- Documentar los cambios sustanciales.
+- Utilizar tokens nuevos para cada prueba autenticada.
+- No imprimir tokens completos en la terminal.
+- No reutilizar tokens caducados.
+- No aceptar la organización desde el cliente.
+- Mantener actualizados los tests.
+- No modificar migraciones Flyway aplicadas.
+- No subir secretos.
 - Revisar los permisos de cada endpoint.
-- Comprobar que las consultas contienen el filtro de organización correspondiente.
+- Mantener actualizados `README.md` y `SECURITY.md` cuando cambie la
+  arquitectura o la seguridad.
+
+## Consideraciones para producción
+
+Antes de un despliegue real se debería revisar:
+
+- Uso obligatorio de HTTPS.
+- Gestión externa de secretos.
+- Rotación de credenciales.
+- Configuración productiva de Keycloak.
+- Eliminación de `start-dev`.
+- Políticas de contraseñas.
+- MFA.
+- Rotación de claves JWT.
+- Restricción de audiencias de los tokens.
+- Límites de tamaño y frecuencia de peticiones.
+- Monitorización y alertas.
+- Copias de seguridad de PostgreSQL.
+- Registro y protección de logs.
+- Configuración de CORS.
+- Revisión de Swagger y OpenAPI.
 
 ## Notificación de vulnerabilidades
 
-No publiques credenciales, tokens, datos personales ni detalles explotables en issues públicos.
+No publiques credenciales, tokens ni información explotable en issues públicos.
 
-Para comunicar una vulnerabilidad:
+Al notificar una vulnerabilidad incluye:
 
-1. No la divulgues públicamente de forma inmediata.
-2. Describe el endpoint o componente afectado.
-3. Incluye los pasos mínimos para reproducirla.
-4. Explica el impacto de seguridad.
-5. Evita incluir secretos reales.
-6. Proporciona una posible medida de mitigación si la conoces.
+- Componente afectado.
+- Pasos mínimos para reproducirla.
+- Impacto.
+- Evidencias relevantes sin secretos.
+- Posible mitigación.
 
 ## Referencias
 
 - [OWASP Top 10](https://owasp.org/www-project-top-ten/)
 - [OWASP API Security Top 10](https://owasp.org/API-Security/)
 - [Spring Security](https://spring.io/projects/spring-security)
-- [Keycloak Documentation](https://www.keycloak.org/documentation)
-- [Flyway Documentation](https://documentation.red-gate.com/flyway)
+- [Keycloak](https://www.keycloak.org/documentation)
+- [Flyway](https://documentation.red-gate.com/flyway)
