@@ -401,4 +401,36 @@ class FindingControllerTest {
                                 FindingSeverity.CRITICAL,
                                 FindingStatus.RESOLVED);
         }
+
+        @Test
+        void deberiaRechazarUnaPaginaNegativa() throws Exception {
+                mockMvc.perform(get("/api/v1/findings?page=-1"))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                                .andExpect(jsonPath("$.errors.page").exists());
+        }
+
+        @Test
+        void deberiaRechazarUnTamanoSuperiorAlPermitido() throws Exception {
+                mockMvc.perform(get("/api/v1/findings?size=101"))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                                .andExpect(jsonPath("$.errors.size").exists());
+        }
+
+        @Test
+        void deberiaRechazarUnaSeveridadInvalida() throws Exception {
+                mockMvc.perform(get("/api/v1/findings?severity=URGENT"))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                                .andExpect(jsonPath("$.errors.severity").exists());
+        }
+
+        @Test
+        void deberiaRechazarUnEstadoInvalido() throws Exception {
+                mockMvc.perform(get("/api/v1/findings?status=INVALID"))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                                .andExpect(jsonPath("$.errors.status").exists());
+        }
 }
