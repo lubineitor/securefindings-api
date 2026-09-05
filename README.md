@@ -2,7 +2,7 @@
 
 API REST desarrollada en Java y Spring Boot para registrar, consultar y gestionar hallazgos de seguridad.
 
-El proyecto está orientado a practicar desarrollo backend seguro, control de acceso, persistencia, auditoría, testing y aislamiento de datos entre organizaciones.
+El proyecto está orientado a practicar desarrollo backend seguro, control de acceso, persistencia, auditoría, testing, integración continua y aislamiento de datos entre organizaciones.
 
 ## Estado
 
@@ -21,6 +21,8 @@ Actualmente, el proyecto incluye:
 - Manejo controlado de errores.
 - Paginación de resultados.
 - Tests unitarios, web y de integración.
+- Integración continua con GitHub Actions.
+- Revisión automática de dependencias en pull requests.
 - Entorno local reproducible con Docker Compose.
 
 ## Objetivo
@@ -38,6 +40,8 @@ El proyecto aplica progresivamente los siguientes principios:
 - Trazabilidad de operaciones.
 - Aislamiento multi-organización.
 - Automatización de pruebas.
+- Integración continua.
+- Revisión de dependencias.
 
 ## Tecnologías
 
@@ -58,6 +62,7 @@ El proyecto aplica progresivamente los siguientes principios:
 | Testcontainers | Tests con PostgreSQL real |
 | Maven Wrapper | Compilación y ejecución |
 | Docker Compose | Infraestructura local |
+| GitHub Actions | Integración continua |
 | Springdoc OpenAPI | Documentación de la API |
 
 ## Funcionalidades
@@ -409,6 +414,39 @@ Keycloak estará disponible en:
 http://localhost:8081
 ```
 
+## Integración continua
+
+El workflow de GitHub Actions se encuentra en:
+
+```text
+.github/workflows/ci.yml
+```
+
+Se ejecuta automáticamente en:
+
+- Cada `push`.
+- Cada `pull_request`.
+
+El job `build-and-test`:
+
+1. Descarga el código.
+2. Configura Java 21.
+3. Utiliza Eclipse Temurin.
+4. Activa la caché de Maven.
+5. Ejecuta `clean verify`.
+6. Ejecuta todos los tests.
+7. Ejecuta los tests de integración con Testcontainers.
+
+El job `dependency-review` se ejecuta únicamente en pull requests.
+
+Su objetivo es detectar:
+
+- Dependencias vulnerables nuevas.
+- Cambios de dependencias con severidad moderada o superior.
+- Licencias no permitidas según la configuración de GitHub.
+
+El workflow utiliza permisos mínimos de lectura para reducir la superficie de ataque del pipeline.
+
 ## Tests
 
 El proyecto contiene diferentes niveles de prueba.
@@ -470,6 +508,10 @@ El test ejecuta la aplicación contra PostgreSQL real y verifica el aislamiento 
 ## Estructura principal
 
 ```text
+.github
+└── workflows
+    └── ci.yml
+
 src
 ├── main
 │   ├── java
@@ -508,6 +550,8 @@ El proyecto trabaja progresivamente riesgos relacionados con:
 - Falta de trazabilidad.
 - Acceso entre organizaciones.
 - Configuración insegura de infraestructura.
+- Dependencias vulnerables.
+- Fallos introducidos durante cambios de código.
 
 ## Licencia
 

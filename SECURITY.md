@@ -2,7 +2,7 @@
 
 ## Alcance
 
-SecureFindings API es un proyecto en desarrollo orientado a practicar seguridad aplicada al backend.
+SecureFindings API es un proyecto en desarrollo orientado a practicar seguridad aplicada al backend y al ciclo de desarrollo.
 
 La seguridad se aborda desde varias capas:
 
@@ -14,7 +14,9 @@ La seguridad se aborda desde varias capas:
 - Persistencia segura.
 - Auditoría.
 - Gestión de secretos.
+- Seguridad de dependencias.
 - Configuración de infraestructura.
+- Integración continua.
 - Pruebas automatizadas.
 
 ## Autenticación
@@ -340,6 +342,74 @@ La migración V3 introduce:
 - Las claves foráneas.
 - Los índices de consulta por organización.
 
+## Integración continua
+
+El workflow se encuentra en:
+
+```text
+.github/workflows/ci.yml
+```
+
+Se ejecuta en cada:
+
+- `push`.
+- `pull_request`.
+
+### Job de compilación y tests
+
+El job `build-and-test`:
+
+1. Descarga el código.
+2. Configura Java 21 mediante Eclipse Temurin.
+3. Utiliza la caché de Maven.
+4. Ejecuta `clean verify`.
+5. Compila desde cero.
+6. Ejecuta todos los tests.
+7. Ejecuta los tests de integración con Testcontainers.
+
+El job utiliza permisos mínimos:
+
+```yaml
+permissions:
+  contents: read
+```
+
+También desactiva la persistencia automática de credenciales de Git:
+
+```yaml
+persist-credentials: false
+```
+
+Esto reduce los permisos disponibles para los procesos que se ejecutan dentro del runner.
+
+### Revisión de dependencias
+
+El job `dependency-review` se ejecuta únicamente en pull requests.
+
+Esto es intencionado:
+
+- En un `push`, solo se ejecuta la compilación y los tests.
+- En una pull request, además se revisan las dependencias modificadas.
+
+La revisión falla cuando una pull request introduce una vulnerabilidad de severidad:
+
+```text
+moderate
+high
+critical
+```
+
+Esta protección ayuda a detectar dependencias vulnerables antes de fusionar cambios.
+
+La revisión de dependencias no sustituye a un análisis completo de vulnerabilidades. Debe complementarse con:
+
+- Actualizaciones periódicas.
+- Análisis de dependencias completo.
+- Revisión de avisos de seguridad.
+- Escaneo SAST.
+- Escaneo de secretos.
+- Revisión manual de cambios.
+
 ## Gestión de secretos
 
 Los siguientes valores no deben incluirse en Git:
@@ -363,7 +433,7 @@ El repositorio contiene únicamente valores de ejemplo:
 .env.example
 ```
 
-Antes de publicar la aplicación deben sustituirse las credenciales de desarrollo por secretos gestionados por la plataforma de despliegue.
+El workflow actual no utiliza secretos personalizados.
 
 Los tokens utilizados durante las pruebas manuales no deben imprimirse completos en la terminal ni incluirse en capturas.
 
@@ -443,10 +513,16 @@ El proyecto incluye pruebas para:
 - Registro de auditoría.
 - Validación de errores HTTP.
 
-Los tests se ejecutan con:
+Los tests se ejecutan localmente con:
 
 ```powershell
 .\mvnw.cmd test
+```
+
+Y automáticamente en GitHub Actions mediante:
+
+```bash
+./mvnw clean verify
 ```
 
 ## Consideraciones para producción
@@ -470,7 +546,9 @@ Antes de desplegar el proyecto en producción sería necesario:
 - Revisar los permisos de los roles.
 - Ejecutar análisis de dependencias.
 - Incorporar escaneo SAST y DAST al pipeline.
-- Revisar periódicamente las migraciones y restricciones de base de datos.
+- Incorporar escaneo de secretos.
+- Proteger la rama principal.
+- Exigir que el workflow pase antes de fusionar pull requests.
 
 ## Notificación de vulnerabilidades
 
