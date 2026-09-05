@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
+import static org.mockito.Mockito.verify;
 
 import java.util.List;
 import java.util.UUID;
@@ -295,5 +296,109 @@ class FindingControllerTest {
                                 .andExpect(status().isNotFound())
                                 .andExpect(jsonPath("$.code")
                                                 .value("FINDING_NOT_FOUND"));
+        }
+
+        @Test
+        void deberiaFiltrarLosHallazgosPorSeveridad() throws Exception {
+                Finding finding = Finding.create(
+                                "SQL Injection",
+                                "Entrada sin validar",
+                                FindingSeverity.HIGH);
+
+                when(findingService.findPage(
+                                0,
+                                20,
+                                FindingSeverity.HIGH,
+                                null))
+                                .thenReturn(new PageImpl<>(
+                                                List.of(finding),
+                                                PageRequest.of(0, 20),
+                                                1));
+
+                mockMvc.perform(get("/api/v1/findings")
+                                .param("severity", "HIGH"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.content").isArray())
+                                .andExpect(jsonPath("$.content[0].severity")
+                                                .value("HIGH"))
+                                .andExpect(jsonPath("$.totalElements")
+                                                .value(1));
+
+                verify(findingService).findPage(
+                                0,
+                                20,
+                                FindingSeverity.HIGH,
+                                null);
+        }
+
+        @Test
+        void deberiaFiltrarLosHallazgosPorEstado() throws Exception {
+                Finding finding = Finding.create(
+                                "Cross-Site Scripting",
+                                "Contenido sin escapar",
+                                FindingSeverity.MEDIUM)
+                                .withStatus(FindingStatus.IN_PROGRESS);
+
+                when(findingService.findPage(
+                                0,
+                                20,
+                                null,
+                                FindingStatus.IN_PROGRESS))
+                                .thenReturn(new PageImpl<>(
+                                                List.of(finding),
+                                                PageRequest.of(0, 20),
+                                                1));
+
+                mockMvc.perform(get("/api/v1/findings")
+                                .param("status", "IN_PROGRESS"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.content").isArray())
+                                .andExpect(jsonPath("$.content[0].status")
+                                                .value("IN_PROGRESS"))
+                                .andExpect(jsonPath("$.totalElements")
+                                                .value(1));
+
+                verify(findingService).findPage(
+                                0,
+                                20,
+                                null,
+                                FindingStatus.IN_PROGRESS);
+        }
+
+        @Test
+        void deberiaFiltrarLosHallazgosPorSeveridadYEstado() throws Exception {
+                Finding finding = Finding.create(
+                                "Configuración insegura",
+                                "Credenciales expuestas",
+                                FindingSeverity.CRITICAL)
+                                .withStatus(FindingStatus.RESOLVED);
+
+                when(findingService.findPage(
+                                0,
+                                20,
+                                FindingSeverity.CRITICAL,
+                                FindingStatus.RESOLVED))
+                                .thenReturn(new PageImpl<>(
+                                                List.of(finding),
+                                                PageRequest.of(0, 20),
+                                                1));
+
+                mockMvc.perform(get("/api/v1/findings")
+                                .param("severity", "CRITICAL")
+                                .param("status", "RESOLVED"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.content").isArray())
+                                .andExpect(jsonPath("$.content[0].severity")
+                                                .value("CRITICAL"))
+                                .andExpect(jsonPath("$.content[0].status")
+                                                .value("RESOLVED"))
+                                .andExpect(jsonPath("$.totalElements")
+                                                .value(1));
+
+                verify(findingService).findPage(
+                                0,
+                                20,
+                                FindingSeverity.CRITICAL,
+                                FindingStatus.RESOLVED);
         }
 }

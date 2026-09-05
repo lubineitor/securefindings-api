@@ -20,9 +20,11 @@ Actualmente, el proyecto incluye:
 - Validación de entradas.
 - Manejo controlado de errores.
 - Paginación de resultados.
+- Filtros por severidad y estado.
 - Tests unitarios, web y de integración.
 - Integración continua con GitHub Actions.
 - Revisión automática de dependencias en pull requests.
+- Análisis estático con CodeQL.
 - Entorno local reproducible con Docker Compose.
 
 ## Objetivo
@@ -42,6 +44,7 @@ El proyecto aplica progresivamente los siguientes principios:
 - Automatización de pruebas.
 - Integración continua.
 - Revisión de dependencias.
+- Análisis estático del código.
 
 ## Tecnologías
 
@@ -63,6 +66,7 @@ El proyecto aplica progresivamente los siguientes principios:
 | Maven Wrapper | Compilación y ejecución |
 | Docker Compose | Infraestructura local |
 | GitHub Actions | Integración continua |
+| CodeQL | Análisis estático de seguridad |
 | Springdoc OpenAPI | Documentación de la API |
 
 ## Funcionalidades
@@ -79,6 +83,9 @@ La API permite:
 - Eliminar hallazgos.
 - Consultar el historial de auditoría.
 - Paginar los resultados.
+- Filtrar por severidad.
+- Filtrar por estado.
+- Combinar filtros de severidad y estado.
 - Validar las peticiones recibidas.
 
 ### Severidades disponibles
@@ -95,6 +102,70 @@ La API permite:
 - `RESOLVED`
 - `FALSE_POSITIVE`
 
+### Paginación y filtros
+
+El listado de hallazgos utiliza paginación para evitar cargar todos los registros en memoria.
+
+Endpoint:
+
+```http
+GET /api/v1/findings
+```
+
+Parámetros disponibles:
+
+| Parámetro | Obligatorio | Valor predeterminado | Descripción |
+|---|---:|---:|---|
+| `page` | No | `0` | Número de página. Empieza en cero |
+| `size` | No | `20` | Elementos por página. Máximo `100` |
+| `severity` | No | — | Filtra por severidad |
+| `status` | No | — | Filtra por estado |
+
+Ejemplos:
+
+```http
+GET /api/v1/findings
+```
+
+```http
+GET /api/v1/findings?page=0&size=20
+```
+
+```http
+GET /api/v1/findings?severity=HIGH
+```
+
+```http
+GET /api/v1/findings?status=OPEN
+```
+
+```http
+GET /api/v1/findings?severity=HIGH&status=OPEN
+```
+
+Los filtros se aplican mediante consultas parametrizadas de Spring Data JPA. No se construyen consultas SQL concatenando valores recibidos del cliente.
+
+La respuesta contiene la información de paginación:
+
+```json
+{
+  "content": [],
+  "page": 0,
+  "size": 20,
+  "totalElements": 0,
+  "totalPages": 0,
+  "first": true,
+  "last": true
+}
+```
+
+Los resultados se ordenan por:
+
+1. Fecha de creación descendente.
+2. Identificador ascendente como orden estable.
+
+Todos los filtros se combinan con el aislamiento por organización. El cliente nunca puede indicar la organización mediante un parámetro de consulta.
+
 ### Auditoría
 
 Las operaciones importantes generan eventos de auditoría:
@@ -105,6 +176,7 @@ Las operaciones importantes generan eventos de auditoría:
 
 Cada evento almacena:
 
+- Identificador del evento.
 - Identificador del hallazgo.
 - Organización.
 - Acción realizada.
@@ -121,7 +193,9 @@ organization_id
 
 Este valor se obtiene del token JWT emitido por Keycloak.
 
-La API no acepta la organización desde el cuerpo de la petición. En su lugar:
+La API no acepta la organización desde el cuerpo de la petición, los parámetros de consulta ni las cabeceras controladas por el cliente.
+
+El flujo es:
 
 1. Keycloak emite el token.
 2. El token contiene el claim `organization_id`.
@@ -171,28 +245,21 @@ Respuesta:
 
 ```http
 GET /api/v1/findings?page=0&size=20
+Authorization: Bearer <token>
 ```
 
-Respuesta:
+También permite filtros:
 
-```json
-{
-  "content": [],
-  "page": 0,
-  "size": 20,
-  "totalElements": 0,
-  "totalPages": 0,
-  "first": true,
-  "last": true
-}
+```http
+GET /api/v1/findings?severity=HIGH&status=OPEN
+Authorization: Bearer <token>
 ```
-
-Los resultados se limitan siempre a la organización contenida en el token.
 
 ### Consultar un hallazgo
 
 ```http
 GET /api/v1/findings/{id}
+Authorization: Bearer <token>
 ```
 
 ### Crear un hallazgo
@@ -292,6 +359,8 @@ La interfaz Swagger UI está disponible en:
 ```text
 http://localhost:8080/swagger-ui.html
 ```
+
+Estos endpoints pueden requerir autenticación según la configuración de Spring Security.
 
 ## Persistencia y migraciones
 
@@ -416,13 +485,16 @@ http://localhost:8081
 
 ## Integración continua
 
-El workflow de GitHub Actions se encuentra en:
+Los workflows de GitHub Actions se encuentran en:
 
 ```text
 .github/workflows/ci.yml
+.github/workflows/codeql.yml
 ```
 
-Se ejecuta automáticamente en:
+### CI
+
+El workflow de CI se ejecuta automáticamente en:
 
 - Cada `push`.
 - Cada `pull_request`.
@@ -437,15 +509,48 @@ El job `build-and-test`:
 6. Ejecuta todos los tests.
 7. Ejecuta los tests de integración con Testcontainers.
 
+### Dependency Review
+
 El job `dependency-review` se ejecuta únicamente en pull requests.
 
-Su objetivo es detectar:
+Su objetivo es detectar dependencias nuevas con vulnerabilidades de severidad moderada o superior antes de fusionar los cambios.
 
-- Dependencias vulnerables nuevas.
-- Cambios de dependencias con severidad moderada o superior.
-- Licencias no permitidas según la configuración de GitHub.
+Para que funcione, el repositorio debe tener activado el Dependency Graph de GitHub.
 
-El workflow utiliza permisos mínimos de lectura para reducir la superficie de ataque del pipeline.
+### CodeQL
+
+El workflow de CodeQL analiza el código Java:
+
+- En cada `push`.
+- En cada `pull_request`.
+- Manualmente mediante `workflow_dispatch`.
+- De forma programada.
+
+La compilación se ejecuta antes del análisis para que CodeQL pueda analizar correctamente el código Java compilado.
+
+## Flujo de ramas
+
+El desarrollo activo se realiza en:
+
+```text
+develop
+```
+
+La rama estable es:
+
+```text
+main
+```
+
+Los cambios se incorporan a `main` mediante pull requests desde `develop`.
+
+La rama `main` mantiene:
+
+- Pull requests obligatorios.
+- Checks de CI obligatorios.
+- Revisión de dependencias.
+- Análisis CodeQL.
+- Protección frente a cambios directos.
 
 ## Tests
 
@@ -466,6 +571,10 @@ Comprueban `FindingService`, incluyendo:
 - Manejo de hallazgos inexistentes.
 - Uso del contexto de organización.
 - Aplicación del filtro por organización.
+- Paginación.
+- Filtro por severidad.
+- Filtro por estado.
+- Combinación de filtros.
 
 ### Tests web
 
@@ -476,6 +585,10 @@ Comprueban los controladores REST mediante MockMvc:
 - Respuestas JSON.
 - Autorización.
 - Manejo de errores.
+- Paginación.
+- Filtro por severidad.
+- Filtro por estado.
+- Combinación de filtros.
 - Restricción de eliminación para usuarios `ANALYST`.
 
 ### Tests de persistencia
@@ -488,6 +601,7 @@ Utilizan PostgreSQL real mediante Testcontainers y comprueban:
 - Eliminaciones.
 - Auditoría.
 - Restricciones de base de datos.
+- Aislamiento por organización.
 
 ### Tests de contexto de seguridad
 
@@ -510,7 +624,8 @@ El test ejecuta la aplicación contra PostgreSQL real y verifica el aislamiento 
 ```text
 .github
 └── workflows
-    └── ci.yml
+    ├── ci.yml
+    └── codeql.yml
 
 src
 ├── main

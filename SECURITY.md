@@ -15,6 +15,7 @@ La seguridad se aborda desde varias capas:
 - Auditoría.
 - Gestión de secretos.
 - Seguridad de dependencias.
+- Análisis estático.
 - Configuración de infraestructura.
 - Integración continua.
 - Pruebas automatizadas.
@@ -197,7 +198,13 @@ findByIdAndOrganizationId(...)
 existsByIdAndOrganizationId(...)
 deleteByIdAndOrganizationId(...)
 findAllByOrganizationId(...)
+findByOrganizationId(...)
+findByOrganizationIdAndSeverity(...)
+findByOrganizationIdAndStatus(...)
+findByOrganizationIdAndSeverityAndStatus(...)
 ```
+
+Las consultas paginadas y filtradas mantienen siempre la condición de organización.
 
 ### Capa de base de datos
 
@@ -216,6 +223,37 @@ organization_id
 ```
 
 Este diseño evita que un hallazgo o un evento de auditoría pueda existir sin una organización válida.
+
+## Seguridad de los filtros y la paginación
+
+El endpoint de listado admite:
+
+```http
+GET /api/v1/findings?page=0&size=20&severity=HIGH&status=OPEN
+```
+
+Los parámetros permitidos son:
+
+- `page`: no puede ser negativo.
+- `size`: debe estar entre 1 y 100.
+- `severity`: solo admite valores definidos en `FindingSeverity`.
+- `status`: solo admite valores definidos en `FindingStatus`.
+
+La severidad y el estado se convierten a enumeraciones Java. No se concatenan directamente en consultas SQL.
+
+Las consultas se generan mediante métodos parametrizados de Spring Data JPA:
+
+```java
+findByOrganizationIdAndSeverity(...)
+findByOrganizationIdAndStatus(...)
+findByOrganizationIdAndSeverityAndStatus(...)
+```
+
+Esto reduce el riesgo de inyección SQL y evita que el cliente controle fragmentos de la consulta.
+
+El cliente no puede utilizar los filtros para consultar otra organización, porque todas las consultas incluyen el identificador obtenido desde `OrganizationContext`.
+
+Los valores inválidos deben producir una respuesta controlada `400 Bad Request`.
 
 ## Prueba de aislamiento
 
@@ -305,6 +343,8 @@ Se validan:
 - Valores permitidos de severidad.
 - Valores permitidos de estado.
 - Formato de identificadores UUID.
+- Número de página.
+- Tamaño máximo de página.
 - Estructura de las peticiones JSON.
 
 La API no debe confiar en que el cliente envíe datos correctos.
@@ -313,7 +353,8 @@ La validación se realiza:
 
 1. En la entrada HTTP.
 2. En los objetos de dominio.
-3. En las restricciones de base de datos.
+3. En las consultas paginadas.
+4. En las restricciones de base de datos.
 
 ## Persistencia segura
 
@@ -344,18 +385,19 @@ La migración V3 introduce:
 
 ## Integración continua
 
-El workflow se encuentra en:
+El workflow de CI se encuentra en:
 
 ```text
 .github/workflows/ci.yml
 ```
 
-Se ejecuta en cada:
+El workflow de CodeQL se encuentra en:
 
-- `push`.
-- `pull_request`.
+```text
+.github/workflows/codeql.yml
+```
 
-### Job de compilación y tests
+### Compilación y tests
 
 El job `build-and-test`:
 
@@ -388,7 +430,7 @@ El job `dependency-review` se ejecuta únicamente en pull requests.
 
 Esto es intencionado:
 
-- En un `push`, solo se ejecuta la compilación y los tests.
+- En un `push`, se ejecuta la compilación y los tests.
 - En una pull request, además se revisan las dependencias modificadas.
 
 La revisión falla cuando una pull request introduce una vulnerabilidad de severidad:
@@ -399,7 +441,7 @@ high
 critical
 ```
 
-Esta protección ayuda a detectar dependencias vulnerables antes de fusionar cambios.
+El repositorio debe tener activado el Dependency Graph de GitHub.
 
 La revisión de dependencias no sustituye a un análisis completo de vulnerabilidades. Debe complementarse con:
 
@@ -409,6 +451,19 @@ La revisión de dependencias no sustituye a un análisis completo de vulnerabili
 - Escaneo SAST.
 - Escaneo de secretos.
 - Revisión manual de cambios.
+
+### CodeQL
+
+CodeQL analiza el código Java después de compilarlo.
+
+El workflow se ejecuta:
+
+- En cada `push`.
+- En cada `pull_request`.
+- Manualmente.
+- De forma programada.
+
+El análisis ayuda a detectar patrones de código potencialmente vulnerables, pero no sustituye a los tests, la revisión manual ni las pruebas dinámicas.
 
 ## Gestión de secretos
 
@@ -511,6 +566,8 @@ El proyecto incluye pruebas para:
 - Aislamiento entre organizaciones.
 - Persistencia en PostgreSQL.
 - Registro de auditoría.
+- Paginación.
+- Filtros por severidad y estado.
 - Validación de errores HTTP.
 
 Los tests se ejecutan localmente con:
@@ -524,6 +581,32 @@ Y automáticamente en GitHub Actions mediante:
 ```bash
 ./mvnw clean verify
 ```
+
+## Flujo de ramas
+
+El desarrollo activo se realiza en:
+
+```text
+develop
+```
+
+La rama protegida es:
+
+```text
+main
+```
+
+Los cambios deben llegar a `main` mediante pull requests.
+
+La protección de la rama principal debe mantener como mínimo:
+
+- Pull request obligatorio.
+- Checks de CI.
+- Revisión de dependencias.
+- Análisis CodeQL.
+- Prohibición de cambios directos para colaboradores normales.
+
+Actualmente no se exige una aprobación obligatoria porque el repositorio es mantenido por un único usuario. Si el proyecto incorpora más colaboradores, debería exigirse al menos una aprobación antes de fusionar cambios.
 
 ## Consideraciones para producción
 
@@ -545,10 +628,11 @@ Antes de desplegar el proyecto en producción sería necesario:
 - Validar la configuración de Keycloak.
 - Revisar los permisos de los roles.
 - Ejecutar análisis de dependencias.
-- Incorporar escaneo SAST y DAST al pipeline.
+- Mantener CodeQL activo.
+- Incorporar escaneo DAST.
 - Incorporar escaneo de secretos.
 - Proteger la rama principal.
-- Exigir que el workflow pase antes de fusionar pull requests.
+- Exigir que los workflows pasen antes de fusionar pull requests.
 
 ## Notificación de vulnerabilidades
 
