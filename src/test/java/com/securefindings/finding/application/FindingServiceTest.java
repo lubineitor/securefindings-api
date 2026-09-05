@@ -244,4 +244,64 @@ class FindingServiceTest {
                                                 id,
                                                 TEST_ORGANIZATION_ID);
         }
+
+        @Test
+        void noDebeEncontrarUnHallazgoDeOtraOrganizacion() {
+                UUID organizationB = UUID.fromString(
+                                "00000000-0000-0000-0000-000000000002");
+
+                Finding finding = Finding.create(
+                                "SQL Injection",
+                                "Hallazgo perteneciente a otra organización",
+                                FindingSeverity.HIGH);
+
+                when(organizationContext.currentOrganizationId())
+                                .thenReturn(organizationB);
+
+                when(findingRepository.findByIdAndOrganizationId(
+                                finding.id(),
+                                organizationB))
+                                .thenReturn(Optional.empty());
+
+                assertTrue(
+                                findingService.findById(finding.id()).isEmpty());
+
+                verify(findingRepository)
+                                .findByIdAndOrganizationId(
+                                                finding.id(),
+                                                organizationB);
+
+                verify(findingRepository, never())
+                                .findById(finding.id());
+        }
+
+        @Test
+        void noDebeEliminarUnHallazgoDeOtraOrganizacion() {
+                UUID organizationB = UUID.fromString(
+                                "00000000-0000-0000-0000-000000000002");
+
+                UUID findingId = UUID.randomUUID();
+
+                when(organizationContext.currentOrganizationId())
+                                .thenReturn(organizationB);
+
+                when(findingRepository.existsByIdAndOrganizationId(
+                                findingId,
+                                organizationB))
+                                .thenReturn(false);
+
+                assertThrows(
+                                FindingNotFoundException.class,
+                                () -> findingService.deleteById(findingId));
+
+                verify(findingRepository)
+                                .existsByIdAndOrganizationId(
+                                                findingId,
+                                                organizationB);
+
+                verify(findingRepository, never())
+                                .deleteByIdAndOrganizationId(
+                                                findingId,
+                                                organizationB);
+        }
 }
