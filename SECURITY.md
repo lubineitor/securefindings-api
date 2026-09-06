@@ -2,9 +2,9 @@
 
 ## Objetivo
 
-Este documento describe las medidas de seguridad implementadas en SecureFindings API, las decisiones adoptadas y las limitaciones conocidas del entorno actual.
+Este documento describe las medidas de seguridad implementadas en SecureFindings API y las limitaciones actuales del proyecto.
 
-El proyecto se desarrolla aplicando principios de:
+La aplicación se desarrolla aplicando:
 
 - Secure by Design.
 - Defense in Depth.
@@ -14,33 +14,15 @@ El proyecto se desarrolla aplicando principios de:
 - Auditoría.
 - Seguridad por defecto.
 
-## Alcance
-
-La aplicación protege una API REST para gestionar hallazgos de seguridad.
-
-Los recursos principales son:
-
-- Hallazgos.
-- Organizaciones.
-- Eventos de auditoría.
-- Usuarios y roles de Keycloak.
-
 ## Autenticación
 
 La autenticación se delega en Keycloak.
 
-La API funciona como OAuth2 Resource Server y valida tokens JWT mediante el issuer configurado:
+La API funciona como OAuth2 Resource Server y valida tokens JWT mediante:
 
 ```properties
 spring.security.oauth2.resourceserver.jwt.issuer-uri=http://localhost:8081/realms/securefindings
 ```
-
-La aplicación no gestiona directamente:
-
-- Contraseñas.
-- Sesiones de usuario.
-- Recuperación de contraseñas.
-- Emisión de tokens.
 
 Spring Security valida:
 
@@ -48,7 +30,7 @@ Spring Security valida:
 - Emisor.
 - Caducidad.
 - Claims.
-- Autoridades y roles.
+- Roles y autoridades.
 
 Las peticiones protegidas deben incluir:
 
@@ -64,26 +46,25 @@ Un token ausente o inválido produce:
 
 ## Autorización
 
-La autorización utiliza roles de Keycloak.
-
-Matriz actual:
+La autorización se basa en los roles del token.
 
 | Operación | ANALYST | ADMIN |
 |---|---:|---:|
 | Consultar hallazgos | Sí | Sí |
+| Buscar hallazgos | Sí | Sí |
 | Crear hallazgos | Sí | Sí |
 | Actualizar hallazgos | Sí | Sí |
 | Actualizar estados | Sí | Sí |
 | Consultar auditoría | Sí | Sí |
 | Eliminar hallazgos | No | Sí |
 
-Un usuario autenticado sin el rol necesario recibe:
+La eliminación se limita a `ADMIN` porque es una operación destructiva.
+
+Un usuario autenticado sin permisos recibe:
 
 ```text
 403 Forbidden
 ```
-
-La eliminación se reserva a `ADMIN` porque es una operación destructiva.
 
 ## Aislamiento organizativo
 
@@ -102,91 +83,89 @@ Ejemplo:
 }
 ```
 
-La aplicación obtiene la organización desde el contexto de seguridad y no desde datos enviados por el cliente.
+La organización se obtiene del contexto de seguridad y no de valores enviados por el cliente.
 
-Esto evita que un usuario pueda intentar seleccionar manualmente otra organización mediante:
-
-- Parámetros de consulta.
-- Campos JSON.
-- Cabeceras personalizadas.
-- Identificadores manipulados.
-
-Las consultas de hallazgos incluyen siempre el identificador de la organización actual.
-
-Ejemplo conceptual:
+Las consultas filtran siempre por organización:
 
 ```text
-findByIdAndOrganizationId(id, organizationId)
+organization_id = organización_actual
 ```
 
-No se considera suficiente comprobar únicamente el identificador del hallazgo.
+Esto se aplica a:
 
-Esta protección evita vulnerabilidades de:
+- Listados.
+- Búsquedas.
+- Filtros.
+- Consultas por identificador.
+- Actualizaciones.
+- Eliminaciones.
+- Auditorías.
+
+Esta protección evita:
 
 - IDOR.
 - Broken Object Level Authorization.
-- Acceso cruzado entre tenants.
+- Acceso cruzado entre organizaciones.
+- Manipulación de identificadores.
+
+## Búsqueda textual y SQL Injection
+
+La búsqueda se realiza mediante el parámetro:
+
+```http
+GET /api/v1/findings?q=SQL
+```
+
+El valor se utiliza como parámetro de una consulta JPQL. No se concatena directamente con una consulta SQL.
+
+La búsqueda se aplica sobre:
+
+- Título.
+- Descripción.
+
+Además:
+
+- No distingue entre mayúsculas y minúsculas.
+- Tiene una longitud máxima de `100` caracteres.
+- Se combina con severidad, estado y organización.
+- Utiliza paginación.
+
+El aislamiento organizativo se aplica antes de devolver los resultados.
 
 ## Validación de entradas
 
-La API valida las peticiones en varios niveles.
+Se validan los cuerpos y parámetros recibidos por la API.
 
-### Validación de cuerpos
-
-Las peticiones de creación y actualización utilizan DTOs con Bean Validation.
-
-Se validan:
-
-- Campos obligatorios.
-- Longitudes máximas.
-- Valores no vacíos.
-- Enumeraciones.
-- Formato de los datos.
-
-### Validación de parámetros
-
-Los parámetros del listado tienen límites definidos:
+### Parámetros de listado
 
 ```text
 page >= 0
 1 <= size <= 100
+q <= 100 caracteres
 ```
 
-También se validan los valores de:
+También se validan:
 
-- `severity`.
-- `status`.
+- Severidades.
+- Estados.
+- Identificadores UUID.
+- Campos obligatorios.
+- Longitudes máximas.
+- Valores no vacíos.
 
-Los errores de validación se transforman en una respuesta consistente:
+Los errores se devuelven con una estructura común:
 
 ```json
 {
   "code": "VALIDATION_ERROR",
   "message": "La petición contiene parámetros no válidos",
   "errors": {
-    "page": "El valor del parámetro no es válido"
+    "q": "El valor del parámetro no es válido"
   }
 }
 ```
 
-Las validaciones de cuerpo utilizan la misma estructura:
-
-```json
-{
-  "code": "VALIDATION_ERROR",
-  "message": "La petición contiene datos no válidos",
-  "errors": {
-    "title": "El título no puede estar vacío"
-  }
-}
-```
-
-El objetivo es:
-
-- Evitar datos inválidos.
-- Reducir errores inesperados.
-- Evitar que detalles internos lleguen al cliente.
-- Mantener un contrato HTTP estable.
+Esto evita que las excepciones internas lleguen directamente al cliente.
 
 ## Manejo de errores
 
@@ -201,44 +180,31 @@ Respuestas principales:
 | `403` | — | Falta de permisos |
 | `404` | `FINDING_NOT_FOUND` | Hallazgo inexistente |
 
-Las excepciones de validación controladas son:
-
-- `MethodArgumentNotValidException`.
-- `HandlerMethodValidationException`.
-- `MethodArgumentTypeMismatchException`.
-
-Las excepciones no deben exponer:
+No se deben exponer:
 
 - Stack traces.
 - Consultas SQL.
-- Credenciales.
 - Tokens.
-- Configuración interna.
-- Rutas sensibles del sistema.
-- Detalles del servidor.
+- Contraseñas.
+- Rutas internas.
+- Configuración sensible.
+- Detalles de la infraestructura.
 
 ## Persistencia
 
 La aplicación utiliza Spring Data JPA y PostgreSQL.
 
-Las consultas se construyen mediante repositorios tipados y métodos derivados de Spring Data JPA.
+La búsqueda y los filtros se ejecutan mediante consultas parametrizadas y repositorios tipados.
 
 No se deben concatenar valores recibidos del usuario dentro de consultas SQL.
 
-La estructura de la base de datos se controla con Flyway:
+La estructura de base de datos se controla con Flyway:
 
 ```properties
 spring.jpa.hibernate.ddl-auto=validate
 ```
 
-Hibernate únicamente valida el esquema. Las modificaciones se realizan mediante migraciones versionadas.
-
-Esto permite:
-
-- Revisar los cambios de base de datos.
-- Reproducir el esquema.
-- Evitar cambios automáticos inesperados.
-- Mantener trazabilidad.
+Hibernate únicamente valida el esquema existente.
 
 ## Auditoría
 
@@ -254,47 +220,36 @@ Cada evento registra:
 
 - Hallazgo afectado.
 - Organización.
-- Acción realizada.
+- Acción.
 - Actor.
 - Fecha y hora.
 
-La auditoría permite investigar:
-
-- Quién creó un hallazgo.
-- Quién lo modificó.
-- Quién lo eliminó.
-- Cuándo ocurrió cada operación.
-
-El actor se obtiene del token autenticado, utilizando preferentemente:
+El actor se obtiene del token autenticado, preferentemente desde:
 
 ```text
 preferred_username
 ```
 
-No se confía en un nombre de usuario enviado por el cliente.
+No se confía en un nombre de usuario proporcionado por el cliente.
 
 ## Protección contra acceso cruzado
 
-Las operaciones de consulta, actualización y eliminación deben comprobar la organización actual.
-
-La respuesta ante un hallazgo inexistente o perteneciente a otra organización es:
+Si un hallazgo pertenece a otra organización, la API responde como si no existiera:
 
 ```text
 404 Not Found
 ```
 
-Esto evita revelar innecesariamente si un identificador existe en otra organización.
+Esto evita revelar información sobre recursos de otras organizaciones.
 
-No se debe devolver una respuesta diferente para distinguir entre:
+La aplicación no diferencia públicamente entre:
 
 - Hallazgo inexistente.
 - Hallazgo perteneciente a otra organización.
 
 ## Gestión de secretos
 
-Las credenciales se cargan mediante variables de entorno.
-
-Ejemplo:
+Las credenciales se cargan mediante variables de entorno:
 
 ```properties
 spring.datasource.username=${POSTGRES_USER}
@@ -307,36 +262,27 @@ Las contraseñas reales no deben:
 - Escribirse en `application.properties`.
 - Incluirse en `compose.yml`.
 - Compartirse en capturas.
-- Introducirse en logs.
+- Aparecer en logs.
 
 El archivo `.env` se utiliza localmente y debe permanecer fuera del repositorio.
 
-El archivo `.env.example` contiene únicamente una plantilla sin secretos reales.
-
 ## Docker y entorno local
 
-Docker Compose se utiliza para levantar PostgreSQL y Keycloak durante el desarrollo.
+Docker Compose se utiliza para PostgreSQL y Keycloak durante el desarrollo.
 
-El entorno local utiliza:
+El entorno local no debe considerarse una configuración de producción.
 
-- PostgreSQL 17.
-- Keycloak 26.7.3.
-- Red local.
-- Volúmenes persistentes.
-
-Este entorno no debe considerarse una configuración de producción.
-
-Para producción se necesitarían, como mínimo:
+Para producción serían necesarios:
 
 - TLS.
-- Secretos gestionados externamente.
+- Gestión externa de secretos.
 - Usuarios administrativos permanentes.
-- Configuración de Keycloak endurecida.
-- Bases de datos gestionadas.
+- Keycloak endurecido.
 - Restricción de puertos.
 - Copias de seguridad.
 - Monitorización.
 - Rotación de credenciales.
+- Protección contra abuso.
 
 ## Dependencias y CI
 
@@ -346,13 +292,13 @@ GitHub Actions ejecuta:
 - Tests.
 - Dependency Review.
 - CodeQL.
-- Análisis de seguridad del código.
+- Análisis estático.
+
+Dependency Review permite detectar dependencias nuevas con vulnerabilidades conocidas.
 
 CodeQL ayuda a detectar patrones inseguros en el código.
 
-Dependency Review ayuda a identificar dependencias nuevas con posibles vulnerabilidades.
-
-Los resultados de CI deben revisarse antes de integrar cambios en `main`.
+Los resultados deben revisarse antes de integrar cambios en `main`.
 
 ## Riesgos OWASP considerados
 
@@ -360,17 +306,17 @@ Los resultados de CI deben revisarse antes de integrar cambios en `main`.
 
 Mitigado mediante:
 
-- Roles `ANALYST` y `ADMIN`.
-- Reglas HTTP en Spring Security.
-- Comprobación de organización.
-- Restricción de la eliminación a administradores.
+- Roles de Keycloak.
+- Reglas de Spring Security.
+- Restricción de eliminación a `ADMIN`.
+- Validación de la organización actual.
 
 ### Broken Object Level Authorization
 
 Mitigado mediante consultas que combinan:
 
 ```text
-finding_id + organization_id
+identificador_del_hallazgo + organization_id
 ```
 
 ### Injection
@@ -378,16 +324,17 @@ finding_id + organization_id
 Mitigado mediante:
 
 - Spring Data JPA.
-- Parámetros tipados.
+- Consultas parametrizadas.
 - Validación de entradas.
-- Ausencia de concatenación SQL con datos del usuario.
+- Búsqueda textual sin concatenación SQL.
+- Uso de tipos Java para filtros.
 
 ### Identification and Authentication Failures
 
 Mitigado mediante:
 
 - Keycloak.
-- Tokens JWT.
+- JWT.
 - Validación del issuer.
 - Expiración de tokens.
 - Roles incluidos en el token.
@@ -396,20 +343,10 @@ Mitigado mediante:
 
 Mitigado parcialmente mediante:
 
-- Auditoría de operaciones.
+- Auditoría.
 - Registro del actor.
 - Registro de fechas.
 - Eventos de creación, actualización y eliminación.
-
-### Vulnerable and Outdated Components
-
-Mitigado mediante:
-
-- Dependency Review.
-- CodeQL.
-- Maven.
-- CI automatizada.
-- Revisión de actualizaciones.
 
 ## Limitaciones actuales
 
@@ -420,13 +357,11 @@ El proyecto todavía no incluye:
 - Gestión centralizada de secretos.
 - Rotación automática de claves.
 - Despliegue productivo.
-- TLS configurado dentro de la aplicación.
+- TLS dentro de la aplicación.
 - Monitorización avanzada.
 - Alertas de seguridad.
 - Escaneo dinámico automatizado.
 - Backup automatizado de PostgreSQL.
-
-Estas limitaciones forman parte del desarrollo futuro.
 
 ## Reporte de vulnerabilidades
 
@@ -437,7 +372,7 @@ No se deben publicar:
 - Tokens.
 - Contraseñas.
 - Datos personales.
-- Evidencias con información sensible.
+- Evidencias sensibles.
 - Detalles explotables antes de su corrección.
 
 Un reporte debe incluir:
@@ -447,11 +382,11 @@ Un reporte debe incluir:
 - Pasos para reproducirlo.
 - Impacto.
 - Evidencias mínimas.
-- Propuesta de mitigación, si está disponible.
+- Propuesta de mitigación.
 
 ## Flujo de desarrollo seguro
 
-El desarrollo se realiza en la rama:
+El trabajo se realiza en:
 
 ```text
 develop
@@ -463,17 +398,17 @@ Los cambios terminados se integran mediante Pull Request hacia:
 main
 ```
 
-Antes de integrar un cambio se debe comprobar:
+Antes de integrar cambios se ejecuta:
 
 ```powershell
 .\mvnw.cmd clean test
 ```
 
-También deben revisarse:
+También se revisan:
 
-- Resultado de CodeQL.
+- CodeQL.
 - Dependency Review.
 - Cambios de migraciones.
 - Cambios de permisos.
-- Actualización de documentación.
+- Documentación.
 - Exposición accidental de secretos.

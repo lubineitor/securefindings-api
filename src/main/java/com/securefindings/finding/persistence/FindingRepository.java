@@ -7,6 +7,8 @@ import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import com.securefindings.finding.domain.FindingSeverity;
 import com.securefindings.finding.domain.FindingStatus;
@@ -48,4 +50,32 @@ public interface FindingRepository
                         FindingSeverity severity,
                         FindingStatus status,
                         Pageable pageable);
+
+        @Query("""
+                        SELECT finding
+                        FROM FindingEntity finding
+                        WHERE finding.organizationId = :organizationId
+                          AND (
+                                :searchTerm IS NULL
+                                OR LOWER(finding.title)
+                                   LIKE LOWER(CONCAT('%', :searchTerm, '%'))
+                                OR LOWER(finding.description)
+                                   LIKE LOWER(CONCAT('%', :searchTerm, '%'))
+                          )
+                          AND (
+                                :severity IS NULL
+                                OR finding.severity = :severity
+                          )
+                          AND (
+                                :status IS NULL
+                                OR finding.status = :status
+                          )
+                        """)
+        Page<FindingEntity> findPageByFilters(
+                        @Param("organizationId") UUID organizationId,
+                        @Param("searchTerm") String searchTerm,
+                        @Param("severity") FindingSeverity severity,
+                        @Param("status") FindingStatus status,
+                        Pageable pageable);
+
 }

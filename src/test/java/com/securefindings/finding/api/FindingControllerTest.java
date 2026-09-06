@@ -2,6 +2,7 @@ package com.securefindings.finding.api;
 
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -9,8 +10,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
-import static org.mockito.Mockito.verify;
 
 import java.util.List;
 import java.util.UUID;
@@ -38,12 +37,18 @@ import com.securefindings.finding.domain.FindingStatus;
 import com.securefindings.security.SecurityConfig;
 
 @WebMvcTest(controllers = FindingController.class)
-@Import({ SecurityConfig.class, GlobalExceptionHandler.class })
+@Import({
+                SecurityConfig.class,
+                GlobalExceptionHandler.class
+})
 @WithMockUser(username = "analista", roles = "ANALYST")
 class FindingControllerTest {
 
         @Autowired
         private WebApplicationContext context;
+
+        @MockitoBean
+        private FindingService findingService;
 
         private MockMvc mockMvc;
 
@@ -55,14 +60,12 @@ class FindingControllerTest {
                                 .build();
         }
 
-        @MockitoBean
-        private FindingService findingService;
-
         @Test
         void deberiaDevolverUnaListaVacia() throws Exception {
                 when(findingService.findPage(
                                 0,
                                 20,
+                                null,
                                 null,
                                 null))
                                 .thenReturn(new PageImpl<>(
@@ -153,7 +156,9 @@ class FindingControllerTest {
         }
 
         @Test
-        void deberiaObtenerUnHallazgoPorSuIdentificador() throws Exception {
+        void deberiaObtenerUnHallazgoPorSuIdentificador()
+                        throws Exception {
+
                 Finding finding = Finding.create(
                                 "Cross-Site Scripting",
                                 "Contenido no escapado correctamente",
@@ -162,7 +167,9 @@ class FindingControllerTest {
                 when(findingService.getById(finding.id()))
                                 .thenReturn(finding);
 
-                mockMvc.perform(get("/api/v1/findings/{id}", finding.id()))
+                mockMvc.perform(get(
+                                "/api/v1/findings/{id}",
+                                finding.id()))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.id")
                                                 .value(finding.id().toString()))
@@ -175,22 +182,207 @@ class FindingControllerTest {
         }
 
         @Test
-        void deberiaDevolver404SiElHallazgoNoExiste() throws Exception {
+        void deberiaDevolver404SiElHallazgoNoExiste()
+                        throws Exception {
+
                 UUID id = UUID.randomUUID();
 
                 when(findingService.getById(id))
                                 .thenThrow(new FindingNotFoundException(id));
 
-                mockMvc.perform(get("/api/v1/findings/{id}", id))
+                mockMvc.perform(get(
+                                "/api/v1/findings/{id}",
+                                id))
                                 .andExpect(status().isNotFound())
                                 .andExpect(jsonPath("$.code")
                                                 .value("FINDING_NOT_FOUND"))
                                 .andExpect(jsonPath("$.message")
-                                                .value("No se ha encontrado el hallazgo con identificador: " + id));
+                                                .value(
+                                                                "No se ha encontrado el hallazgo "
+                                                                                + "con identificador: " + id));
         }
 
         @Test
-        void deberiaActualizarElEstadoDeUnHallazgo() throws Exception {
+        void deberiaFiltrarLosHallazgosPorSeveridad()
+                        throws Exception {
+
+                Finding finding = Finding.create(
+                                "SQL Injection",
+                                "Consulta sin parametrizar",
+                                FindingSeverity.HIGH);
+
+                when(findingService.findPage(
+                                0,
+                                20,
+                                null,
+                                FindingSeverity.HIGH,
+                                null))
+                                .thenReturn(new PageImpl<>(
+                                                List.of(finding),
+                                                PageRequest.of(0, 20),
+                                                1));
+
+                mockMvc.perform(get("/api/v1/findings")
+                                .param("severity", "HIGH"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.content[0].severity")
+                                                .value("HIGH"))
+                                .andExpect(jsonPath("$.totalElements")
+                                                .value(1));
+        }
+
+        @Test
+        void deberiaFiltrarLosHallazgosPorEstado()
+                        throws Exception {
+
+                Finding finding = Finding.create(
+                                "Cross-Site Scripting",
+                                "Contenido sin escapar",
+                                FindingSeverity.MEDIUM);
+
+                Finding inProgressFinding = finding.withStatus(
+                                FindingStatus.IN_PROGRESS);
+
+                when(findingService.findPage(
+                                0,
+                                20,
+                                null,
+                                null,
+                                FindingStatus.IN_PROGRESS))
+                                .thenReturn(new PageImpl<>(
+                                                List.of(inProgressFinding),
+                                                PageRequest.of(0, 20),
+                                                1));
+
+                mockMvc.perform(get("/api/v1/findings")
+                                .param("status", "IN_PROGRESS"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.content[0].status")
+                                                .value("IN_PROGRESS"))
+                                .andExpect(jsonPath("$.totalElements")
+                                                .value(1));
+        }
+
+        @Test
+        void deberiaFiltrarLosHallazgosPorSeveridadYEstado()
+                        throws Exception {
+
+                Finding finding = Finding.create(
+                                "SQL Injection",
+                                "Consulta sin parametrizar",
+                                FindingSeverity.CRITICAL);
+
+                Finding inProgressFinding = finding.withStatus(
+                                FindingStatus.IN_PROGRESS);
+
+                when(findingService.findPage(
+                                0,
+                                20,
+                                null,
+                                FindingSeverity.CRITICAL,
+                                FindingStatus.IN_PROGRESS))
+                                .thenReturn(new PageImpl<>(
+                                                List.of(inProgressFinding),
+                                                PageRequest.of(0, 20),
+                                                1));
+
+                mockMvc.perform(get("/api/v1/findings")
+                                .param("severity", "CRITICAL")
+                                .param("status", "IN_PROGRESS"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.content[0].severity")
+                                                .value("CRITICAL"))
+                                .andExpect(jsonPath("$.content[0].status")
+                                                .value("IN_PROGRESS"))
+                                .andExpect(jsonPath("$.totalElements")
+                                                .value(1));
+        }
+
+        @Test
+        void deberiaBuscarLosHallazgosPorTexto()
+                        throws Exception {
+
+                Finding finding = Finding.create(
+                                "SQL Injection",
+                                "Consulta sin parametrizar",
+                                FindingSeverity.HIGH);
+
+                when(findingService.findPage(
+                                0,
+                                20,
+                                "SQL",
+                                null,
+                                null))
+                                .thenReturn(new PageImpl<>(
+                                                List.of(finding),
+                                                PageRequest.of(0, 20),
+                                                1));
+
+                mockMvc.perform(get("/api/v1/findings")
+                                .param("q", "SQL"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.content[0].title")
+                                                .value("SQL Injection"))
+                                .andExpect(jsonPath("$.totalElements")
+                                                .value(1));
+        }
+
+        @Test
+        void deberiaRechazarUnaPaginaNegativa()
+                        throws Exception {
+
+                mockMvc.perform(get("/api/v1/findings")
+                                .param("page", "-1"))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.code")
+                                                .value("VALIDATION_ERROR"))
+                                .andExpect(jsonPath("$.errors.page")
+                                                .exists());
+        }
+
+        @Test
+        void deberiaRechazarUnTamanoSuperiorAlPermitido()
+                        throws Exception {
+
+                mockMvc.perform(get("/api/v1/findings")
+                                .param("size", "101"))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.code")
+                                                .value("VALIDATION_ERROR"))
+                                .andExpect(jsonPath("$.errors.size")
+                                                .exists());
+        }
+
+        @Test
+        void deberiaRechazarUnaSeveridadInvalida()
+                        throws Exception {
+
+                mockMvc.perform(get("/api/v1/findings")
+                                .param("severity", "URGENT"))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.code")
+                                                .value("VALIDATION_ERROR"))
+                                .andExpect(jsonPath("$.errors.severity")
+                                                .exists());
+        }
+
+        @Test
+        void deberiaRechazarUnEstadoInvalido()
+                        throws Exception {
+
+                mockMvc.perform(get("/api/v1/findings")
+                                .param("status", "INVALID"))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.code")
+                                                .value("VALIDATION_ERROR"))
+                                .andExpect(jsonPath("$.errors.status")
+                                                .exists());
+        }
+
+        @Test
+        void deberiaActualizarElEstadoDeUnHallazgo()
+                        throws Exception {
+
                 Finding finding = Finding.create(
                                 "SQL Injection",
                                 "Entrada de usuario sin validar",
@@ -204,7 +396,9 @@ class FindingControllerTest {
                                 FindingStatus.RESOLVED))
                                 .thenReturn(updatedFinding);
 
-                mockMvc.perform(patch("/api/v1/findings/{id}/status", finding.id())
+                mockMvc.perform(patch(
+                                "/api/v1/findings/{id}/status",
+                                finding.id())
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
                                                 {
@@ -219,10 +413,14 @@ class FindingControllerTest {
         }
 
         @Test
-        void deberiaRechazarActualizacionSinEstado() throws Exception {
+        void deberiaRechazarActualizacionSinEstado()
+                        throws Exception {
+
                 UUID id = UUID.randomUUID();
 
-                mockMvc.perform(patch("/api/v1/findings/{id}/status", id)
+                mockMvc.perform(patch(
+                                "/api/v1/findings/{id}/status",
+                                id)
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("{}"))
                                 .andExpect(status().isBadRequest())
@@ -233,7 +431,9 @@ class FindingControllerTest {
         }
 
         @Test
-        void deberiaActualizarLosDatosDeUnHallazgo() throws Exception {
+        void deberiaActualizarLosDatosDeUnHallazgo()
+                        throws Exception {
+
                 Finding finding = Finding.create(
                                 "SQL Injection",
                                 "Entrada sin validar",
@@ -251,7 +451,9 @@ class FindingControllerTest {
                                 FindingSeverity.CRITICAL))
                                 .thenReturn(updatedFinding);
 
-                mockMvc.perform(put("/api/v1/findings/{id}", finding.id())
+                mockMvc.perform(put(
+                                "/api/v1/findings/{id}",
+                                finding.id())
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
                                                 {
@@ -275,10 +477,14 @@ class FindingControllerTest {
 
         @Test
         @WithMockUser(username = "administrador", roles = "ADMIN")
-        void deberiaEliminarUnHallazgo() throws Exception {
+        void deberiaEliminarUnHallazgo()
+                        throws Exception {
+
                 UUID id = UUID.randomUUID();
 
-                mockMvc.perform(delete("/api/v1/findings/{id}", id))
+                mockMvc.perform(delete(
+                                "/api/v1/findings/{id}",
+                                id))
                                 .andExpect(status().isNoContent());
         }
 
@@ -286,151 +492,18 @@ class FindingControllerTest {
         @WithMockUser(username = "administrador", roles = "ADMIN")
         void deberiaDevolver404AlEliminarUnHallazgoInexistente()
                         throws Exception {
+
                 UUID id = UUID.randomUUID();
 
                 doThrow(new FindingNotFoundException(id))
                                 .when(findingService)
                                 .deleteById(id);
 
-                mockMvc.perform(delete("/api/v1/findings/{id}", id))
+                mockMvc.perform(delete(
+                                "/api/v1/findings/{id}",
+                                id))
                                 .andExpect(status().isNotFound())
                                 .andExpect(jsonPath("$.code")
                                                 .value("FINDING_NOT_FOUND"));
-        }
-
-        @Test
-        void deberiaFiltrarLosHallazgosPorSeveridad() throws Exception {
-                Finding finding = Finding.create(
-                                "SQL Injection",
-                                "Entrada sin validar",
-                                FindingSeverity.HIGH);
-
-                when(findingService.findPage(
-                                0,
-                                20,
-                                FindingSeverity.HIGH,
-                                null))
-                                .thenReturn(new PageImpl<>(
-                                                List.of(finding),
-                                                PageRequest.of(0, 20),
-                                                1));
-
-                mockMvc.perform(get("/api/v1/findings")
-                                .param("severity", "HIGH"))
-                                .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.content").isArray())
-                                .andExpect(jsonPath("$.content[0].severity")
-                                                .value("HIGH"))
-                                .andExpect(jsonPath("$.totalElements")
-                                                .value(1));
-
-                verify(findingService).findPage(
-                                0,
-                                20,
-                                FindingSeverity.HIGH,
-                                null);
-        }
-
-        @Test
-        void deberiaFiltrarLosHallazgosPorEstado() throws Exception {
-                Finding finding = Finding.create(
-                                "Cross-Site Scripting",
-                                "Contenido sin escapar",
-                                FindingSeverity.MEDIUM)
-                                .withStatus(FindingStatus.IN_PROGRESS);
-
-                when(findingService.findPage(
-                                0,
-                                20,
-                                null,
-                                FindingStatus.IN_PROGRESS))
-                                .thenReturn(new PageImpl<>(
-                                                List.of(finding),
-                                                PageRequest.of(0, 20),
-                                                1));
-
-                mockMvc.perform(get("/api/v1/findings")
-                                .param("status", "IN_PROGRESS"))
-                                .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.content").isArray())
-                                .andExpect(jsonPath("$.content[0].status")
-                                                .value("IN_PROGRESS"))
-                                .andExpect(jsonPath("$.totalElements")
-                                                .value(1));
-
-                verify(findingService).findPage(
-                                0,
-                                20,
-                                null,
-                                FindingStatus.IN_PROGRESS);
-        }
-
-        @Test
-        void deberiaFiltrarLosHallazgosPorSeveridadYEstado() throws Exception {
-                Finding finding = Finding.create(
-                                "Configuración insegura",
-                                "Credenciales expuestas",
-                                FindingSeverity.CRITICAL)
-                                .withStatus(FindingStatus.RESOLVED);
-
-                when(findingService.findPage(
-                                0,
-                                20,
-                                FindingSeverity.CRITICAL,
-                                FindingStatus.RESOLVED))
-                                .thenReturn(new PageImpl<>(
-                                                List.of(finding),
-                                                PageRequest.of(0, 20),
-                                                1));
-
-                mockMvc.perform(get("/api/v1/findings")
-                                .param("severity", "CRITICAL")
-                                .param("status", "RESOLVED"))
-                                .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.content").isArray())
-                                .andExpect(jsonPath("$.content[0].severity")
-                                                .value("CRITICAL"))
-                                .andExpect(jsonPath("$.content[0].status")
-                                                .value("RESOLVED"))
-                                .andExpect(jsonPath("$.totalElements")
-                                                .value(1));
-
-                verify(findingService).findPage(
-                                0,
-                                20,
-                                FindingSeverity.CRITICAL,
-                                FindingStatus.RESOLVED);
-        }
-
-        @Test
-        void deberiaRechazarUnaPaginaNegativa() throws Exception {
-                mockMvc.perform(get("/api/v1/findings?page=-1"))
-                                .andExpect(status().isBadRequest())
-                                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
-                                .andExpect(jsonPath("$.errors.page").exists());
-        }
-
-        @Test
-        void deberiaRechazarUnTamanoSuperiorAlPermitido() throws Exception {
-                mockMvc.perform(get("/api/v1/findings?size=101"))
-                                .andExpect(status().isBadRequest())
-                                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
-                                .andExpect(jsonPath("$.errors.size").exists());
-        }
-
-        @Test
-        void deberiaRechazarUnaSeveridadInvalida() throws Exception {
-                mockMvc.perform(get("/api/v1/findings?severity=URGENT"))
-                                .andExpect(status().isBadRequest())
-                                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
-                                .andExpect(jsonPath("$.errors.severity").exists());
-        }
-
-        @Test
-        void deberiaRechazarUnEstadoInvalido() throws Exception {
-                mockMvc.perform(get("/api/v1/findings?status=INVALID"))
-                                .andExpect(status().isBadRequest())
-                                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
-                                .andExpect(jsonPath("$.errors.status").exists());
         }
 }

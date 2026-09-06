@@ -32,6 +32,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Size;
 
 @RestController
 @RequestMapping("/api/v1/findings")
@@ -45,10 +46,11 @@ public class FindingController {
         }
 
         @GetMapping
-        @Operation(summary = "Listar hallazgos", description = "Devuelve una página de hallazgos "
-                        + "con filtros opcionales")
+        @Operation(summary = "Listar hallazgos", description = "Devuelve una página de hallazgos con filtros "
+                        + "opcionales y búsqueda textual")
         @ApiResponses({
                         @ApiResponse(responseCode = "200", description = "Hallazgos recuperados correctamente", content = @Content(mediaType = "application/json", schema = @Schema(implementation = FindingPageResponse.class))),
+                        @ApiResponse(responseCode = "400", description = "Los parámetros enviados no son válidos"),
                         @ApiResponse(responseCode = "401", description = "Token ausente o inválido"),
                         @ApiResponse(responseCode = "403", description = "El usuario no tiene permisos")
         })
@@ -57,6 +59,8 @@ public class FindingController {
 
                         @Parameter(description = "Número máximo de elementos por página", example = "20", in = ParameterIn.QUERY) @RequestParam(name = "size", defaultValue = "20") @Min(1) @Max(100) int size,
 
+                        @Parameter(description = "Texto que se buscará en título y descripción", example = "SQL Injection", in = ParameterIn.QUERY) @RequestParam(name = "q", required = false) @Size(max = 100) String searchTerm,
+
                         @Parameter(description = "Filtrar por severidad", example = "HIGH", in = ParameterIn.QUERY) @RequestParam(name = "severity", required = false) FindingSeverity severity,
 
                         @Parameter(description = "Filtrar por estado", example = "OPEN", in = ParameterIn.QUERY) @RequestParam(name = "status", required = false) FindingStatus status) {
@@ -64,6 +68,7 @@ public class FindingController {
                 Page<Finding> findingPage = findingService.findPage(
                                 page,
                                 size,
+                                searchTerm,
                                 severity,
                                 status);
 
