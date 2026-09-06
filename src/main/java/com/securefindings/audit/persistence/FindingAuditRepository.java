@@ -3,6 +3,8 @@ package com.securefindings.audit.persistence;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface FindingAuditRepository
@@ -11,4 +13,9 @@ public interface FindingAuditRepository
         List<FindingAuditEntity> findByFindingIdAndOrganizationIdOrderByOccurredAtAsc(
                         UUID findingId,
                         UUID organizationId);
+
+        Page<FindingAuditEntity> findByFindingIdAndOrganizationIdOrderByOccurredAtAsc(
+                        UUID findingId,
+                        UUID organizationId,
+                        Pageable pageable);
 }

@@ -1,48 +1,76 @@
-# Seguridad de SecureFindings API
+# Security
 
-## Objetivo
+## Alcance
 
-Este documento describe las medidas de seguridad implementadas en SecureFindings API y las limitaciones actuales del proyecto.
+SecureFindings API es un proyecto en desarrollo orientado a practicar seguridad aplicada al backend y al ciclo de desarrollo.
 
-La aplicación se desarrolla aplicando:
+La seguridad se aborda desde varias capas:
 
-- Secure by Design.
-- Defense in Depth.
-- Least Privilege.
+- Identidad.
+- Autenticación.
+- Autorización.
+- Aislamiento de datos.
 - Validación de entradas.
-- Separación de responsabilidades.
+- Persistencia segura.
 - Auditoría.
-- Seguridad por defecto.
+- Gestión de secretos.
+- Seguridad de dependencias.
+- Configuración de infraestructura.
+- Integración continua.
+- Pruebas automatizadas.
 
 ## Autenticación
 
-La autenticación se delega en Keycloak.
+La autenticación se delega en Keycloak mediante OAuth2/OIDC.
 
-La API funciona como OAuth2 Resource Server y valida tokens JWT mediante:
+La API actúa como Resource Server y valida los tokens JWT emitidos por Keycloak.
+
+Configuración local:
 
 ```properties
 spring.security.oauth2.resourceserver.jwt.issuer-uri=http://localhost:8081/realms/securefindings
 ```
 
-Spring Security valida:
-
-- Firma del token.
-- Emisor.
-- Caducidad.
-- Claims.
-- Roles y autoridades.
-
-Las peticiones protegidas deben incluir:
+El token se envía mediante:
 
 ```http
 Authorization: Bearer <access_token>
 ```
 
-Cuando el token falta o no es válido, la API devuelve:
+La aplicación:
+
+- No recibe contraseñas.
+- No almacena contraseñas.
+- No gestiona directamente usuarios.
+- No utiliza sesiones de usuario.
+- No utiliza autenticación basada en cookies.
+
+Las credenciales son gestionadas por Keycloak.
+
+## Autorización
+
+Spring Security utiliza los roles contenidos en el token JWT.
+
+Las reglas actuales son:
+
+| Recurso | ANALYST | ADMIN |
+|---|---:|---:|
+| `GET /api/v1/health` | Público | Público |
+| Consultar hallazgos | Sí | Sí |
+| Crear hallazgos | Sí | Sí |
+| Actualizar hallazgos | Sí | Sí |
+| Consultar auditoría | Sí | Sí |
+| Eliminar hallazgos | No | Sí |
+
+El borrado requiere específicamente el rol `ADMIN`.
+
+Si no existe una autenticación válida:
 
 ```http
 401 Unauthorized
 ```
+
+Respuesta JSON:
 
 ```json
 {
@@ -52,25 +80,13 @@ Cuando el token falta o no es válido, la API devuelve:
 }
 ```
 
-## Autorización
-
-La autorización se basa en los roles del token.
-
-| Operación | ANALYST | ADMIN |
-|---|---:|---:|
-| Consultar hallazgos | Sí | Sí |
-| Buscar hallazgos | Sí | Sí |
-| Crear hallazgos | Sí | Sí |
-| Actualizar hallazgos | Sí | Sí |
-| Actualizar estados | Sí | Sí |
-| Consultar auditoría | Sí | Sí |
-| Eliminar hallazgos | No | Sí |
-
-Cuando el usuario está autenticado, pero no tiene el rol necesario, la API devuelve:
+Si el usuario está autenticado pero no tiene permisos:
 
 ```http
 403 Forbidden
 ```
+
+Respuesta JSON:
 
 ```json
 {
@@ -80,132 +96,228 @@ Cuando el usuario está autenticado, pero no tiene el rol necesario, la API devu
 }
 ```
 
-La eliminación se limita a `ADMIN` porque es una operación destructiva.
+La aplicación utiliza sesiones sin estado:
 
-## Aislamiento organizativo
+```java
+SessionCreationPolicy.STATELESS
+```
 
-Cada usuario pertenece a una organización mediante el claim:
+También desactiva:
+
+- Inicio de sesión basado en formulario.
+- Autenticación HTTP Basic.
+
+CSRF está desactivado porque la API utiliza tokens Bearer y no autenticación basada en cookies.
+
+## Roles de Keycloak
+
+El realm utilizado localmente es:
+
+```text
+securefindings
+```
+
+Los roles principales son:
+
+```text
+ANALYST
+ADMIN
+```
+
+El cliente utilizado para las pruebas locales es:
+
+```text
+securefindings-cli
+```
+
+`KeycloakRealmRoleConverter` transforma los roles del realm en autoridades reconocidas por Spring Security.
+
+Por ejemplo, el rol:
+
+```text
+ANALYST
+```
+
+se utiliza en las reglas mediante:
+
+```java
+.hasRole("ANALYST")
+```
+
+## Claim de organización
+
+Los usuarios deben tener configurado el atributo:
 
 ```text
 organization_id
 ```
 
-La organización se obtiene del contexto de seguridad y no de valores enviados por el cliente.
+El cliente de Keycloak utiliza un mapper para incluirlo en el access token:
 
-Todas las consultas filtran por la organización actual, incluyendo:
-
-- Listados.
-- Búsquedas.
-- Filtros.
-- Consultas por identificador.
-- Actualizaciones.
-- Eliminaciones.
-- Auditorías.
-
-Esto evita:
-
-- IDOR.
-- Broken Object Level Authorization.
-- Acceso cruzado entre organizaciones.
-- Manipulación de identificadores.
-
-## Búsqueda textual y SQL Injection
-
-La búsqueda se realiza mediante:
-
-```http
-GET /api/v1/findings?q=SQL
+```json
+{
+  "preferred_username": "analista",
+  "organization_id": "00000000-0000-0000-0000-000000000001"
+}
 ```
 
-El parámetro se utiliza mediante una consulta parametrizada. No se concatena directamente con SQL.
+El mapper debe:
 
-La búsqueda:
+- Incluir el claim en el access token.
+- Utilizar el tipo `String`.
+- Evitar exponerlo innecesariamente en otros tokens.
 
-- Se aplica sobre título y descripción.
-- No distingue entre mayúsculas y minúsculas.
-- Permite como máximo `100` caracteres.
-- Se combina con organización, severidad y estado.
-- Utiliza paginación.
+## Aislamiento entre organizaciones
 
-El filtro de organización se mantiene siempre activo, incluso cuando se utilizan búsquedas textuales.
+La organización se obtiene exclusivamente del token validado.
 
-## Validación de entradas
+La API no acepta el identificador de organización desde:
 
-Se validan los cuerpos y parámetros recibidos por la API.
+- Parámetros de consulta.
+- Cuerpo JSON.
+- Cabeceras controladas por el cliente.
+- Identificadores enviados manualmente.
 
-Restricciones actuales:
+El flujo de validación es:
+
+1. Keycloak autentica al usuario.
+2. Keycloak emite un JWT.
+3. Spring Security valida la firma, el emisor y la vigencia.
+4. `OrganizationContext` obtiene `organization_id`.
+5. El valor se convierte en `UUID`.
+6. Se comprueba que la organización existe.
+7. Los servicios utilizan esa organización.
+8. Los repositorios filtran las operaciones.
+9. La auditoría se registra dentro de la misma organización.
+
+Si el claim:
+
+- No existe.
+- Está vacío.
+- No tiene formato UUID.
+- Hace referencia a una organización inexistente.
+
+La operación se rechaza mediante `AccessDeniedException`.
+
+## Defensa en profundidad
+
+El aislamiento no depende de una única comprobación.
+
+### Capa de contexto
+
+`OrganizationContext` valida la organización procedente del token.
+
+### Capa de aplicación
+
+`FindingService` y `AuditService` obtienen siempre la organización actual antes de consultar o modificar datos.
+
+Los servicios no reciben la organización desde el cuerpo de la petición ni desde parámetros del cliente.
+
+### Capa de persistencia
+
+Los repositorios incluyen la organización en las consultas:
+
+```java
+findByIdAndOrganizationId(...)
+existsByIdAndOrganizationId(...)
+deleteByIdAndOrganizationId(...)
+findPageByFilters(...)
+findByFindingIdAndOrganizationIdOrderByOccurredAtAsc(...)
+```
+
+### Capa de base de datos
+
+Las tablas `findings` y `finding_audit` contienen:
+
+```text
+organization_id
+```
+
+Las columnas son obligatorias y tienen claves foráneas hacia `organizations`.
+
+También existen índices para las consultas por organización.
+
+## Paginación y seguridad
+
+Los endpoints paginados aceptan:
 
 ```text
 page >= 0
 1 <= size <= 100
-q <= 100 caracteres
 ```
 
-También se validan:
+El límite máximo de `100` evita solicitar cantidades excesivas de información en una sola petición.
 
-- Severidades.
-- Estados.
-- Identificadores UUID.
-- Campos obligatorios.
-- Longitudes máximas.
-- Valores no vacíos.
+La paginación no modifica el aislamiento organizativo.
 
-Los errores utilizan una estructura común:
+En cada página del historial se siguen aplicando simultáneamente estos filtros:
+
+- `finding_id`.
+- `organization_id`.
+
+Por tanto, conocer el identificador de un hallazgo de otra organización no permite consultar su historial.
+
+El endpoint es:
+
+```http
+GET /api/v1/findings/{id}/audit?page=0&size=20
+```
+
+La respuesta contiene:
 
 ```json
 {
-  "code": "VALIDATION_ERROR",
-  "message": "La petición contiene parámetros no válidos",
-  "errors": {
-    "q": "El valor del parámetro no es válido"
-  }
+  "content": [],
+  "page": 0,
+  "size": 20,
+  "totalElements": 0,
+  "totalPages": 0,
+  "first": true,
+  "last": true
 }
 ```
 
-## Manejo de errores
+La respuesta no contiene información de eventos pertenecientes a otra organización.
 
-`GlobalExceptionHandler` centraliza los errores funcionales y de validación.
+## Búsqueda y filtros
 
-`SecurityErrorHandler` centraliza los errores de autenticación y autorización.
+La búsqueda textual utiliza el parámetro:
 
-Respuestas principales:
-
-| HTTP | Código | Descripción |
-|---:|---|---|
-| `400` | `VALIDATION_ERROR` | Datos o parámetros inválidos |
-| `401` | `UNAUTHORIZED` | Token ausente o inválido |
-| `403` | `FORBIDDEN` | Falta de permisos |
-| `404` | `FINDING_NOT_FOUND` | Hallazgo inexistente |
-
-Las respuestas no exponen:
-
-- Stack traces.
-- Consultas SQL.
-- Tokens.
-- Contraseñas.
-- Rutas internas.
-- Configuración sensible.
-- Detalles de la infraestructura.
-
-## Persistencia
-
-La aplicación utiliza Spring Data JPA y PostgreSQL.
-
-La búsqueda y los filtros utilizan consultas parametrizadas y repositorios tipados.
-
-No se deben concatenar valores recibidos del usuario dentro de consultas SQL.
-
-La estructura de base de datos se controla con Flyway:
-
-```properties
-spring.jpa.hibernate.ddl-auto=validate
+```text
+q
 ```
 
-Hibernate únicamente valida el esquema existente.
+Ejemplo:
+
+```http
+GET /api/v1/findings?q=sql&page=0&size=20
+```
+
+El valor se busca en:
+
+- `title`.
+- `description`.
+
+El parámetro tiene una longitud máxima de 100 caracteres.
+
+Las consultas se realizan mediante repositorios Spring Data JPA y parámetros enlazados. No se construyen consultas SQL concatenando directamente valores del usuario.
+
+Esto reduce el riesgo de inyección SQL.
+
+También existen filtros controlados para:
+
+```text
+severity
+status
+```
+
+Los valores se validan contra los enums permitidos por la aplicación.
 
 ## Auditoría
 
-Las operaciones principales generan eventos:
+Las operaciones de negocio generan eventos en `finding_audit`.
+
+Acciones disponibles:
 
 ```text
 CREATED
@@ -213,181 +325,281 @@ UPDATED
 DELETED
 ```
 
-Cada evento registra:
+Cada evento almacena:
 
-- Hallazgo afectado.
-- Organización.
+- Identificador del evento.
+- Identificador del hallazgo.
+- Identificador de la organización.
 - Acción.
-- Actor.
-- Fecha y hora.
+- Usuario que realizó la operación.
+- Fecha y hora UTC.
 
-El actor se obtiene del token autenticado, preferentemente desde:
+El actor se obtiene preferentemente del claim:
 
 ```text
 preferred_username
 ```
 
-No se confía en un nombre enviado por el cliente.
+Si no está disponible, se utiliza el nombre de la autenticación.
+
+Las operaciones internas o de prueba pueden utilizar:
+
+```text
+system
+```
+
+La auditoría se registra dentro de la misma transacción de negocio.
+
+El historial se consulta:
+
+- Filtrado por hallazgo.
+- Filtrado por organización.
+- Ordenado cronológicamente.
+- De forma paginada.
+
+## Validación de entradas
+
+Las peticiones REST utilizan Jakarta Validation.
+
+Se validan:
+
+- Campos obligatorios.
+- Longitudes máximas.
+- Valores permitidos de severidad.
+- Valores permitidos de estado.
+- Formato de UUID.
+- Número de página.
+- Tamaño máximo de página.
+- Estructura de las peticiones JSON.
+
+La validación se realiza en varias capas:
+
+1. Entrada HTTP.
+2. Objetos de aplicación.
+3. Objetos de dominio.
+4. Persistencia.
+5. Restricciones de base de datos.
+
+La API no debe confiar en que el cliente envíe datos correctos.
+
+## Persistencia segura
+
+Hibernate está configurado con:
+
+```properties
+spring.jpa.hibernate.ddl-auto=validate
+```
+
+La aplicación no modifica automáticamente el esquema de producción.
+
+Flyway controla la evolución mediante migraciones versionadas:
+
+```text
+V1__crear_tabla_findings.sql
+V2__crear_tabla_finding_audit.sql
+V3__crear_organizaciones_y_asignar_hallazgos.sql
+```
+
+La migración V3 introduce:
+
+- La tabla `organizations`.
+- La organización inicial.
+- `organization_id` en `findings`.
+- `organization_id` en `finding_audit`.
+- Claves foráneas.
+- Índices de consulta por organización.
+
+## Integración continua
+
+El workflow principal se encuentra en:
+
+```text
+.github/workflows/ci.yml
+```
+
+Se ejecuta en:
+
+- Cada `push`.
+- Cada `pull_request`.
+
+El pipeline:
+
+1. Descarga el código.
+2. Configura Java 21 mediante Eclipse Temurin.
+3. Utiliza la caché de Maven.
+4. Ejecuta `clean verify`.
+5. Compila desde cero.
+6. Ejecuta todos los tests.
+7. Ejecuta los tests de integración con Testcontainers.
+
+El proyecto también utiliza CodeQL para analizar el código Java.
+
+La revisión de dependencias se ejecuta en pull requests y ayuda a detectar vulnerabilidades nuevas en las dependencias modificadas.
+
+Los workflows utilizan permisos mínimos siempre que es posible.
 
 ## Gestión de secretos
 
-Las credenciales se cargan mediante variables de entorno:
+Los siguientes valores no deben incluirse en Git:
 
-```properties
-spring.datasource.username=${POSTGRES_USER}
-spring.datasource.password=${POSTGRES_PASSWORD}
-```
+- Contraseñas de PostgreSQL.
+- Contraseñas de Keycloak.
+- Tokens JWT.
+- Claves privadas.
+- Credenciales de producción.
+- Archivos `.env`.
 
-Las contraseñas reales no deben:
-
-- Subirse a Git.
-- Escribirse en `application.properties`.
-- Incluirse en `compose.yml`.
-- Compartirse en capturas.
-- Aparecer en logs.
-
-## Docker y entorno local
-
-Docker Compose se utiliza para PostgreSQL y Keycloak durante el desarrollo.
-
-Este entorno no debe considerarse una configuración de producción.
-
-Para producción serían necesarios:
-
-- TLS.
-- Gestión externa de secretos.
-- Usuarios administrativos permanentes.
-- Keycloak endurecido.
-- Restricción de puertos.
-- Copias de seguridad.
-- Monitorización.
-- Rotación de credenciales.
-- Protección contra abuso.
-
-## Dependencias y CI
-
-GitHub Actions ejecuta:
-
-- Compilación.
-- Tests.
-- Dependency Review.
-- CodeQL.
-- Análisis estático.
-
-Dependency Review permite detectar dependencias nuevas con vulnerabilidades conocidas.
-
-CodeQL ayuda a detectar patrones inseguros en el código.
-
-## Riesgos OWASP considerados
-
-### Broken Access Control
-
-Mitigado mediante:
-
-- Roles de Keycloak.
-- Reglas de Spring Security.
-- Restricción de eliminación a `ADMIN`.
-- Validación de la organización actual.
-
-### Broken Object Level Authorization
-
-Mitigado mediante consultas que combinan:
+La configuración local utiliza:
 
 ```text
-identificador_del_hallazgo + organization_id
+.env
 ```
 
-### Injection
-
-Mitigado mediante:
-
-- Spring Data JPA.
-- Consultas parametrizadas.
-- Validación de entradas.
-- Búsqueda textual sin concatenación SQL.
-- Uso de tipos Java para los filtros.
-
-### Identification and Authentication Failures
-
-Mitigado mediante:
-
-- Keycloak.
-- JWT.
-- Validación del issuer.
-- Expiración de tokens.
-- Roles incluidos en el token.
-- Respuestas controladas para `401`.
-
-### Security Logging and Monitoring Failures
-
-Mitigado parcialmente mediante:
-
-- Auditoría.
-- Registro del actor.
-- Registro de fechas.
-- Eventos de creación, actualización y eliminación.
-
-## Limitaciones actuales
-
-El proyecto todavía no incluye:
-
-- Rate limiting.
-- Protección avanzada contra abuso.
-- Gestión centralizada de secretos.
-- Rotación automática de claves.
-- Despliegue productivo.
-- TLS dentro de la aplicación.
-- Monitorización avanzada.
-- Alertas de seguridad.
-- Escaneo dinámico automatizado.
-- Backup automatizado de PostgreSQL.
-
-## Reporte de vulnerabilidades
-
-Las vulnerabilidades deben comunicarse de forma privada al responsable del repositorio.
-
-No se deben publicar:
-
-- Tokens.
-- Contraseñas.
-- Datos personales.
-- Evidencias sensibles.
-- Detalles explotables antes de su corrección.
-
-Un reporte debe incluir:
-
-- Descripción.
-- Endpoint afectado.
-- Pasos para reproducirlo.
-- Impacto.
-- Evidencias mínimas.
-- Propuesta de mitigación.
-
-## Flujo de desarrollo seguro
-
-El desarrollo se realiza en:
+El repositorio contiene únicamente:
 
 ```text
-develop
+.env.example
 ```
 
-Los cambios terminados se integran mediante Pull Request hacia:
+Los tokens utilizados durante las pruebas manuales:
+
+- No deben imprimirse completos en la terminal.
+- No deben incluirse en capturas.
+- No deben subirse al repositorio.
+- Deben renovarse cuando caduquen.
+- Deben almacenarse únicamente de forma temporal.
+
+## Docker
+
+Docker Compose ejecuta PostgreSQL y Keycloak localmente mediante `compose.yml`.
+
+Los datos se almacenan en volúmenes Docker:
 
 ```text
-main
+securefindings_postgres_data
+securefindings-keycloak-data
 ```
 
-Antes de integrar cambios se ejecuta:
+Detener los servicios sin borrar datos:
+
+```powershell
+docker compose stop
+```
+
+Eliminar los contenedores conservando los volúmenes:
+
+```powershell
+docker compose down
+```
+
+Eliminar también los datos persistidos:
+
+```powershell
+docker compose down -v
+```
+
+El último comando debe utilizarse únicamente cuando se quiera reiniciar completamente el entorno local.
+
+En producción:
+
+- PostgreSQL no debe exponerse directamente a Internet.
+- Keycloak no debe ejecutarse con `start-dev`.
+- Deben utilizarse redes privadas.
+- Debe utilizarse HTTPS.
+- Las credenciales deben gestionarse mediante un sistema de secretos.
+
+## Respuestas de error
+
+La API utiliza respuestas controladas para evitar exponer trazas internas.
+
+Ejemplo:
+
+```json
+{
+  "code": "FINDING_NOT_FOUND",
+  "message": "No se ha encontrado el hallazgo",
+  "errors": {}
+}
+```
+
+Códigos habituales:
+
+| Código | Significado |
+|---:|---|
+| `400` | Petición inválida |
+| `401` | Falta autenticación o el token no es válido |
+| `403` | El usuario no tiene permisos |
+| `404` | El recurso no existe dentro de la organización |
+| `409` | Conflicto de datos |
+| `500` | Error interno no esperado |
+
+Para evitar filtraciones, un hallazgo perteneciente a otra organización se trata como no encontrado.
+
+## Tests de seguridad
+
+El proyecto incluye pruebas para:
+
+- Validación del contexto de organización.
+- Claims ausentes o inválidos.
+- Organizaciones inexistentes.
+- Autorización por roles.
+- Acceso de `ANALYST`.
+- Acceso de `ADMIN`.
+- Restricción de eliminación.
+- Aislamiento entre organizaciones.
+- Búsqueda y filtros.
+- Paginación.
+- Persistencia en PostgreSQL.
+- Registro de auditoría.
+- Orden cronológico del historial.
+- Respuestas HTTP `401` y `403`.
+
+Los tests se ejecutan localmente con:
 
 ```powershell
 .\mvnw.cmd clean test
 ```
 
-También se revisan:
+Y automáticamente en GitHub Actions mediante:
 
-- CodeQL.
-- Dependency Review.
-- Cambios de migraciones.
-- Cambios de permisos.
-- Documentación.
-- Exposición accidental de secretos.
+```bash
+./mvnw clean verify
+```
+
+## Consideraciones para producción
+
+Antes de desplegar el proyecto en producción sería necesario:
+
+- Utilizar HTTPS.
+- No utilizar `start-dev` en Keycloak.
+- Crear una cuenta administrativa permanente.
+- Eliminar usuarios temporales.
+- Configurar una base de datos gestionada.
+- Utilizar secretos externos.
+- Restringir la red de PostgreSQL.
+- No publicar PostgreSQL directamente a Internet.
+- Configurar logs centralizados.
+- Añadir monitorización.
+- Configurar límites de peticiones.
+- Revisar las políticas CORS.
+- Rotar credenciales.
+- Validar la configuración de Keycloak.
+- Revisar los permisos de los roles.
+- Ejecutar análisis de dependencias.
+- Incorporar escaneo SAST y DAST.
+- Incorporar escaneo de secretos.
+- Proteger la rama principal.
+- Exigir que los workflows pasen antes de fusionar pull requests.
+
+## Notificación de vulnerabilidades
+
+Las vulnerabilidades deben comunicarse de forma responsable y no publicarse antes de que exista una solución.
+
+En un proyecto real se debería proporcionar:
+
+- Descripción del problema.
+- Pasos para reproducirlo.
+- Impacto.
+- Evidencias mínimas.
+- Posible mitigación.
+- Versión afectada.
