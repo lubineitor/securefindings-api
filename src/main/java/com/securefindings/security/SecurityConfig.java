@@ -16,9 +16,15 @@ import org.springframework.security.web.SecurityFilterChain;
 public class SecurityConfig {
 
         @Bean
+        SecurityErrorHandler securityErrorHandler() {
+                return new SecurityErrorHandler();
+        }
+
+        @Bean
         SecurityFilterChain securityFilterChain(
                         HttpSecurity http,
-                        JwtAuthenticationConverter jwtAuthenticationConverter)
+                        JwtAuthenticationConverter jwtAuthenticationConverter,
+                        SecurityErrorHandler securityErrorHandler)
                         throws Exception {
 
                 http
@@ -66,7 +72,12 @@ public class SecurityConfig {
                                                 .anyRequest()
                                                 .authenticated())
 
+                                .exceptionHandling(exceptionHandling -> exceptionHandling
+                                                .authenticationEntryPoint(securityErrorHandler)
+                                                .accessDeniedHandler(securityErrorHandler))
+
                                 .oauth2ResourceServer(oauth2 -> oauth2
+                                                .authenticationEntryPoint(securityErrorHandler)
                                                 .jwt(jwt -> jwt
                                                                 .jwtAuthenticationConverter(
                                                                                 jwtAuthenticationConverter)))

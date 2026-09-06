@@ -31,7 +31,7 @@ Actualmente incluye:
 - Filtros por severidad y estado.
 - Búsqueda textual por título y descripción.
 - Validación de peticiones y parámetros.
-- Manejo centralizado de errores.
+- Respuestas JSON para errores `400`, `401`, `403` y `404`.
 - Tests unitarios, web e integración.
 - CodeQL.
 - Dependency Review.
@@ -80,7 +80,7 @@ src/
         └── com/securefindings/
 ```
 
-Las responsabilidades principales son:
+Responsabilidades principales:
 
 - `api`: controladores y objetos de petición/respuesta.
 - `application`: servicios y casos de uso.
@@ -91,8 +91,6 @@ Las responsabilidades principales son:
 - `api.error`: tratamiento global de errores.
 
 ## Funcionalidades
-
-### Gestión de hallazgos
 
 La API permite:
 
@@ -105,17 +103,6 @@ La API permite:
 - Filtrar por severidad.
 - Filtrar por estado.
 - Consultar el historial de auditoría.
-
-Cada hallazgo contiene:
-
-- Identificador único.
-- Título.
-- Descripción.
-- Severidad.
-- Estado.
-- Organización.
-- Fecha de creación.
-- Fecha de actualización.
 
 ### Severidades
 
@@ -137,8 +124,6 @@ FALSE_POSITIVE
 
 ## Listado, paginación y búsqueda
 
-El listado utiliza paginación:
-
 ```http
 GET /api/v1/findings?page=0&size=20
 ```
@@ -159,12 +144,12 @@ Ejemplo de búsqueda:
 GET /api/v1/findings?q=SQL
 ```
 
-La búsqueda no distingue entre mayúsculas y minúsculas y se aplica sobre:
+La búsqueda se realiza sobre:
 
-- `title`.
-- `description`.
+- Título.
+- Descripción.
 
-Los filtros pueden combinarse:
+No distingue entre mayúsculas y minúsculas y puede combinarse con el resto de filtros:
 
 ```http
 GET /api/v1/findings?page=0&size=10&q=SQL&severity=HIGH&status=OPEN
@@ -201,7 +186,9 @@ Todas las consultas se ejecutan dentro de la organización asociada al token JWT
 
 ## Manejo de errores
 
-Los errores de validación utilizan una estructura común:
+Todas las respuestas de error utilizan una estructura JSON consistente.
+
+### Error de validación
 
 ```json
 {
@@ -213,24 +200,48 @@ Los errores de validación utilizan una estructura común:
 }
 ```
 
-Errores principales:
+### Error de autenticación
+
+```json
+{
+  "code": "UNAUTHORIZED",
+  "message": "La autenticación es necesaria para acceder a este recurso",
+  "errors": {}
+}
+```
+
+Se devuelve cuando no existe un token válido o el token ha caducado.
+
+### Error de autorización
+
+```json
+{
+  "code": "FORBIDDEN",
+  "message": "El usuario no tiene permisos para acceder a este recurso",
+  "errors": {}
+}
+```
+
+Se devuelve cuando el usuario está autenticado, pero no dispone del rol necesario.
+
+### Hallazgo inexistente
+
+```json
+{
+  "code": "FINDING_NOT_FOUND",
+  "message": "No se ha encontrado el hallazgo",
+  "errors": {}
+}
+```
+
+Tabla de errores:
 
 | HTTP | Código | Situación |
 |---:|---|---|
-| `400` | `VALIDATION_ERROR` | Petición o parámetros incorrectos |
-| `401` | — | Token ausente, inválido o expirado |
-| `403` | — | El usuario no tiene permisos |
+| `400` | `VALIDATION_ERROR` | Datos o parámetros incorrectos |
+| `401` | `UNAUTHORIZED` | Token ausente o inválido |
+| `403` | `FORBIDDEN` | El usuario no tiene permisos |
 | `404` | `FINDING_NOT_FOUND` | Hallazgo inexistente |
-
-Se validan:
-
-- Cuerpos JSON.
-- Paginación.
-- Longitud máxima de `q`.
-- Severidades.
-- Estados.
-- Identificadores UUID.
-- Reglas del dominio.
 
 ## Persistencia y migraciones
 
@@ -293,13 +304,11 @@ Los datos se almacenan en volúmenes Docker:
 - `securefindings_postgres_data`.
 - `securefindings-keycloak-data`.
 
-Las contraseñas reales se cargan mediante variables de entorno y no deben subirse al repositorio.
+Las credenciales reales se cargan mediante variables de entorno y no deben subirse al repositorio.
 
 ## Keycloak
 
 La autenticación utiliza tokens JWT emitidos por Keycloak.
-
-Configuración principal:
 
 ```text
 Realm: securefindings
@@ -326,7 +335,7 @@ El claim `organization_id` se utiliza para aislar los datos entre organizaciones
 
 ## Auditoría
 
-Las siguientes operaciones generan eventos:
+Las operaciones generan eventos:
 
 ```text
 CREATED
@@ -341,8 +350,6 @@ Cada evento registra:
 - Acción.
 - Usuario.
 - Fecha y hora.
-
-La auditoría permite conocer quién realizó cada operación y cuándo se produjo.
 
 ## OpenAPI
 
@@ -360,33 +367,9 @@ http://localhost:8080/v3/api-docs
 
 ## Ejecución local
 
-### 1. Iniciar la infraestructura
-
 ```powershell
 docker compose up -d
-```
-
-### 2. Comprobar el estado
-
-```powershell
-docker compose ps
-```
-
-### 3. Ejecutar los tests
-
-```powershell
-.\mvnw.cmd test
-```
-
-### 4. Compilar
-
-```powershell
-.\mvnw.cmd clean package
-```
-
-### 5. Ejecutar la aplicación
-
-```powershell
+.\mvnw.cmd clean test
 .\mvnw.cmd spring-boot:run
 ```
 
@@ -402,6 +385,7 @@ El proyecto contiene:
 - Tests de filtros.
 - Tests de búsqueda textual.
 - Tests de validación.
+- Tests de respuestas `401` y `403`.
 - Tests de auditoría.
 - Tests de aislamiento organizativo.
 - Tests de persistencia con Testcontainers.
@@ -422,24 +406,11 @@ GitHub Actions ejecuta:
 - CodeQL.
 - Análisis del código Java.
 
-El flujo de trabajo es:
-
-```text
-develop
-   │
-   └── Pull Request
-           │
-           ▼
-          main
-```
-
-La rama `develop` se utiliza para el desarrollo. La rama `main` contiene cambios terminados y revisados.
+La rama `develop` se utiliza para el desarrollo. La rama `main` contiene cambios terminados y revisados mediante Pull Request.
 
 ## Objetivo de seguridad
 
-El proyecto sigue un enfoque Secure by Design.
-
-Se presta especial atención a:
+El proyecto sigue un enfoque Secure by Design y presta especial atención a:
 
 - Broken Access Control.
 - IDOR.

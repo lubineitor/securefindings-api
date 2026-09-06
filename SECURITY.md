@@ -38,10 +38,18 @@ Las peticiones protegidas deben incluir:
 Authorization: Bearer <access_token>
 ```
 
-Un token ausente o inválido produce:
+Cuando el token falta o no es válido, la API devuelve:
 
-```text
+```http
 401 Unauthorized
+```
+
+```json
+{
+  "code": "UNAUTHORIZED",
+  "message": "La autenticación es necesaria para acceder a este recurso",
+  "errors": {}
+}
 ```
 
 ## Autorización
@@ -58,13 +66,21 @@ La autorización se basa en los roles del token.
 | Consultar auditoría | Sí | Sí |
 | Eliminar hallazgos | No | Sí |
 
-La eliminación se limita a `ADMIN` porque es una operación destructiva.
+Cuando el usuario está autenticado, pero no tiene el rol necesario, la API devuelve:
 
-Un usuario autenticado sin permisos recibe:
-
-```text
+```http
 403 Forbidden
 ```
+
+```json
+{
+  "code": "FORBIDDEN",
+  "message": "El usuario no tiene permisos para acceder a este recurso",
+  "errors": {}
+}
+```
+
+La eliminación se limita a `ADMIN` porque es una operación destructiva.
 
 ## Aislamiento organizativo
 
@@ -74,24 +90,9 @@ Cada usuario pertenece a una organización mediante el claim:
 organization_id
 ```
 
-Ejemplo:
-
-```json
-{
-  "preferred_username": "analista",
-  "organization_id": "00000000-0000-0000-0000-000000000001"
-}
-```
-
 La organización se obtiene del contexto de seguridad y no de valores enviados por el cliente.
 
-Las consultas filtran siempre por organización:
-
-```text
-organization_id = organización_actual
-```
-
-Esto se aplica a:
+Todas las consultas filtran por la organización actual, incluyendo:
 
 - Listados.
 - Búsquedas.
@@ -101,7 +102,7 @@ Esto se aplica a:
 - Eliminaciones.
 - Auditorías.
 
-Esta protección evita:
+Esto evita:
 
 - IDOR.
 - Broken Object Level Authorization.
@@ -110,33 +111,29 @@ Esta protección evita:
 
 ## Búsqueda textual y SQL Injection
 
-La búsqueda se realiza mediante el parámetro:
+La búsqueda se realiza mediante:
 
 ```http
 GET /api/v1/findings?q=SQL
 ```
 
-El valor se utiliza como parámetro de una consulta JPQL. No se concatena directamente con una consulta SQL.
+El parámetro se utiliza mediante una consulta parametrizada. No se concatena directamente con SQL.
 
-La búsqueda se aplica sobre:
+La búsqueda:
 
-- Título.
-- Descripción.
-
-Además:
-
+- Se aplica sobre título y descripción.
 - No distingue entre mayúsculas y minúsculas.
-- Tiene una longitud máxima de `100` caracteres.
-- Se combina con severidad, estado y organización.
+- Permite como máximo `100` caracteres.
+- Se combina con organización, severidad y estado.
 - Utiliza paginación.
 
-El aislamiento organizativo se aplica antes de devolver los resultados.
+El filtro de organización se mantiene siempre activo, incluso cuando se utilizan búsquedas textuales.
 
 ## Validación de entradas
 
 Se validan los cuerpos y parámetros recibidos por la API.
 
-### Parámetros de listado
+Restricciones actuales:
 
 ```text
 page >= 0
@@ -153,7 +150,7 @@ También se validan:
 - Longitudes máximas.
 - Valores no vacíos.
 
-Los errores se devuelven con una estructura común:
+Los errores utilizan una estructura común:
 
 ```json
 {
@@ -165,22 +162,22 @@ Los errores se devuelven con una estructura común:
 }
 ```
 
-Esto evita que las excepciones internas lleguen directamente al cliente.
-
 ## Manejo de errores
 
-`GlobalExceptionHandler` centraliza las excepciones funcionales y de validación.
+`GlobalExceptionHandler` centraliza los errores funcionales y de validación.
+
+`SecurityErrorHandler` centraliza los errores de autenticación y autorización.
 
 Respuestas principales:
 
 | HTTP | Código | Descripción |
 |---:|---|---|
 | `400` | `VALIDATION_ERROR` | Datos o parámetros inválidos |
-| `401` | — | Token ausente o inválido |
-| `403` | — | Falta de permisos |
+| `401` | `UNAUTHORIZED` | Token ausente o inválido |
+| `403` | `FORBIDDEN` | Falta de permisos |
 | `404` | `FINDING_NOT_FOUND` | Hallazgo inexistente |
 
-No se deben exponer:
+Las respuestas no exponen:
 
 - Stack traces.
 - Consultas SQL.
@@ -194,7 +191,7 @@ No se deben exponer:
 
 La aplicación utiliza Spring Data JPA y PostgreSQL.
 
-La búsqueda y los filtros se ejecutan mediante consultas parametrizadas y repositorios tipados.
+La búsqueda y los filtros utilizan consultas parametrizadas y repositorios tipados.
 
 No se deben concatenar valores recibidos del usuario dentro de consultas SQL.
 
@@ -230,22 +227,7 @@ El actor se obtiene del token autenticado, preferentemente desde:
 preferred_username
 ```
 
-No se confía en un nombre de usuario proporcionado por el cliente.
-
-## Protección contra acceso cruzado
-
-Si un hallazgo pertenece a otra organización, la API responde como si no existiera:
-
-```text
-404 Not Found
-```
-
-Esto evita revelar información sobre recursos de otras organizaciones.
-
-La aplicación no diferencia públicamente entre:
-
-- Hallazgo inexistente.
-- Hallazgo perteneciente a otra organización.
+No se confía en un nombre enviado por el cliente.
 
 ## Gestión de secretos
 
@@ -264,13 +246,11 @@ Las contraseñas reales no deben:
 - Compartirse en capturas.
 - Aparecer en logs.
 
-El archivo `.env` se utiliza localmente y debe permanecer fuera del repositorio.
-
 ## Docker y entorno local
 
 Docker Compose se utiliza para PostgreSQL y Keycloak durante el desarrollo.
 
-El entorno local no debe considerarse una configuración de producción.
+Este entorno no debe considerarse una configuración de producción.
 
 Para producción serían necesarios:
 
@@ -297,8 +277,6 @@ GitHub Actions ejecuta:
 Dependency Review permite detectar dependencias nuevas con vulnerabilidades conocidas.
 
 CodeQL ayuda a detectar patrones inseguros en el código.
-
-Los resultados deben revisarse antes de integrar cambios en `main`.
 
 ## Riesgos OWASP considerados
 
@@ -327,7 +305,7 @@ Mitigado mediante:
 - Consultas parametrizadas.
 - Validación de entradas.
 - Búsqueda textual sin concatenación SQL.
-- Uso de tipos Java para filtros.
+- Uso de tipos Java para los filtros.
 
 ### Identification and Authentication Failures
 
@@ -338,6 +316,7 @@ Mitigado mediante:
 - Validación del issuer.
 - Expiración de tokens.
 - Roles incluidos en el token.
+- Respuestas controladas para `401`.
 
 ### Security Logging and Monitoring Failures
 
@@ -386,7 +365,7 @@ Un reporte debe incluir:
 
 ## Flujo de desarrollo seguro
 
-El trabajo se realiza en:
+El desarrollo se realiza en:
 
 ```text
 develop
