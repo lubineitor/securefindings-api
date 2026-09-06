@@ -22,11 +22,13 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 @RestController
 @RequestMapping("/api/v1/findings/{findingId}/audit")
 @Tag(name = "Auditoría", description = "Historial de operaciones de los hallazgos")
+@SecurityRequirement(name = "bearerAuth")
 public class FindingAuditController {
 
         private final AuditService auditService;
