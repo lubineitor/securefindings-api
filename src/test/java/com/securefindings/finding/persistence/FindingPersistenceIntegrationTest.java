@@ -179,4 +179,36 @@ class FindingPersistenceIntegrationTest {
                                 .findById(createdFinding.id())
                                 .isEmpty());
         }
+
+        @Test
+        void deberiaBuscarHallazgosPersistidosPorTituloYDescripcion() {
+                Finding titleMatch = findingService.create(
+                                "SQL Injection",
+                                "Consulta sin parametrizar",
+                                FindingSeverity.HIGH);
+
+                Finding descriptionMatch = findingService.create(
+                                "Configuración insegura",
+                                "El hallazgo contiene referencias a SQL",
+                                FindingSeverity.MEDIUM);
+
+                var results = findingService.findPage(
+                                0,
+                                20,
+                                " SQL ",
+                                null,
+                                null);
+
+                assertEquals(2, results.getTotalElements());
+
+                assertTrue(results.getContent()
+                                .stream()
+                                .anyMatch(finding -> finding.id()
+                                                .equals(titleMatch.id())));
+
+                assertTrue(results.getContent()
+                                .stream()
+                                .anyMatch(finding -> finding.id()
+                                                .equals(descriptionMatch.id())));
+        }
 }

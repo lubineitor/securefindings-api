@@ -95,12 +95,7 @@ public class FindingService {
 
                 UUID organizationId = organizationContext.currentOrganizationId();
 
-                Pageable pageable = PageRequest.of(
-                                page,
-                                size,
-                                Sort.by(
-                                                Sort.Order.desc("createdAt"),
-                                                Sort.Order.asc("id")));
+                Pageable pageable = createPageable(page, size);
 
                 Page<FindingEntity> entities;
 
@@ -130,11 +125,30 @@ public class FindingService {
                                                         pageable);
                 }
 
-                return entities
-                                .map(entity -> Objects.requireNonNull(
-                                                entity,
-                                                "El repositorio devolvió una entidad nula")
-                                                .toDomain());
+                return toDomainPage(entities);
+        }
+
+        public Page<Finding> findPage(
+                        int page,
+                        int size,
+                        String searchTerm,
+                        FindingSeverity severity,
+                        FindingStatus status) {
+
+                UUID organizationId = organizationContext.currentOrganizationId();
+
+                Pageable pageable = createPageable(page, size);
+                String normalizedSearchTerm = normalizeSearchTerm(searchTerm);
+
+                Page<FindingEntity> entities = findingRepository
+                                .findPageByFilters(
+                                                organizationId,
+                                                normalizedSearchTerm,
+                                                severity,
+                                                status,
+                                                pageable);
+
+                return toDomainPage(entities);
         }
 
         public Optional<Finding> findById(UUID id) {
@@ -225,6 +239,39 @@ public class FindingService {
                                 id,
                                 AuditAction.DELETED,
                                 currentActor());
+        }
+
+        private Pageable createPageable(
+                        int page,
+                        int size) {
+
+                return PageRequest.of(
+                                page,
+                                size,
+                                Sort.by(
+                                                Sort.Order.desc("createdAt"),
+                                                Sort.Order.asc("id")));
+        }
+
+        private Page<Finding> toDomainPage(
+                        Page<FindingEntity> entities) {
+
+                return entities.map(entity -> Objects.requireNonNull(
+                                entity,
+                                "El repositorio devolvió una entidad nula")
+                                .toDomain());
+        }
+
+        private String normalizeSearchTerm(String searchTerm) {
+                if (searchTerm == null) {
+                        return null;
+                }
+
+                String normalizedSearchTerm = searchTerm.trim();
+
+                return normalizedSearchTerm.isEmpty()
+                                ? null
+                                : normalizedSearchTerm;
         }
 
         private Finding save(
