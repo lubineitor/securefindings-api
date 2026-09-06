@@ -7,7 +7,7 @@ import org.springframework.data.domain.Page;
 import com.securefindings.audit.persistence.FindingAuditEntity;
 
 public record FindingAuditPageResponse(
-        List<FindingAuditEntity> content,
+        List<FindingAuditResponse> content,
         int page,
         int size,
         long totalElements,
@@ -18,8 +18,14 @@ public record FindingAuditPageResponse(
     public static FindingAuditPageResponse from(
             Page<FindingAuditEntity> auditPage) {
 
+        List<FindingAuditResponse> content = auditPage
+                .getContent()
+                .stream()
+                .map(FindingAuditResponse::from)
+                .toList();
+
         return new FindingAuditPageResponse(
-                auditPage.getContent(),
+                content,
                 auditPage.getNumber(),
                 auditPage.getSize(),
                 auditPage.getTotalElements(),
