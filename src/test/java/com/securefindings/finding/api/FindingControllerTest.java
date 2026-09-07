@@ -1,6 +1,7 @@
 package com.securefindings.finding.api;
 
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -505,5 +506,44 @@ class FindingControllerTest {
                                 .andExpect(status().isNotFound())
                                 .andExpect(jsonPath("$.code")
                                                 .value("FINDING_NOT_FOUND"));
+        }
+
+        @Test
+        void deberiaRechazarUnaPaginaNegativaEnElListado()
+                        throws Exception {
+
+                mockMvc.perform(get("/api/v1/findings")
+                                .param("page", "-1"))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.code")
+                                                .value("VALIDATION_ERROR"));
+
+                verifyNoInteractions(findingService);
+        }
+
+        @Test
+        void deberiaRechazarUnTamanoDePaginaCeroEnElListado()
+                        throws Exception {
+
+                mockMvc.perform(get("/api/v1/findings")
+                                .param("size", "0"))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.code")
+                                                .value("VALIDATION_ERROR"));
+
+                verifyNoInteractions(findingService);
+        }
+
+        @Test
+        void deberiaRechazarUnTamanoSuperiorAlPermitidoEnElListado()
+                        throws Exception {
+
+                mockMvc.perform(get("/api/v1/findings")
+                                .param("size", "101"))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.code")
+                                                .value("VALIDATION_ERROR"));
+
+                verifyNoInteractions(findingService);
         }
 }

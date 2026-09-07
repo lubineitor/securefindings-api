@@ -1,5 +1,6 @@
 package com.securefindings.audit.api;
 
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -141,5 +142,56 @@ class FindingAuditControllerTest {
                                 .andExpect(jsonPath("$.totalPages").value(0))
                                 .andExpect(jsonPath("$.first").value(true))
                                 .andExpect(jsonPath("$.last").value(true));
+        }
+
+        @Test
+        void deberiaRechazarUnaPaginaNegativa()
+                        throws Exception {
+
+                UUID findingId = UUID.randomUUID();
+
+                mockMvc.perform(get(
+                                "/api/v1/findings/{findingId}/audit",
+                                findingId)
+                                .param("page", "-1"))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.code")
+                                                .value("VALIDATION_ERROR"));
+
+                verifyNoInteractions(auditService);
+        }
+
+        @Test
+        void deberiaRechazarUnTamanoDePaginaCero()
+                        throws Exception {
+
+                UUID findingId = UUID.randomUUID();
+
+                mockMvc.perform(get(
+                                "/api/v1/findings/{findingId}/audit",
+                                findingId)
+                                .param("size", "0"))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.code")
+                                                .value("VALIDATION_ERROR"));
+
+                verifyNoInteractions(auditService);
+        }
+
+        @Test
+        void deberiaRechazarUnTamanoDePaginaSuperiorAlMaximo()
+                        throws Exception {
+
+                UUID findingId = UUID.randomUUID();
+
+                mockMvc.perform(get(
+                                "/api/v1/findings/{findingId}/audit",
+                                findingId)
+                                .param("size", "101"))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.code")
+                                                .value("VALIDATION_ERROR"));
+
+                verifyNoInteractions(auditService);
         }
 }
