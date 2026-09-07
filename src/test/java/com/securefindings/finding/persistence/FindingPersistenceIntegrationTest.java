@@ -11,12 +11,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.domain.Page;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
+import com.securefindings.audit.application.AuditService;
 import com.securefindings.audit.domain.AuditAction;
 import com.securefindings.audit.persistence.FindingAuditEntity;
 import com.securefindings.audit.persistence.FindingAuditRepository;
@@ -31,6 +33,9 @@ class FindingPersistenceIntegrationTest {
 
         private static final UUID ORGANIZATION_ID = UUID.fromString(
                         "00000000-0000-0000-0000-000000000001");
+
+        @Autowired
+        private AuditService auditService;
 
         @SuppressWarnings("resource")
         @Container
@@ -210,5 +215,52 @@ class FindingPersistenceIntegrationTest {
                                 .stream()
                                 .anyMatch(finding -> finding.id()
                                                 .equals(descriptionMatch.id())));
+        }
+
+        @Test
+        void deberiaPaginarLaAuditoriaPersistidaEnPostgreSQL() {
+                Finding createdFinding = findingService.create(
+                                "SQL Injection",
+                                "Consulta sin parametrizar",
+                                FindingSeverity.HIGH);
+
+                findingService.updateStatus(
+                                createdFinding.id(),
+                                FindingStatus.IN_PROGRESS);
+
+                Page<FindingAuditEntity> firstPage = auditService
+                                .findPageByFindingId(
+                                                createdFinding.id(),
+                                                0,
+                                                1);
+
+                Page<FindingAuditEntity> secondPage = auditService
+                                .findPageByFindingId(
+                                                createdFinding.id(),
+                                                1,
+                                                1);
+
+                assertEquals(1, firstPage.getContent().size());
+                assertEquals(2, firstPage.getTotalElements());
+                assertEquals(2, firstPage.getTotalPages());
+                assertEquals(0, firstPage.getNumber());
+                assertEquals(1, firstPage.getSize());
+                assertEquals(AuditAction.CREATED,
+                                firstPage.getContent().get(0).getAction());
+                assertEquals("system",
+                                firstPage.getContent().get(0).getActor());
+                assertEquals(true, firstPage.isFirst());
+                assertEquals(false, firstPage.isLast());
+
+                assertEquals(1, secondPage.getContent().size());
+                assertEquals(2, secondPage.getTotalElements());
+                assertEquals(2, secondPage.getTotalPages());
+                assertEquals(1, secondPage.getNumber());
+                assertEquals(AuditAction.UPDATED,
+                                secondPage.getContent().get(0).getAction());
+                assertEquals("system",
+                                secondPage.getContent().get(0).getActor());
+                assertEquals(false, secondPage.isFirst());
+                assertEquals(true, secondPage.isLast());
         }
 }
