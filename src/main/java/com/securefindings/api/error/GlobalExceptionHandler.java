@@ -19,6 +19,8 @@ import org.springframework.core.MethodParameter;
 
 import com.securefindings.finding.application.FindingNotFoundException;
 
+import jakarta.validation.ConstraintViolationException;
+
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -146,5 +148,38 @@ public class GlobalExceptionHandler {
                         String code,
                         String message,
                         Map<String, String> errors) {
+        }
+
+        @ExceptionHandler(ConstraintViolationException.class)
+        @ResponseStatus(HttpStatus.BAD_REQUEST)
+        public ApiErrorResponse handleConstraintViolation(
+                        ConstraintViolationException exception) {
+
+                Map<String, String> errors = exception
+                                .getConstraintViolations()
+                                .stream()
+                                .collect(Collectors.toMap(
+                                                violation -> extractFieldName(
+                                                                violation.getPropertyPath().toString()),
+                                                violation -> violation.getMessage() == null
+                                                                ? "Valor no válido"
+                                                                : violation.getMessage(),
+                                                (firstMessage, ignoredMessage) -> firstMessage,
+                                                LinkedHashMap::new));
+
+                return new ApiErrorResponse(
+                                "VALIDATION_ERROR",
+                                "La petición contiene datos no válidos",
+                                errors);
+        }
+
+        private String extractFieldName(String propertyPath) {
+                int lastSeparator = propertyPath.lastIndexOf('.');
+
+                if (lastSeparator < 0) {
+                        return propertyPath;
+                }
+
+                return propertyPath.substring(lastSeparator + 1);
         }
 }

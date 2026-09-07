@@ -5,6 +5,10 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,48 +21,70 @@ import com.securefindings.security.OrganizationContext;
 @Service
 public class AuditService {
 
-    private final FindingAuditRepository auditRepository;
-    private final OrganizationContext organizationContext;
+        private final FindingAuditRepository auditRepository;
+        private final OrganizationContext organizationContext;
 
-    public AuditService(
-            FindingAuditRepository auditRepository,
-            OrganizationContext organizationContext) {
+        public AuditService(
+                        FindingAuditRepository auditRepository,
+                        OrganizationContext organizationContext) {
 
-        this.auditRepository = Objects.requireNonNull(auditRepository);
-        this.organizationContext = Objects.requireNonNull(organizationContext);
-    }
+                this.auditRepository = Objects.requireNonNull(auditRepository);
+                this.organizationContext = Objects.requireNonNull(organizationContext);
+        }
 
-    @Transactional
-    public void register(
-            UUID findingId,
-            AuditAction action,
-            String actor) {
+        @Transactional
+        public void register(
+                        UUID findingId,
+                        AuditAction action,
+                        String actor) {
 
-        UUID organizationId = organizationContext.currentOrganizationId();
+                UUID organizationId = organizationContext.currentOrganizationId();
 
-        AuditEvent event = new AuditEvent(
-                findingId,
-                organizationId,
-                action,
-                actor,
-                Instant.now());
+                AuditEvent event = new AuditEvent(
+                                findingId,
+                                organizationId,
+                                action,
+                                actor,
+                                Instant.now());
 
-        FindingAuditEntity entity = new FindingAuditEntity(
-                UUID.randomUUID(),
-                event);
+                FindingAuditEntity entity = new FindingAuditEntity(
+                                UUID.randomUUID(),
+                                event);
 
-        auditRepository.save(entity);
-    }
+                auditRepository.save(entity);
+        }
 
-    @Transactional(readOnly = true)
-    public List<FindingAuditEntity> findByFindingId(
-            UUID findingId) {
+        @Transactional(readOnly = true)
+        public List<FindingAuditEntity> findByFindingId(
+                        UUID findingId) {
 
-        UUID organizationId = organizationContext.currentOrganizationId();
+                UUID organizationId = organizationContext.currentOrganizationId();
 
-        return auditRepository
-                .findByFindingIdAndOrganizationIdOrderByOccurredAtAsc(
-                        findingId,
-                        organizationId);
-    }
+                return auditRepository
+                                .findByFindingIdAndOrganizationIdOrderByOccurredAtAsc(
+                                                findingId,
+                                                organizationId);
+        }
+
+        @Transactional(readOnly = true)
+        public Page<FindingAuditEntity> findPageByFindingId(
+                        UUID findingId,
+                        int page,
+                        int size) {
+
+                UUID organizationId = organizationContext.currentOrganizationId();
+
+                Pageable pageable = PageRequest.of(
+                                page,
+                                size,
+                                Sort.by(
+                                                Sort.Order.asc("occurredAt"),
+                                                Sort.Order.asc("id")));
+
+                return auditRepository
+                                .findByFindingIdAndOrganizationIdOrderByOccurredAtAsc(
+                                                findingId,
+                                                organizationId,
+                                                pageable);
+        }
 }

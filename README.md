@@ -1,128 +1,182 @@
 # SecureFindings API
 
-API REST desarrollada en Java para registrar, consultar y gestionar hallazgos de seguridad.
+API REST desarrollada en Java y Spring Boot para registrar, consultar y gestionar hallazgos de seguridad.
 
-El proyecto aplica progresivamente principios de:
-
-- Secure Coding.
-- OWASP.
-- Application Security.
-- Autenticación y autorización.
-- Persistencia segura.
-- Aislamiento organizativo.
-- Auditoría.
-- Testing automatizado.
-- Integración continua.
+El proyecto está orientado a practicar desarrollo backend seguro, control de acceso, persistencia, auditoría, testing, integración continua y aislamiento de datos entre organizaciones.
 
 ## Estado
 
-🚧 En desarrollo activo.
+🚧 **En desarrollo**
 
-Actualmente incluye:
+Actualmente, el proyecto incluye:
 
-- Gestión completa de hallazgos.
+- Gestión de hallazgos de seguridad.
 - Persistencia en PostgreSQL.
-- Migraciones con Flyway.
-- Autenticación mediante Keycloak y JWT.
+- Migraciones de base de datos con Flyway.
+- Autenticación mediante Keycloak y OAuth2/OIDC.
 - Autorización basada en roles.
 - Aislamiento de datos por organización.
-- Auditoría de operaciones.
-- Paginación.
-- Filtros por severidad y estado.
-- Búsqueda textual por título y descripción.
-- Validación de peticiones y parámetros.
-- Respuestas JSON para errores `400`, `401`, `403` y `404`.
-- Tests unitarios, web e integración.
-- CodeQL.
-- Dependency Review.
-- GitHub Actions.
+- Historial de auditoría.
+- Paginación de hallazgos y eventos de auditoría.
+- Búsqueda textual y filtros.
+- Validación de entradas.
+- Manejo controlado de errores.
+- Tests unitarios, web y de integración.
+- Integración continua con GitHub Actions.
+- Análisis de código con CodeQL.
+- Revisión de dependencias en pull requests.
+- Entorno local reproducible con Docker Compose.
+
+## Objetivo
+
+SecureFindings pretende proporcionar una API para registrar y gestionar hallazgos de seguridad durante procesos de análisis o revisión de aplicaciones.
+
+El proyecto aplica progresivamente los siguientes principios:
+
+- Secure by Design.
+- Defensa en profundidad.
+- Principio de mínimo privilegio.
+- Separación entre dominio, aplicación, persistencia y API.
+- Validación de entradas.
+- Control de acceso.
+- Trazabilidad de operaciones.
+- Aislamiento multi-organización.
+- Automatización de pruebas.
+- Integración continua.
+- Revisión de dependencias.
 
 ## Tecnologías
 
-- Java 21.
-- Spring Boot 4.1.1.
-- Spring Web.
-- Spring Data JPA.
-- Spring Security.
-- OAuth2 Resource Server.
-- PostgreSQL 17.
-- Flyway.
-- Keycloak 26.7.3.
-- Maven.
-- JUnit 5.
-- Mockito.
-- MockMvc.
-- Testcontainers.
-- Docker Compose.
-- OpenAPI y Swagger UI.
-- GitHub Actions.
-- CodeQL.
-
-## Arquitectura
-
-```text
-src/
-├── main/
-│   ├── java/
-│   │   └── com/securefindings/
-│   │       ├── api/
-│   │       │   └── error/
-│   │       ├── audit/
-│   │       ├── finding/
-│   │       ├── health/
-│   │       └── security/
-│   └── resources/
-│       ├── application.properties
-│       └── db/
-│           └── migration/
-└── test/
-    └── java/
-        └── com/securefindings/
-```
-
-Responsabilidades principales:
-
-- `api`: controladores y objetos de petición/respuesta.
-- `application`: servicios y casos de uso.
-- `domain`: reglas y modelos del dominio.
-- `persistence`: entidades JPA y repositorios.
-- `security`: autenticación, autorización y contexto organizativo.
-- `audit`: registro de operaciones.
-- `api.error`: tratamiento global de errores.
+| Tecnología | Uso |
+|---|---|
+| Java 21 | Lenguaje principal |
+| Spring Boot 4.1.1 | Framework de aplicación |
+| Spring MVC | Desarrollo de la API REST |
+| Spring Data JPA | Persistencia |
+| Hibernate | ORM |
+| PostgreSQL 17 | Base de datos |
+| Flyway | Migraciones versionadas |
+| Keycloak 26.7.3 | Identidad y autorización |
+| Spring Security | Autenticación y autorización |
+| JUnit 5 | Tests |
+| Mockito | Tests unitarios |
+| MockMvc | Tests web |
+| Testcontainers | Tests con PostgreSQL real |
+| Maven Wrapper | Compilación y ejecución |
+| Docker Compose | Infraestructura local |
+| GitHub Actions | Integración continua |
+| Springdoc OpenAPI | Documentación de la API |
+| CodeQL | Análisis estático de seguridad |
 
 ## Funcionalidades
+
+### Gestión de hallazgos
 
 La API permite:
 
 - Crear hallazgos.
-- Consultar hallazgos.
-- Actualizar información.
-- Actualizar estados.
+- Consultar los hallazgos de la organización actual.
+- Consultar un hallazgo por identificador.
+- Actualizar título, descripción y severidad.
+- Actualizar el estado.
 - Eliminar hallazgos.
-- Buscar por texto.
+- Consultar el historial de auditoría.
+- Buscar por título o descripción.
 - Filtrar por severidad.
 - Filtrar por estado.
-- Consultar el historial de auditoría.
+- Paginar los resultados.
+- Validar las peticiones recibidas.
 
-### Severidades
+### Severidades disponibles
+
+- `LOW`
+- `MEDIUM`
+- `HIGH`
+- `CRITICAL`
+
+### Estados disponibles
+
+- `OPEN`
+- `IN_PROGRESS`
+- `RESOLVED`
+- `FALSE_POSITIVE`
+
+### Auditoría
+
+Las operaciones importantes generan eventos de auditoría:
+
+- `CREATED`
+- `UPDATED`
+- `DELETED`
+
+Cada evento almacena:
+
+- Identificador del evento.
+- Identificador del hallazgo.
+- Identificador de la organización.
+- Acción realizada.
+- Usuario que realizó la operación.
+- Fecha y hora UTC.
+
+El historial se consulta de forma paginada y ordenada cronológicamente.
+
+## Aislamiento entre organizaciones
+
+Cada organización posee un identificador único:
 
 ```text
-LOW
-MEDIUM
-HIGH
-CRITICAL
+organization_id
 ```
 
-### Estados
+Este valor se obtiene exclusivamente del token JWT emitido por Keycloak.
 
-```text
-OPEN
-IN_PROGRESS
-RESOLVED
-FALSE_POSITIVE
+La API no acepta la organización desde:
+
+- Parámetros de consulta.
+- Cuerpo JSON.
+- Cabeceras controladas por el cliente.
+- Identificadores enviados manualmente por el usuario.
+
+El flujo es:
+
+1. Keycloak autentica al usuario.
+2. Keycloak emite un token JWT.
+3. Spring Security valida el token.
+4. `OrganizationContext` obtiene el claim `organization_id`.
+5. Se convierte el valor a `UUID`.
+6. Se comprueba que la organización existe.
+7. Los servicios utilizan esa organización.
+8. Los repositorios filtran las consultas.
+9. La auditoría queda asociada a la misma organización.
+
+Por tanto, un usuario de una organización no puede consultar ni modificar hallazgos pertenecientes a otra.
+
+## API REST
+
+Todas las operaciones protegidas requieren:
+
+```http
+Authorization: Bearer <access_token>
 ```
 
-## Listado, paginación y búsqueda
+### Estado de la aplicación
+
+```http
+GET /api/v1/health
+```
+
+Este endpoint no requiere autenticación.
+
+Respuesta:
+
+```json
+{
+  "status": "UP",
+  "timestamp": "2026-09-03T09:00:00Z"
+}
+```
+
+### Listar hallazgos
 
 ```http
 GET /api/v1/findings?page=0&size=20
@@ -134,25 +188,14 @@ Parámetros disponibles:
 |---|---:|---|
 | `page` | No | Número de página. Empieza en `0`. |
 | `size` | No | Elementos por página. Entre `1` y `100`. |
-| `q` | No | Texto buscado en título y descripción. Máximo `100` caracteres. |
-| `severity` | No | Filtra por severidad. |
-| `status` | No | Filtra por estado. |
+| `q` | No | Busca en título y descripción. Máximo 100 caracteres. |
+| `severity` | No | `LOW`, `MEDIUM`, `HIGH` o `CRITICAL`. |
+| `status` | No | `OPEN`, `IN_PROGRESS`, `RESOLVED` o `FALSE_POSITIVE`. |
 
-Ejemplo de búsqueda:
-
-```http
-GET /api/v1/findings?q=SQL
-```
-
-La búsqueda se realiza sobre:
-
-- Título.
-- Descripción.
-
-No distingue entre mayúsculas y minúsculas y puede combinarse con el resto de filtros:
+Ejemplo:
 
 ```http
-GET /api/v1/findings?page=0&size=10&q=SQL&severity=HIGH&status=OPEN
+GET /api/v1/findings?page=0&size=20&q=sql&severity=HIGH&status=OPEN
 ```
 
 Respuesta:
@@ -161,7 +204,7 @@ Respuesta:
 {
   "content": [],
   "page": 0,
-  "size": 10,
+  "size": 20,
   "totalElements": 0,
   "totalPages": 0,
   "first": true,
@@ -169,123 +212,216 @@ Respuesta:
 }
 ```
 
-Todas las consultas se ejecutan dentro de la organización asociada al token JWT.
+Los resultados están limitados a la organización del token.
 
-## Endpoints
+### Consultar un hallazgo
 
-| Método | Endpoint | Descripción | Acceso |
-|---|---|---|---|
-| `GET` | `/api/v1/health` | Estado de la aplicación | Público |
-| `GET` | `/api/v1/findings` | Listar, filtrar y buscar hallazgos | `ANALYST`, `ADMIN` |
-| `GET` | `/api/v1/findings/{id}` | Obtener un hallazgo | `ANALYST`, `ADMIN` |
-| `POST` | `/api/v1/findings` | Crear un hallazgo | `ANALYST`, `ADMIN` |
-| `PUT` | `/api/v1/findings/{id}` | Actualizar un hallazgo | `ANALYST`, `ADMIN` |
-| `PATCH` | `/api/v1/findings/{id}/status` | Actualizar el estado | `ANALYST`, `ADMIN` |
-| `DELETE` | `/api/v1/findings/{id}` | Eliminar un hallazgo | `ADMIN` |
-| `GET` | `/api/v1/findings/{id}/audit` | Consultar auditoría | `ANALYST`, `ADMIN` |
+```http
+GET /api/v1/findings/{id}
+```
 
-## Manejo de errores
+### Crear un hallazgo
 
-Todas las respuestas de error utilizan una estructura JSON consistente.
+```http
+POST /api/v1/findings
+Content-Type: application/json
+Authorization: Bearer <access_token>
+```
 
-### Error de validación
+Cuerpo:
 
 ```json
 {
-  "code": "VALIDATION_ERROR",
-  "message": "La petición contiene parámetros no válidos",
-  "errors": {
-    "page": "El valor del parámetro no es válido"
-  }
+  "title": "SQL Injection",
+  "description": "Entrada de usuario sin validar",
+  "severity": "HIGH"
 }
 ```
 
-### Error de autenticación
+### Actualizar los datos de un hallazgo
+
+```http
+PUT /api/v1/findings/{id}
+Content-Type: application/json
+Authorization: Bearer <access_token>
+```
+
+Cuerpo:
 
 ```json
 {
-  "code": "UNAUTHORIZED",
-  "message": "La autenticación es necesaria para acceder a este recurso",
-  "errors": {}
+  "title": "SQL Injection corregido",
+  "description": "La entrada se valida y parametriza correctamente",
+  "severity": "MEDIUM"
 }
 ```
 
-Se devuelve cuando no existe un token válido o el token ha caducado.
+### Actualizar el estado
 
-### Error de autorización
+```http
+PATCH /api/v1/findings/{id}/status
+Content-Type: application/json
+Authorization: Bearer <access_token>
+```
+
+Cuerpo:
 
 ```json
 {
-  "code": "FORBIDDEN",
-  "message": "El usuario no tiene permisos para acceder a este recurso",
-  "errors": {}
+  "status": "IN_PROGRESS"
 }
 ```
 
-Se devuelve cuando el usuario está autenticado, pero no dispone del rol necesario.
+### Consultar el historial de auditoría
 
-### Hallazgo inexistente
+```http
+GET /api/v1/findings/{id}/audit?page=0&size=20
+Authorization: Bearer <access_token>
+```
+
+Los parámetros son:
+
+| Parámetro | Obligatorio | Descripción |
+|---|---:|---|
+| `page` | No | Número de página. Empieza en `0`. |
+| `size` | No | Eventos por página. Entre `1` y `100`. |
+
+Respuesta:
 
 ```json
 {
-  "code": "FINDING_NOT_FOUND",
-  "message": "No se ha encontrado el hallazgo",
-  "errors": {}
+  "content": [
+    {
+      "id": "6c4d7f76-3ad9-4a19-8d7f-8987d25ed2d8",
+      "findingId": "d534aae0-9eb0-4794-a854-de55f3712625",
+      "action": "CREATED",
+      "actor": "analista",
+      "occurredAt": "2026-09-03T09:16:21.148144Z"
+    }
+  ],
+  "page": 0,
+  "size": 20,
+  "totalElements": 1,
+  "totalPages": 1,
+  "first": true,
+  "last": true
 }
 ```
 
-Tabla de errores:
+Los eventos se ordenan cronológicamente por `occurredAt`.
 
-| HTTP | Código | Situación |
-|---:|---|---|
-| `400` | `VALIDATION_ERROR` | Datos o parámetros incorrectos |
-| `401` | `UNAUTHORIZED` | Token ausente o inválido |
-| `403` | `FORBIDDEN` | El usuario no tiene permisos |
-| `404` | `FINDING_NOT_FOUND` | Hallazgo inexistente |
+La paginación no permite acceder a eventos de otra organización. Cada consulta filtra por:
+
+- Identificador del hallazgo.
+- Identificador de la organización obtenida del token.
+
+### Eliminar un hallazgo
+
+```http
+DELETE /api/v1/findings/{id}
+Authorization: Bearer <access_token>
+```
+
+Respuesta correcta:
+
+```http
+204 No Content
+```
+
+Solo un usuario con rol `ADMIN` puede eliminar hallazgos.
+
+## Roles
+
+| Operación | ANALYST | ADMIN |
+|---|---:|---:|
+| Consultar hallazgos | Sí | Sí |
+| Crear hallazgos | Sí | Sí |
+| Actualizar hallazgos | Sí | Sí |
+| Consultar auditoría | Sí | Sí |
+| Eliminar hallazgos | No | Sí |
+
+Los roles proceden de Keycloak y se convierten en autoridades de Spring Security.
+
+## Documentación OpenAPI
+
+Con la aplicación arrancada:
+
+```text
+http://localhost:8080/v3/api-docs
+```
+
+Swagger UI:
+
+```text
+http://localhost:8080/swagger-ui.html
+```
+
+Swagger permite introducir un token JWT mediante el botón `Authorize`.
+
+Debe pegarse únicamente el token, sin añadir manualmente el prefijo `Bearer`, ya que Swagger lo incorpora automáticamente.
 
 ## Persistencia y migraciones
 
-La aplicación utiliza PostgreSQL y Flyway.
-
-Las migraciones se encuentran en:
-
-```text
-src/main/resources/db/migration/
-```
-
-Migraciones actuales:
-
-- `V1`: creación de `findings`.
-- `V2`: creación de la auditoría.
-- `V3`: creación de organizaciones y asignación de hallazgos.
-
-Hibernate utiliza:
+La aplicación utiliza:
 
 ```properties
 spring.jpa.hibernate.ddl-auto=validate
 ```
 
-Hibernate únicamente valida el esquema. Los cambios estructurales se realizan mediante migraciones Flyway.
+Hibernate no crea ni modifica tablas automáticamente. Solo valida que las entidades coincidan con la estructura existente.
 
-## Docker Compose
-
-El archivo utilizado es:
+Flyway controla la estructura mediante migraciones versionadas:
 
 ```text
-compose.yml
+V1__crear_tabla_findings.sql
+V2__crear_tabla_finding_audit.sql
+V3__crear_organizaciones_y_asignar_hallazgos.sql
 ```
 
-Iniciar PostgreSQL y Keycloak:
+La migración V3:
+
+- Crea la tabla `organizations`.
+- Crea la organización inicial.
+- Añade `organization_id` a `findings`.
+- Añade `organization_id` a `finding_audit`.
+- Crea las claves foráneas.
+- Crea índices para las consultas por organización.
+
+## Configuración local
+
+Crea el archivo `.env` a partir del ejemplo:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+El archivo `.env` contiene valores locales y no debe subirse al repositorio.
+
+La configuración utiliza variables de entorno para:
+
+- Host de PostgreSQL.
+- Puerto de PostgreSQL.
+- Nombre de la base de datos.
+- Usuario de PostgreSQL.
+- Contraseña de PostgreSQL.
+- Usuario administrador de Keycloak.
+- Contraseña del administrador de Keycloak.
+
+## Ejecutar la infraestructura
+
+Desde la raíz del proyecto:
 
 ```powershell
 docker compose up -d
 ```
 
-Comprobar los contenedores:
+Comprobar el estado:
 
 ```powershell
 docker compose ps
 ```
+
+PostgreSQL debe aparecer como `healthy`.
 
 Detener los contenedores conservando los datos:
 
@@ -299,126 +435,208 @@ Detener y eliminar los contenedores conservando los volúmenes:
 docker compose down
 ```
 
-Los datos se almacenan en volúmenes Docker:
-
-- `securefindings_postgres_data`.
-- `securefindings-keycloak-data`.
-
-Las credenciales reales se cargan mediante variables de entorno y no deben subirse al repositorio.
-
-## Keycloak
-
-La autenticación utiliza tokens JWT emitidos por Keycloak.
-
-```text
-Realm: securefindings
-Issuer: http://localhost:8081/realms/securefindings
-```
-
-Ejemplo de token:
-
-```json
-{
-  "preferred_username": "analista",
-  "organization_id": "00000000-0000-0000-0000-000000000001"
-}
-```
-
-Roles principales:
-
-```text
-ANALYST
-ADMIN
-```
-
-El claim `organization_id` se utiliza para aislar los datos entre organizaciones.
-
-## Auditoría
-
-Las operaciones generan eventos:
-
-```text
-CREATED
-UPDATED
-DELETED
-```
-
-Cada evento registra:
-
-- Hallazgo afectado.
-- Organización.
-- Acción.
-- Usuario.
-- Fecha y hora.
-
-## OpenAPI
-
-Swagger UI:
-
-```text
-http://localhost:8080/swagger-ui/index.html
-```
-
-Especificación OpenAPI:
-
-```text
-http://localhost:8080/v3/api-docs
-```
-
-## Ejecución local
+Eliminar también los datos persistidos:
 
 ```powershell
-docker compose up -d
+docker compose down -v
+```
+
+El último comando elimina los datos de PostgreSQL y Keycloak.
+
+## Ejecutar la aplicación
+
+Compilar:
+
+```powershell
+.\mvnw.cmd compile
+```
+
+Ejecutar los tests:
+
+```powershell
+.\mvnw.cmd test
+```
+
+Ejecutar una compilación limpia:
+
+```powershell
 .\mvnw.cmd clean test
+```
+
+Arrancar Spring Boot:
+
+```powershell
 .\mvnw.cmd spring-boot:run
 ```
 
-## Testing
+La API estará disponible en:
 
-El proyecto contiene:
+```text
+http://localhost:8080
+```
 
-- Tests unitarios del dominio.
-- Tests unitarios de servicios.
-- Tests de controladores con MockMvc.
-- Tests de seguridad.
-- Tests de paginación.
-- Tests de filtros.
-- Tests de búsqueda textual.
-- Tests de validación.
-- Tests de respuestas `401` y `403`.
-- Tests de auditoría.
-- Tests de aislamiento organizativo.
-- Tests de persistencia con Testcontainers.
+Keycloak estará disponible en:
 
-Comando principal:
-
-```powershell
-.\mvnw.cmd clean test
+```text
+http://localhost:8081
 ```
 
 ## Integración continua
 
-GitHub Actions ejecuta:
+El workflow principal está en:
 
-- Compilación.
-- Tests.
-- Dependency Review.
-- CodeQL.
-- Análisis del código Java.
+```text
+.github/workflows/ci.yml
+```
 
-La rama `develop` se utiliza para el desarrollo. La rama `main` contiene cambios terminados y revisados mediante Pull Request.
+Se ejecuta automáticamente en:
 
-## Objetivo de seguridad
+- Cada `push`.
+- Cada `pull_request`.
 
-El proyecto sigue un enfoque Secure by Design y presta especial atención a:
+El pipeline:
+
+1. Descarga el código.
+2. Configura Java 21.
+3. Utiliza Eclipse Temurin.
+4. Activa la caché de Maven.
+5. Ejecuta `clean verify`.
+6. Ejecuta todos los tests.
+7. Ejecuta los tests de integración con Testcontainers.
+
+La revisión de dependencias se ejecuta en pull requests.
+
+El proyecto también utiliza CodeQL para analizar el código Java y detectar posibles problemas de seguridad.
+
+## Tests
+
+El proyecto contiene diferentes niveles de prueba.
+
+### Tests de dominio
+
+Comprueban las reglas de `Finding`, sus estados, severidades y validaciones.
+
+### Tests de aplicación
+
+Comprueban `FindingService`, incluyendo:
+
+- Creación.
+- Consulta.
+- Actualización.
+- Eliminación.
+- Manejo de hallazgos inexistentes.
+- Uso del contexto de organización.
+- Aplicación de filtros.
+- Búsqueda textual.
+- Paginación.
+
+### Tests web
+
+Comprueban los controladores REST mediante MockMvc:
+
+- Códigos HTTP.
+- Validación de peticiones.
+- Respuestas JSON.
+- Paginación.
+- Filtros.
+- Autorización.
+- Manejo de errores.
+- Restricción de eliminación para usuarios `ANALYST`.
+- Respuestas JSON para errores `401` y `403`.
+
+### Tests de auditoría
+
+Comprueban:
+
+- Registro de eventos `CREATED`.
+- Registro de eventos `UPDATED`.
+- Registro de eventos `DELETED`.
+- Actor procedente de `preferred_username`.
+- Filtrado por organización.
+- Orden cronológico.
+- Paginación del historial.
+- Respuesta vacía cuando no existen eventos.
+
+### Tests de persistencia
+
+Utilizan PostgreSQL real mediante Testcontainers y comprueban:
+
+- Persistencia de hallazgos.
+- Recuperación de datos.
+- Actualizaciones.
+- Eliminaciones.
+- Persistencia de auditoría.
+- Restricciones de base de datos.
+- Aislamiento organizativo.
+
+### Tests de seguridad
+
+`OrganizationContextTest` comprueba:
+
+- Claim `organization_id` válido.
+- Claim ausente.
+- Claim con formato inválido.
+- Organización inexistente.
+- Contextos no autenticados.
+
+`SecurityConfigTest` comprueba:
+
+- Acceso sin autenticación.
+- Respuesta JSON `401`.
+- Acceso de usuarios `ANALYST`.
+- Restricción de eliminación.
+- Respuesta JSON `403` para usuarios sin permisos.
+
+## Estructura principal
+
+```text
+.github
+└── workflows
+    ├── ci.yml
+    └── codeql.yml
+
+src
+├── main
+│   ├── java
+│   │   └── com
+│   │       └── securefindings
+│   │           ├── SecureFindingsApplication.java
+│   │           ├── api
+│   │           ├── audit
+│   │           ├── finding
+│   │           ├── health
+│   │           ├── organization
+│   │           └── security
+│   └── resources
+│       ├── application.properties
+│       └── db
+│           └── migration
+└── test
+    └── java
+        └── com
+            └── securefindings
+                ├── audit
+                ├── finding
+                ├── health
+                └── security
+```
+
+## Objetivos de seguridad
+
+El proyecto trabaja progresivamente riesgos relacionados con:
 
 - Broken Access Control.
-- IDOR.
-- Aislamiento organizativo.
+- Fallos de autenticación.
+- Validación insuficiente.
 - Inyección SQL.
-- Validación de entradas.
-- Gestión de secretos.
-- Seguridad de JWT.
-- Privilegios mínimos.
-- Auditoría.
+- Exposición de información.
+- Gestión incorrecta de secretos.
+- Falta de trazabilidad.
+- Acceso entre organizaciones.
+- Configuración insegura de infraestructura.
 - Dependencias vulnerables.
+- Fallos introducidos durante cambios de código.
+
+## Licencia
+
+Proyecto personal en desarrollo con finalidad educativa y de portfolio.
