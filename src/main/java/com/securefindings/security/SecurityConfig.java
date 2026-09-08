@@ -69,6 +69,11 @@ public class SecurityConfig {
                                                                 "/api/v1/findings/**")
                                                 .hasRole("ADMIN")
 
+                                                .requestMatchers(
+                                                                HttpMethod.POST,
+                                                                "/api/v1/findings/*/comments")
+                                                .hasAnyRole("ANALYST", "ADMIN")
+
                                                 .anyRequest()
                                                 .authenticated())
 
