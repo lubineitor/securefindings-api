@@ -40,61 +40,12 @@ Authorization: Bearer <access_token>
 La aplicación:
 
 - No recibe contraseñas.
-- No almacena contraseñas.
-- No gestiona directamente usuarios.
-- No utiliza sesiones de usuario.
-- No utiliza autenticación basada en cookies.
+- No almacena credenciales de usuarios.
+- No gestiona sesiones de usuario.
+- No utiliza autenticación mediante formulario.
+- No utiliza autenticación HTTP Basic.
 
 Las credenciales son gestionadas por Keycloak.
-
-## Autorización
-
-Spring Security utiliza los roles contenidos en el token JWT.
-
-Las reglas actuales son:
-
-| Recurso | ANALYST | ADMIN |
-|---|---:|---:|
-| `GET /api/v1/health` | Público | Público |
-| Consultar hallazgos | Sí | Sí |
-| Crear hallazgos | Sí | Sí |
-| Actualizar hallazgos | Sí | Sí |
-| Consultar auditoría | Sí | Sí |
-| Eliminar hallazgos | No | Sí |
-
-El borrado requiere específicamente el rol `ADMIN`.
-
-Si no existe una autenticación válida:
-
-```http
-401 Unauthorized
-```
-
-Respuesta JSON:
-
-```json
-{
-  "code": "UNAUTHORIZED",
-  "message": "La autenticación es necesaria para acceder a este recurso",
-  "errors": {}
-}
-```
-
-Si el usuario está autenticado pero no tiene permisos:
-
-```http
-403 Forbidden
-```
-
-Respuesta JSON:
-
-```json
-{
-  "code": "FORBIDDEN",
-  "message": "El usuario no tiene permisos para acceder a este recurso",
-  "errors": {}
-}
-```
 
 La aplicación utiliza sesiones sin estado:
 
@@ -102,12 +53,40 @@ La aplicación utiliza sesiones sin estado:
 SessionCreationPolicy.STATELESS
 ```
 
-También desactiva:
+CSRF está desactivado porque la API no utiliza autenticación basada en cookies y funciona como Resource Server stateless.
 
-- Inicio de sesión basado en formulario.
-- Autenticación HTTP Basic.
+## Autorización
 
-CSRF está desactivado porque la API utiliza tokens Bearer y no autenticación basada en cookies.
+Spring Security utiliza los roles incluidos en el token JWT.
+
+Las reglas principales son:
+
+| Recurso | ANALYST | ADMIN |
+|---|---:|---:|
+| `GET /api/v1/health` | Público | Público |
+| Consultar hallazgos | Sí | Sí |
+| Crear hallazgos | Sí | Sí |
+| Actualizar hallazgos | Sí | Sí |
+| Crear comentarios | Sí | Sí |
+| Consultar comentarios | Sí | Sí |
+| Consultar auditoría | Sí | Sí |
+| Eliminar hallazgos | No | Sí |
+
+El borrado de hallazgos requiere específicamente el rol `ADMIN`.
+
+Si no existe un token válido:
+
+```http
+401 Unauthorized
+```
+
+Si el usuario está autenticado pero no tiene permisos suficientes:
+
+```http
+403 Forbidden
+```
+
+Las respuestas de seguridad se devuelven en formato JSON controlado.
 
 ## Roles de Keycloak
 
@@ -132,17 +111,13 @@ securefindings-cli
 
 `KeycloakRealmRoleConverter` transforma los roles del realm en autoridades reconocidas por Spring Security.
 
-Por ejemplo, el rol:
-
-```text
-ANALYST
-```
-
-se utiliza en las reglas mediante:
+Por ejemplo:
 
 ```java
 .hasRole("ANALYST")
 ```
+
+requiere que el usuario tenga el rol `ANALYST`.
 
 ## Claim de organización
 
@@ -165,20 +140,21 @@ El mapper debe:
 
 - Incluir el claim en el access token.
 - Utilizar el tipo `String`.
-- Evitar exponerlo innecesariamente en otros tokens.
+- No permitir que el usuario lo modifique desde la petición.
+- No exponerlo innecesariamente en otros tokens.
 
 ## Aislamiento entre organizaciones
-
-La organización se obtiene exclusivamente del token validado.
 
 La API no acepta el identificador de organización desde:
 
 - Parámetros de consulta.
 - Cuerpo JSON.
 - Cabeceras controladas por el cliente.
-- Identificadores enviados manualmente.
+- Identificadores enviados manualmente por el usuario.
 
-El flujo de validación es:
+El valor se obtiene exclusivamente del token validado.
+
+### Flujo de validación
 
 1. Keycloak autentica al usuario.
 2. Keycloak emite un JWT.
@@ -188,7 +164,7 @@ El flujo de validación es:
 6. Se comprueba que la organización existe.
 7. Los servicios utilizan esa organización.
 8. Los repositorios filtran las operaciones.
-9. La auditoría se registra dentro de la misma organización.
+9. Los eventos de auditoría quedan asociados a ella.
 
 Si el claim:
 
@@ -205,113 +181,95 @@ El aislamiento no depende de una única comprobación.
 
 ### Capa de contexto
 
-`OrganizationContext` valida la organización procedente del token.
+`OrganizationContext` valida la organización procedente del token y evita confiar en valores proporcionados por el cliente.
 
 ### Capa de aplicación
 
-`FindingService` y `AuditService` obtienen siempre la organización actual antes de consultar o modificar datos.
+Los servicios obtienen siempre la organización actual antes de consultar o modificar datos.
 
-Los servicios no reciben la organización desde el cuerpo de la petición ni desde parámetros del cliente.
+No reciben la organización desde:
+
+- El cuerpo de la petición.
+- El path.
+- Los parámetros de consulta.
+- Las cabeceras del cliente.
 
 ### Capa de persistencia
 
-Los repositorios incluyen la organización en las consultas:
+Los repositorios utilizan métodos que incluyen el identificador de organización:
 
 ```java
 findByIdAndOrganizationId(...)
 existsByIdAndOrganizationId(...)
 deleteByIdAndOrganizationId(...)
-findPageByFilters(...)
+findByOrganizationId(...)
+findByFindingIdAndOrganizationId(...)
 findByFindingIdAndOrganizationIdOrderByOccurredAtAsc(...)
+findByFindingIdAndOrganizationIdOrderByOccurredAtAsc(..., Pageable)
+findByFindingIdAndOrganizationIdOrderByCreatedAtAscIdAsc(...)
 ```
+
+Esto evita recuperar o modificar registros pertenecientes a otra organización.
 
 ### Capa de base de datos
 
-Las tablas `findings` y `finding_audit` contienen:
+Las tablas principales contienen `organization_id`:
 
-```text
-organization_id
-```
+- `findings`
+- `finding_audit`
+- `finding_comments`
 
 Las columnas son obligatorias y tienen claves foráneas hacia `organizations`.
 
-También existen índices para las consultas por organización.
+Los comentarios también tienen una relación obligatoria con el hallazgo mediante `finding_id`.
 
-## Paginación y seguridad
+## Comentarios de hallazgos
 
-Los endpoints paginados aceptan:
-
-```text
-page >= 0
-1 <= size <= 100
-```
-
-El límite máximo de `100` evita solicitar cantidades excesivas de información en una sola petición.
-
-La paginación no modifica el aislamiento organizativo.
-
-En cada página del historial se siguen aplicando simultáneamente estos filtros:
-
-- `finding_id`.
-- `organization_id`.
-
-Por tanto, conocer el identificador de un hallazgo de otra organización no permite consultar su historial.
-
-El endpoint es:
+Los comentarios se crean mediante:
 
 ```http
-GET /api/v1/findings/{id}/audit?page=0&size=20
+POST /api/v1/findings/{id}/comments
 ```
 
-La respuesta contiene:
+El cuerpo solo contiene el contenido:
 
 ```json
 {
-  "content": [],
-  "page": 0,
-  "size": 20,
-  "totalElements": 0,
-  "totalPages": 0,
-  "first": true,
-  "last": true
+  "content": "Se ha validado la entrada."
 }
 ```
 
-La respuesta no contiene información de eventos pertenecientes a otra organización.
+La API no acepta desde el cliente:
 
-## Búsqueda y filtros
+- El autor.
+- La organización.
+- La fecha de creación.
+- El identificador del comentario.
 
-La búsqueda textual utiliza el parámetro:
+El autor se obtiene preferentemente del claim:
 
 ```text
-q
+preferred_username
 ```
 
-Ejemplo:
+Si no está disponible, se utiliza el nombre de la autenticación o el actor técnico `system`.
+
+El contenido:
+
+- Es obligatorio.
+- No puede estar vacío.
+- Tiene una longitud máxima de 5000 caracteres.
+- Se valida en la capa HTTP.
+- Se valida también en el dominio.
+- Está protegido por una restricción de base de datos.
+
+La consulta de comentarios es paginada:
 
 ```http
-GET /api/v1/findings?q=sql&page=0&size=20
+GET /api/v1/findings/{id}/comments?page=0&size=20
 ```
 
-El valor se busca en:
-
-- `title`.
-- `description`.
-
-El parámetro tiene una longitud máxima de 100 caracteres.
-
-Las consultas se realizan mediante repositorios Spring Data JPA y parámetros enlazados. No se construyen consultas SQL concatenando directamente valores del usuario.
-
-Esto reduce el riesgo de inyección SQL.
-
-También existen filtros controlados para:
-
-```text
-severity
-status
-```
-
-Los valores se validan contra los enums permitidos por la aplicación.
+Solo devuelve comentarios del hallazgo y de la organización actual.
 
 ## Auditoría
 
@@ -323,6 +281,7 @@ Acciones disponibles:
 CREATED
 UPDATED
 DELETED
+COMMENTED
 ```
 
 Cada evento almacena:
@@ -331,16 +290,18 @@ Cada evento almacena:
 - Identificador del hallazgo.
 - Identificador de la organización.
 - Acción.
-- Usuario que realizó la operación.
+- Actor.
 - Fecha y hora UTC.
 
-El actor se obtiene preferentemente del claim:
+El evento `COMMENTED` se registra cuando se crea un comentario correctamente.
+
+El registro de auditoría se realiza después de guardar el comentario dentro de la misma operación transaccional.
+
+El actor se obtiene preferentemente de:
 
 ```text
 preferred_username
 ```
-
-Si no está disponible, se utiliza el nombre de la autenticación.
 
 Las operaciones internas o de prueba pueden utilizar:
 
@@ -348,14 +309,47 @@ Las operaciones internas o de prueba pueden utilizar:
 system
 ```
 
-La auditoría se registra dentro de la misma transacción de negocio.
+El historial se consulta de forma paginada y aislada por organización.
 
-El historial se consulta:
+Un usuario no puede consultar el historial de un hallazgo perteneciente a otra organización.
 
-- Filtrado por hallazgo.
-- Filtrado por organización.
-- Ordenado cronológicamente.
-- De forma paginada.
+## Prueba de aislamiento
+
+La prueba:
+
+```text
+FindingOrganizationIsolationIntegrationTest
+```
+
+utiliza:
+
+- Spring Boot.
+- PostgreSQL real mediante Testcontainers.
+- Dos organizaciones.
+- Contextos JWT simulados.
+- Servicios de aplicación.
+- Repositorios JPA.
+- Flyway.
+
+El flujo probado es:
+
+1. Autenticar una organización A.
+2. Crear un hallazgo.
+3. Cambiar a una organización B.
+4. Intentar recuperar el hallazgo.
+5. Verificar que el resultado es vacío.
+6. Intentar eliminarlo.
+7. Verificar que se lanza `FindingNotFoundException`.
+8. Volver a la organización A.
+9. Verificar que el hallazgo sigue existiendo.
+
+El mismo principio se aplica a:
+
+- Comentarios.
+- Auditoría.
+- Consultas paginadas.
+- Operaciones de actualización.
+- Operaciones de eliminación.
 
 ## Validación de entradas
 
@@ -367,20 +361,32 @@ Se validan:
 - Longitudes máximas.
 - Valores permitidos de severidad.
 - Valores permitidos de estado.
-- Formato de UUID.
+- Contenido de comentarios.
+- Tamaño de página.
 - Número de página.
-- Tamaño máximo de página.
+- Formato de identificadores UUID.
 - Estructura de las peticiones JSON.
 
-La validación se realiza en varias capas:
+La API devuelve errores controlados en formato JSON.
+
+Ejemplo:
+
+```json
+{
+  "code": "VALIDATION_ERROR",
+  "message": "La petición contiene datos no válidos",
+  "errors": {
+    "content": "El contenido no puede estar vacío"
+  }
+}
+```
+
+La validación se realiza en:
 
 1. Entrada HTTP.
-2. Objetos de aplicación.
-3. Objetos de dominio.
-4. Persistencia.
-5. Restricciones de base de datos.
-
-La API no debe confiar en que el cliente envíe datos correctos.
+2. Objetos de dominio.
+3. Servicios de aplicación.
+4. Restricciones de base de datos.
 
 ## Persistencia segura
 
@@ -398,49 +404,34 @@ Flyway controla la evolución mediante migraciones versionadas:
 V1__crear_tabla_findings.sql
 V2__crear_tabla_finding_audit.sql
 V3__crear_organizaciones_y_asignar_hallazgos.sql
+V4__crear_comentarios_de_hallazgos.sql
+V5__permitir_auditoria_de_comentarios.sql
 ```
 
-La migración V3 introduce:
+La migración V4 crea la tabla de comentarios con:
 
-- La tabla `organizations`.
-- La organización inicial.
-- `organization_id` en `findings`.
-- `organization_id` en `finding_audit`.
-- Claves foráneas.
-- Índices de consulta por organización.
+- Clave primaria UUID.
+- Clave foránea hacia `findings`.
+- Clave foránea hacia `organizations`.
+- Contenido obligatorio.
+- Restricción de contenido no vacío.
+- Índice por hallazgo, organización y fecha.
 
-## Integración continua
+La migración V5 actualiza la restricción de acciones de auditoría para aceptar `COMMENTED`.
 
-El workflow principal se encuentra en:
+## Inyección SQL
 
-```text
-.github/workflows/ci.yml
-```
+La aplicación utiliza Spring Data JPA y métodos derivados de repositorio.
 
-Se ejecuta en:
+No se construyen consultas SQL concatenando directamente valores procedentes del usuario.
 
-- Cada `push`.
-- Cada `pull_request`.
+Los filtros y búsquedas se reciben como parámetros controlados por Spring Data y Hibernate.
 
-El pipeline:
-
-1. Descarga el código.
-2. Configura Java 21 mediante Eclipse Temurin.
-3. Utiliza la caché de Maven.
-4. Ejecuta `clean verify`.
-5. Compila desde cero.
-6. Ejecuta todos los tests.
-7. Ejecuta los tests de integración con Testcontainers.
-
-El proyecto también utiliza CodeQL para analizar el código Java.
-
-La revisión de dependencias se ejecuta en pull requests y ayuda a detectar vulnerabilidades nuevas en las dependencias modificadas.
-
-Los workflows utilizan permisos mínimos siempre que es posible.
+La validación de entradas y el aislamiento organizativo se mantienen aunque el usuario manipule los parámetros de consulta.
 
 ## Gestión de secretos
 
-Los siguientes valores no deben incluirse en Git:
+Nunca deben incluirse en Git:
 
 - Contraseñas de PostgreSQL.
 - Contraseñas de Keycloak.
@@ -448,6 +439,7 @@ Los siguientes valores no deben incluirse en Git:
 - Claves privadas.
 - Credenciales de producción.
 - Archivos `.env`.
+- Secretos utilizados en pruebas manuales.
 
 La configuración local utiliza:
 
@@ -455,23 +447,83 @@ La configuración local utiliza:
 .env
 ```
 
-El repositorio contiene únicamente:
+El repositorio debe contener únicamente:
 
 ```text
 .env.example
 ```
 
-Los tokens utilizados durante las pruebas manuales:
+Los tokens utilizados manualmente no deben imprimirse completos en la terminal ni incluirse en capturas.
 
-- No deben imprimirse completos en la terminal.
-- No deben incluirse en capturas.
-- No deben subirse al repositorio.
-- Deben renovarse cuando caduquen.
-- Deben almacenarse únicamente de forma temporal.
+## Integración continua
+
+Los workflows están en:
+
+```text
+.github/workflows/
+```
+
+La integración continua se ejecuta en:
+
+- `push`.
+- `pull_request`.
+
+Las comprobaciones incluyen:
+
+- Compilación con Java 21.
+- Tests unitarios.
+- Tests web.
+- Tests de integración con Testcontainers.
+- Revisión de dependencias.
+- Análisis CodeQL.
+
+Los workflows deben utilizar permisos mínimos:
+
+```yaml
+permissions:
+  contents: read
+```
+
+También se debe evitar la persistencia innecesaria de credenciales:
+
+```yaml
+persist-credentials: false
+```
+
+### Revisión de dependencias
+
+La revisión de dependencias se ejecuta en pull requests.
+
+Busca:
+
+- Dependencias vulnerables nuevas.
+- Cambios con severidad moderada o superior.
+- Problemas de licencias según la configuración de GitHub.
+
+No sustituye a:
+
+- Actualizaciones periódicas.
+- Revisión de avisos de seguridad.
+- SAST.
+- DAST.
+- Escaneo de secretos.
+- Revisión manual.
+
+### CodeQL
+
+CodeQL analiza el código Java para detectar patrones potencialmente inseguros.
+
+El análisis se ejecuta en:
+
+- Pull requests.
+- Pushes a la rama principal.
+- Ejecuciones programadas.
+
+Los resultados deben revisarse antes de fusionar cambios relevantes.
 
 ## Docker
 
-Docker Compose ejecuta PostgreSQL y Keycloak localmente mediante `compose.yml`.
+Docker Compose ejecuta PostgreSQL y Keycloak localmente.
 
 Los datos se almacenan en volúmenes Docker:
 
@@ -486,7 +538,7 @@ Detener los servicios sin borrar datos:
 docker compose stop
 ```
 
-Eliminar los contenedores conservando los volúmenes:
+Eliminar los contenedores conservando volúmenes:
 
 ```powershell
 docker compose down
@@ -498,21 +550,21 @@ Eliminar también los datos persistidos:
 docker compose down -v
 ```
 
-El último comando debe utilizarse únicamente cuando se quiera reiniciar completamente el entorno local.
+Este último comando debe utilizarse únicamente cuando se quiera reiniciar completamente el entorno local.
 
 En producción:
 
 - PostgreSQL no debe exponerse directamente a Internet.
 - Keycloak no debe ejecutarse con `start-dev`.
-- Deben utilizarse redes privadas.
 - Debe utilizarse HTTPS.
-- Las credenciales deben gestionarse mediante un sistema de secretos.
+- Deben aplicarse controles de red.
+- Las credenciales deben gestionarse mediante un sistema seguro de secretos.
 
 ## Respuestas de error
 
 La API utiliza respuestas controladas para evitar exponer trazas internas.
 
-Ejemplo:
+Ejemplo de recurso inexistente:
 
 ```json
 {
@@ -526,12 +578,12 @@ Códigos habituales:
 
 | Código | Significado |
 |---:|---|
-| `400` | Petición inválida |
-| `401` | Falta autenticación o el token no es válido |
-| `403` | El usuario no tiene permisos |
-| `404` | El recurso no existe dentro de la organización |
-| `409` | Conflicto de datos |
-| `500` | Error interno no esperado |
+| 400 | Petición inválida |
+| 401 | Falta autenticación o el token no es válido |
+| 403 | El usuario no tiene permisos |
+| 404 | El recurso no existe dentro de la organización |
+| 409 | Conflicto de datos |
+| 500 | Error interno no esperado |
 
 Para evitar filtraciones, un hallazgo perteneciente a otra organización se trata como no encontrado.
 
@@ -547,12 +599,11 @@ El proyecto incluye pruebas para:
 - Acceso de `ADMIN`.
 - Restricción de eliminación.
 - Aislamiento entre organizaciones.
-- Búsqueda y filtros.
-- Paginación.
+- Creación y consulta de comentarios.
+- Auditoría de comentarios.
 - Persistencia en PostgreSQL.
-- Registro de auditoría.
-- Orden cronológico del historial.
-- Respuestas HTTP `401` y `403`.
+- Validación de errores HTTP.
+- Paginación y límites de página.
 
 Los tests se ejecutan localmente con:
 
@@ -571,10 +622,10 @@ Y automáticamente en GitHub Actions mediante:
 Antes de desplegar el proyecto en producción sería necesario:
 
 - Utilizar HTTPS.
-- No utilizar `start-dev` en Keycloak.
-- Crear una cuenta administrativa permanente.
+- No usar `start-dev` en Keycloak.
+- Crear cuentas administrativas controladas.
 - Eliminar usuarios temporales.
-- Configurar una base de datos gestionada.
+- Utilizar una base de datos gestionada.
 - Utilizar secretos externos.
 - Restringir la red de PostgreSQL.
 - No publicar PostgreSQL directamente a Internet.
@@ -586,16 +637,17 @@ Antes de desplegar el proyecto en producción sería necesario:
 - Validar la configuración de Keycloak.
 - Revisar los permisos de los roles.
 - Ejecutar análisis de dependencias.
-- Incorporar escaneo SAST y DAST.
+- Incorporar SAST y DAST.
 - Incorporar escaneo de secretos.
 - Proteger la rama principal.
 - Exigir que los workflows pasen antes de fusionar pull requests.
+- Revisar periódicamente las migraciones y restricciones de base de datos.
 
 ## Notificación de vulnerabilidades
 
 Las vulnerabilidades deben comunicarse de forma responsable y no publicarse antes de que exista una solución.
 
-En un proyecto real se debería proporcionar:
+La comunicación debería incluir:
 
 - Descripción del problema.
 - Pasos para reproducirlo.
