@@ -144,6 +144,17 @@ public class GlobalExceptionHandler {
                 return "El valor del parámetro no tiene un formato válido";
         }
 
+        @ExceptionHandler(IllegalArgumentException.class)
+        @ResponseStatus(HttpStatus.BAD_REQUEST)
+        public ApiErrorResponse handleIllegalArgument(
+                        IllegalArgumentException exception) {
+
+                return new ApiErrorResponse(
+                                "VALIDATION_ERROR",
+                                "La petición contiene datos no válidos",
+                                Map.of("parameter", exception.getMessage()));
+        }
+
         public record ApiErrorResponse(
                         String code,
                         String message,

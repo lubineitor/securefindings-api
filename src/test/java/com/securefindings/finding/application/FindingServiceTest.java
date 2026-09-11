@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -15,11 +17,17 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 
 import com.securefindings.audit.application.AuditService;
+import com.securefindings.finding.api.FindingSortDirection;
+import com.securefindings.finding.api.FindingSortField;
 import com.securefindings.finding.domain.Finding;
 import com.securefindings.finding.domain.FindingSeverity;
 import com.securefindings.finding.domain.FindingStatus;
@@ -303,5 +311,99 @@ class FindingServiceTest {
                                 .deleteByIdAndOrganizationId(
                                                 findingId,
                                                 organizationB);
+        }
+
+        @Test
+        void deberiaUsarLaOrdenacionPorDefecto() {
+                UUID organizationId = UUID.randomUUID();
+
+                when(organizationContext.currentOrganizationId())
+                                .thenReturn(organizationId);
+
+                when(findingRepository.findPageByFilters(
+                                eq(organizationId),
+                                isNull(String.class),
+                                isNull(FindingSeverity.class),
+                                isNull(FindingStatus.class),
+                                any(Pageable.class)))
+                                .thenReturn(new PageImpl<>(List.of()));
+
+                findingService.findPage(
+                                0,
+                                20,
+                                null,
+                                null,
+                                null);
+
+                ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+
+                verify(findingRepository).findPageByFilters(
+                                eq(organizationId),
+                                isNull(String.class),
+                                isNull(FindingSeverity.class),
+                                isNull(FindingStatus.class),
+                                pageableCaptor.capture());
+
+                Pageable pageable = pageableCaptor.getValue();
+
+                assertEquals(
+                                Sort.Direction.DESC,
+                                pageable.getSort()
+                                                .getOrderFor("createdAt")
+                                                .getDirection());
+
+                assertEquals(
+                                Sort.Direction.ASC,
+                                pageable.getSort()
+                                                .getOrderFor("id")
+                                                .getDirection());
+        }
+
+        @Test
+        void deberiaAplicarUnaOrdenacionPersonalizada() {
+                UUID organizationId = UUID.randomUUID();
+
+                when(organizationContext.currentOrganizationId())
+                                .thenReturn(organizationId);
+
+                when(findingRepository.findPageByFilters(
+                                eq(organizationId),
+                                isNull(String.class),
+                                isNull(FindingSeverity.class),
+                                isNull(FindingStatus.class),
+                                any(Pageable.class)))
+                                .thenReturn(new PageImpl<>(List.of()));
+
+                findingService.findPage(
+                                0,
+                                20,
+                                null,
+                                null,
+                                null,
+                                FindingSortField.TITLE,
+                                FindingSortDirection.ASC);
+
+                ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+
+                verify(findingRepository).findPageByFilters(
+                                eq(organizationId),
+                                isNull(String.class),
+                                isNull(FindingSeverity.class),
+                                isNull(FindingStatus.class),
+                                pageableCaptor.capture());
+
+                Pageable pageable = pageableCaptor.getValue();
+
+                assertEquals(
+                                Sort.Direction.ASC,
+                                pageable.getSort()
+                                                .getOrderFor("title")
+                                                .getDirection());
+
+                assertEquals(
+                                Sort.Direction.ASC,
+                                pageable.getSort()
+                                                .getOrderFor("id")
+                                                .getDirection());
         }
 }

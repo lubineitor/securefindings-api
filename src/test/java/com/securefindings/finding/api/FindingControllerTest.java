@@ -1,6 +1,7 @@
 package com.securefindings.finding.api;
 
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
@@ -68,7 +69,9 @@ class FindingControllerTest {
                                 20,
                                 null,
                                 null,
-                                null))
+                                null,
+                                FindingSortField.CREATED_AT,
+                                FindingSortDirection.DESC))
                                 .thenReturn(new PageImpl<>(
                                                 List.of(),
                                                 PageRequest.of(0, 20),
@@ -217,7 +220,9 @@ class FindingControllerTest {
                                 20,
                                 null,
                                 FindingSeverity.HIGH,
-                                null))
+                                null,
+                                FindingSortField.CREATED_AT,
+                                FindingSortDirection.DESC))
                                 .thenReturn(new PageImpl<>(
                                                 List.of(finding),
                                                 PageRequest.of(0, 20),
@@ -249,7 +254,9 @@ class FindingControllerTest {
                                 20,
                                 null,
                                 null,
-                                FindingStatus.IN_PROGRESS))
+                                FindingStatus.IN_PROGRESS,
+                                FindingSortField.CREATED_AT,
+                                FindingSortDirection.DESC))
                                 .thenReturn(new PageImpl<>(
                                                 List.of(inProgressFinding),
                                                 PageRequest.of(0, 20),
@@ -281,7 +288,9 @@ class FindingControllerTest {
                                 20,
                                 null,
                                 FindingSeverity.CRITICAL,
-                                FindingStatus.IN_PROGRESS))
+                                FindingStatus.IN_PROGRESS,
+                                FindingSortField.CREATED_AT,
+                                FindingSortDirection.DESC))
                                 .thenReturn(new PageImpl<>(
                                                 List.of(inProgressFinding),
                                                 PageRequest.of(0, 20),
@@ -313,7 +322,9 @@ class FindingControllerTest {
                                 20,
                                 "SQL",
                                 null,
-                                null))
+                                null,
+                                FindingSortField.CREATED_AT,
+                                FindingSortDirection.DESC))
                                 .thenReturn(new PageImpl<>(
                                                 List.of(finding),
                                                 PageRequest.of(0, 20),
@@ -329,6 +340,47 @@ class FindingControllerTest {
         }
 
         @Test
+        void deberiaOrdenarLosHallazgosPorTituloDeFormaAscendente()
+                        throws Exception {
+
+                Finding finding = Finding.create(
+                                "Cross-Site Scripting",
+                                "Contenido sin escapar",
+                                FindingSeverity.MEDIUM);
+
+                when(findingService.findPage(
+                                0,
+                                20,
+                                null,
+                                null,
+                                null,
+                                FindingSortField.TITLE,
+                                FindingSortDirection.ASC))
+                                .thenReturn(new PageImpl<>(
+                                                List.of(finding),
+                                                PageRequest.of(0, 20),
+                                                1));
+
+                mockMvc.perform(get("/api/v1/findings")
+                                .param("sortBy", "title")
+                                .param("direction", "ASC"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.content[0].title")
+                                                .value("Cross-Site Scripting"))
+                                .andExpect(jsonPath("$.totalElements")
+                                                .value(1));
+
+                verify(findingService).findPage(
+                                0,
+                                20,
+                                null,
+                                null,
+                                null,
+                                FindingSortField.TITLE,
+                                FindingSortDirection.ASC);
+        }
+
+        @Test
         void deberiaRechazarUnaPaginaNegativa()
                         throws Exception {
 
@@ -339,6 +391,8 @@ class FindingControllerTest {
                                                 .value("VALIDATION_ERROR"))
                                 .andExpect(jsonPath("$.errors.page")
                                                 .exists());
+
+                verifyNoInteractions(findingService);
         }
 
         @Test
@@ -352,6 +406,8 @@ class FindingControllerTest {
                                                 .value("VALIDATION_ERROR"))
                                 .andExpect(jsonPath("$.errors.size")
                                                 .exists());
+
+                verifyNoInteractions(findingService);
         }
 
         @Test
@@ -365,6 +421,8 @@ class FindingControllerTest {
                                                 .value("VALIDATION_ERROR"))
                                 .andExpect(jsonPath("$.errors.severity")
                                                 .exists());
+
+                verifyNoInteractions(findingService);
         }
 
         @Test
@@ -378,6 +436,8 @@ class FindingControllerTest {
                                                 .value("VALIDATION_ERROR"))
                                 .andExpect(jsonPath("$.errors.status")
                                                 .exists());
+
+                verifyNoInteractions(findingService);
         }
 
         @Test
@@ -429,6 +489,8 @@ class FindingControllerTest {
                                                 .value("VALIDATION_ERROR"))
                                 .andExpect(jsonPath("$.errors.status")
                                                 .value("El estado es obligatorio"));
+
+                verifyNoInteractions(findingService);
         }
 
         @Test
@@ -540,6 +602,32 @@ class FindingControllerTest {
 
                 mockMvc.perform(get("/api/v1/findings")
                                 .param("size", "101"))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.code")
+                                                .value("VALIDATION_ERROR"));
+
+                verifyNoInteractions(findingService);
+        }
+
+        @Test
+        void deberiaRechazarUnCampoDeOrdenacionNoPermitido()
+                        throws Exception {
+
+                mockMvc.perform(get("/api/v1/findings")
+                                .param("sortBy", "password"))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.code")
+                                                .value("VALIDATION_ERROR"));
+
+                verifyNoInteractions(findingService);
+        }
+
+        @Test
+        void deberiaRechazarUnaDireccionDeOrdenacionNoPermitida()
+                        throws Exception {
+
+                mockMvc.perform(get("/api/v1/findings")
+                                .param("direction", "RANDOM"))
                                 .andExpect(status().isBadRequest())
                                 .andExpect(jsonPath("$.code")
                                                 .value("VALIDATION_ERROR"));

@@ -17,6 +17,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.securefindings.audit.application.AuditService;
 import com.securefindings.audit.domain.AuditAction;
+import com.securefindings.finding.api.FindingSortDirection;
+import com.securefindings.finding.api.FindingSortField;
 import com.securefindings.finding.domain.Finding;
 import com.securefindings.finding.domain.FindingSeverity;
 import com.securefindings.finding.domain.FindingStatus;
@@ -93,39 +95,12 @@ public class FindingService {
                         FindingSeverity severity,
                         FindingStatus status) {
 
-                UUID organizationId = organizationContext.currentOrganizationId();
-
-                Pageable pageable = createPageable(page, size);
-
-                Page<FindingEntity> entities;
-
-                if (severity != null && status != null) {
-                        entities = findingRepository
-                                        .findByOrganizationIdAndSeverityAndStatus(
-                                                        organizationId,
-                                                        severity,
-                                                        status,
-                                                        pageable);
-                } else if (severity != null) {
-                        entities = findingRepository
-                                        .findByOrganizationIdAndSeverity(
-                                                        organizationId,
-                                                        severity,
-                                                        pageable);
-                } else if (status != null) {
-                        entities = findingRepository
-                                        .findByOrganizationIdAndStatus(
-                                                        organizationId,
-                                                        status,
-                                                        pageable);
-                } else {
-                        entities = findingRepository
-                                        .findByOrganizationId(
-                                                        organizationId,
-                                                        pageable);
-                }
-
-                return toDomainPage(entities);
+                return findPage(
+                                page,
+                                size,
+                                null,
+                                severity,
+                                status);
         }
 
         public Page<Finding> findPage(
@@ -135,9 +110,33 @@ public class FindingService {
                         FindingSeverity severity,
                         FindingStatus status) {
 
+                return findPage(
+                                page,
+                                size,
+                                searchTerm,
+                                severity,
+                                status,
+                                FindingSortField.CREATED_AT,
+                                FindingSortDirection.DESC);
+        }
+
+        public Page<Finding> findPage(
+                        int page,
+                        int size,
+                        String searchTerm,
+                        FindingSeverity severity,
+                        FindingStatus status,
+                        FindingSortField sortField,
+                        FindingSortDirection sortDirection) {
+
                 UUID organizationId = organizationContext.currentOrganizationId();
 
-                Pageable pageable = createPageable(page, size);
+                Pageable pageable = createPageable(
+                                page,
+                                size,
+                                sortField,
+                                sortDirection);
+
                 String normalizedSearchTerm = normalizeSearchTerm(searchTerm);
 
                 Page<FindingEntity> entities = findingRepository
@@ -243,13 +242,29 @@ public class FindingService {
 
         private Pageable createPageable(
                         int page,
-                        int size) {
+                        int size,
+                        FindingSortField sortField,
+                        FindingSortDirection sortDirection) {
+
+                FindingSortField effectiveSortField = sortField == null
+                                ? FindingSortField.CREATED_AT
+                                : sortField;
+
+                FindingSortDirection effectiveSortDirection = sortDirection == null
+                                ? FindingSortDirection.DESC
+                                : sortDirection;
+
+                Sort.Direction springDirection = effectiveSortDirection == FindingSortDirection.ASC
+                                ? Sort.Direction.ASC
+                                : Sort.Direction.DESC;
 
                 return PageRequest.of(
                                 page,
                                 size,
                                 Sort.by(
-                                                Sort.Order.desc("createdAt"),
+                                                new Sort.Order(
+                                                                springDirection,
+                                                                effectiveSortField.parameter()),
                                                 Sort.Order.asc("id")));
         }
 
@@ -292,6 +307,7 @@ public class FindingService {
 
                 if (authentication == null
                                 || !authentication.isAuthenticated()) {
+
                         return SYSTEM_ACTOR;
                 }
 
@@ -302,6 +318,7 @@ public class FindingService {
 
                         if (preferredUsername != null
                                         && !preferredUsername.isBlank()) {
+
                                 return preferredUsername;
                         }
                 }
