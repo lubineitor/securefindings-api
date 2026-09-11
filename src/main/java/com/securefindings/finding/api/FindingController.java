@@ -48,8 +48,8 @@ public class FindingController {
         }
 
         @GetMapping
-        @Operation(summary = "Listar hallazgos", description = "Devuelve una página de hallazgos con filtros "
-                        + "opcionales y búsqueda textual")
+        @Operation(summary = "Listar hallazgos", description = "Devuelve una página de hallazgos con filtros, "
+                        + "búsqueda textual y ordenación")
         @ApiResponses({
                         @ApiResponse(responseCode = "200", description = "Hallazgos recuperados correctamente", content = @Content(mediaType = "application/json", schema = @Schema(implementation = FindingPageResponse.class))),
                         @ApiResponse(responseCode = "400", description = "Los parámetros enviados no son válidos"),
@@ -65,14 +65,25 @@ public class FindingController {
 
                         @Parameter(description = "Filtrar por severidad", example = "HIGH", in = ParameterIn.QUERY) @RequestParam(name = "severity", required = false) FindingSeverity severity,
 
-                        @Parameter(description = "Filtrar por estado", example = "OPEN", in = ParameterIn.QUERY) @RequestParam(name = "status", required = false) FindingStatus status) {
+                        @Parameter(description = "Filtrar por estado", example = "OPEN", in = ParameterIn.QUERY) @RequestParam(name = "status", required = false) FindingStatus status,
+
+                        @Parameter(description = "Campo por el que ordenar. "
+                                        + "Valores permitidos: createdAt, updatedAt, "
+                                        + "title, severity, status", example = "createdAt", in = ParameterIn.QUERY) @RequestParam(name = "sortBy", defaultValue = "createdAt") String sortBy,
+
+                        @Parameter(description = "Dirección de ordenación: ASC o DESC", example = "DESC", in = ParameterIn.QUERY) @RequestParam(name = "direction", defaultValue = "DESC") String direction) {
+
+                FindingSortField sortField = FindingSortField.from(sortBy);
+                FindingSortDirection sortDirection = FindingSortDirection.from(direction);
 
                 Page<Finding> findingPage = findingService.findPage(
                                 page,
                                 size,
                                 searchTerm,
                                 severity,
-                                status);
+                                status,
+                                sortField,
+                                sortDirection);
 
                 return FindingPageResponse.from(findingPage);
         }
@@ -121,6 +132,7 @@ public class FindingController {
         })
         public Finding updateStatus(
                         @Parameter(description = "Identificador del hallazgo", required = true) @PathVariable UUID id,
+
                         @Valid @RequestBody UpdateFindingStatusRequest request) {
 
                 return findingService.updateStatus(
@@ -140,6 +152,7 @@ public class FindingController {
         })
         public Finding update(
                         @Parameter(description = "Identificador del hallazgo", required = true) @PathVariable UUID id,
+
                         @Valid @RequestBody UpdateFindingRequest request) {
 
                 return findingService.update(
