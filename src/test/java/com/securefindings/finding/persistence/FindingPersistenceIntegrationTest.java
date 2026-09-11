@@ -269,7 +269,7 @@ class FindingPersistenceIntegrationTest {
         @Test
         void deberiaOrdenarLosHallazgosPorTituloEnPostgreSQL() {
 
-                FindingEntity zeta = findingRepository.save(
+                findingRepository.save(
                                 new FindingEntity(
                                                 Finding.create(
                                                                 "Zeta",
@@ -277,7 +277,7 @@ class FindingPersistenceIntegrationTest {
                                                                 FindingSeverity.MEDIUM),
                                                 ORGANIZATION_ID));
 
-                FindingEntity alpha = findingRepository.save(
+                findingRepository.save(
                                 new FindingEntity(
                                                 Finding.create(
                                                                 "Alpha",
