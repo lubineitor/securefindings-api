@@ -48,8 +48,8 @@ public class FindingController {
         }
 
         @GetMapping
-        @Operation(summary = "Listar hallazgos", description = "Devuelve una página de hallazgos con filtros, "
-                        + "búsqueda textual y ordenación")
+        @Operation(summary = "Listar hallazgos", description = "Devuelve una página de hallazgos con filtros "
+                        + "opcionales, búsqueda textual y ordenación")
         @ApiResponses({
                         @ApiResponse(responseCode = "200", description = "Hallazgos recuperados correctamente", content = @Content(mediaType = "application/json", schema = @Schema(implementation = FindingPageResponse.class))),
                         @ApiResponse(responseCode = "400", description = "Los parámetros enviados no son válidos"),
@@ -67,14 +67,9 @@ public class FindingController {
 
                         @Parameter(description = "Filtrar por estado", example = "OPEN", in = ParameterIn.QUERY) @RequestParam(name = "status", required = false) FindingStatus status,
 
-                        @Parameter(description = "Campo por el que ordenar. "
-                                        + "Valores permitidos: createdAt, updatedAt, "
-                                        + "title, severity, status", example = "createdAt", in = ParameterIn.QUERY) @RequestParam(name = "sortBy", defaultValue = "createdAt") String sortBy,
+                        @Parameter(description = "Campo por el que ordenar", example = "createdAt", in = ParameterIn.QUERY) @RequestParam(name = "sortBy", defaultValue = "createdAt") String sortBy,
 
-                        @Parameter(description = "Dirección de ordenación: ASC o DESC", example = "DESC", in = ParameterIn.QUERY) @RequestParam(name = "direction", defaultValue = "DESC") String direction) {
-
-                FindingSortField sortField = FindingSortField.from(sortBy);
-                FindingSortDirection sortDirection = FindingSortDirection.from(direction);
+                        @Parameter(description = "Dirección de ordenación", example = "DESC", in = ParameterIn.QUERY) @RequestParam(name = "direction", defaultValue = "DESC") String direction) {
 
                 Page<Finding> findingPage = findingService.findPage(
                                 page,
@@ -82,8 +77,8 @@ public class FindingController {
                                 searchTerm,
                                 severity,
                                 status,
-                                sortField,
-                                sortDirection);
+                                FindingSortField.from(sortBy),
+                                FindingSortDirection.from(direction));
 
                 return FindingPageResponse.from(findingPage);
         }
