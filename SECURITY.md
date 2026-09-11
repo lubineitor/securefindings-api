@@ -1,281 +1,350 @@
-# Security
+# Política de seguridad
+
+## Estado del proyecto
+
+SecureFindings API es un proyecto en desarrollo orientado al aprendizaje y a la aplicación práctica de principios de seguridad en APIs REST.
+
+Actualmente no debe considerarse una solución preparada para producción sin una revisión adicional de:
+
+- Infraestructura.
+- Configuración.
+- Gestión de secretos.
+- Observabilidad.
+- Control de acceso.
+- Hardening de contenedores.
+- Pruebas de seguridad.
 
 ## Alcance
 
-SecureFindings API es un proyecto en desarrollo orientado a practicar seguridad aplicada al backend y al ciclo de desarrollo.
+Esta política cubre:
 
-La seguridad se aborda desde varias capas:
-
-- Identidad.
-- Autenticación.
-- Autorización.
-- Aislamiento de datos.
+- Código de la API REST.
+- Autenticación y autorización.
+- Aislamiento entre organizaciones.
 - Validación de entradas.
-- Persistencia segura.
+- Persistencia de hallazgos.
 - Auditoría.
-- Gestión de secretos.
-- Seguridad de dependencias.
-- Configuración de infraestructura.
-- Integración continua.
-- Pruebas automatizadas.
+- Comentarios.
+- Búsqueda y ordenación.
+- Configuración de Docker y PostgreSQL.
+- Migraciones de base de datos.
+- Workflows de GitHub Actions.
+- Dependencias del proyecto.
+
+## Cómo informar de una vulnerabilidad
+
+No publiques vulnerabilidades de seguridad en una issue pública.
+
+Utiliza preferentemente un aviso privado de seguridad de GitHub:
+
+```text
+https://github.com/lubineitor/securefindings-api/security/advisories/new
+```
+
+El informe debería incluir:
+
+- Descripción del problema.
+- Endpoint, clase o componente afectado.
+- Pasos para reproducirlo.
+- Impacto posible.
+- Evidencias o payloads de prueba.
+- Versión o commit afectado.
+- Propuesta de mitigación, si existe.
+
+No incluyas en el informe:
+
+- Contraseñas reales.
+- Tokens JWT válidos.
+- Claves privadas.
+- Datos personales.
+- Información sensible de organizaciones.
+
+## Clasificación orientativa
+
+| Nivel | Descripción |
+|---|---|
+| Crítico | Compromiso completo de la aplicación, bypass de autenticación o acceso masivo entre organizaciones |
+| Alto | Acceso no autorizado a datos sensibles o modificación de información de otra organización |
+| Medio | Escalada de privilegios limitada, filtrado de información o fallo relevante de autorización |
+| Bajo | Problema con impacto limitado o condiciones de explotación poco probables |
+
+## Modelo de amenazas
+
+Los principales riesgos considerados son:
+
+| Activo | Amenaza | Control aplicado |
+|---|---|---|
+| Hallazgos | Acceso entre organizaciones | Filtros obligatorios por `organization_id` |
+| Operaciones administrativas | Eliminación por usuarios no autorizados | Rol `ADMIN` |
+| API REST | Acceso sin autenticación | OAuth2 Resource Server y JWT |
+| Tokens | Manipulación o falsificación | Validación de firma, emisor y expiración |
+| Parámetros de búsqueda | Inyección o consultas no controladas | Parámetros enlazados mediante JPA |
+| Ordenación | Manipulación de propiedades internas | Lista blanca de campos permitidos |
+| Datos recibidos | Valores inválidos o excesivos | Bean Validation |
+| Historial | Falta de trazabilidad | Eventos de auditoría |
+| Comentarios | Contenido no validado | Validación de longitud y obligatoriedad |
+| Credenciales | Exposición en el repositorio | `.env` excluido y `.env.example` sin secretos |
+| Dependencias | Vulnerabilidades conocidas | Revisión automatizada y CodeQL |
 
 ## Autenticación
 
-La autenticación se delega en Keycloak mediante OAuth2/OIDC.
+La API utiliza tokens JWT emitidos por Keycloak.
 
-La API actúa como Resource Server y valida los tokens JWT emitidos por Keycloak.
-
-Configuración local:
-
-```properties
-spring.security.oauth2.resourceserver.jwt.issuer-uri=http://localhost:8081/realms/securefindings
-```
-
-El token se envía mediante:
+Las peticiones protegidas deben incluir:
 
 ```http
-Authorization: Bearer <access_token>
+Authorization: Bearer <token>
 ```
 
-La aplicación:
+La aplicación funciona como un OAuth2 Resource Server y valida:
 
-- No recibe contraseñas.
-- No almacena credenciales de usuarios.
-- No gestiona sesiones de usuario.
-- No utiliza autenticación mediante formulario.
-- No utiliza autenticación HTTP Basic.
+- Firma del token.
+- Emisor configurado.
+- Fecha de expiración.
+- Claims necesarios.
+- Roles asociados.
 
-Las credenciales son gestionadas por Keycloak.
+La aplicación no utiliza sesiones de usuario:
 
-La aplicación utiliza sesiones sin estado:
-
-```java
+```text
 SessionCreationPolicy.STATELESS
 ```
 
-CSRF está desactivado porque la API no utiliza autenticación basada en cookies y funciona como Resource Server stateless.
+También se deshabilitan:
 
-## Autorización
+- Form Login.
+- HTTP Basic.
+- CSRF para la API stateless.
 
-Spring Security utiliza los roles incluidos en el token JWT.
+La desactivación de CSRF se realiza porque la API utiliza autenticación mediante token Bearer y no cookies de sesión como mecanismo principal de autenticación.
 
-Las reglas principales son:
+## Claims utilizados
 
-| Recurso | ANALYST | ADMIN |
-|---|---:|---:|
-| `GET /api/v1/health` | Público | Público |
-| Consultar hallazgos | Sí | Sí |
-| Crear hallazgos | Sí | Sí |
-| Actualizar hallazgos | Sí | Sí |
-| Crear comentarios | Sí | Sí |
-| Consultar comentarios | Sí | Sí |
-| Consultar auditoría | Sí | Sí |
-| Eliminar hallazgos | No | Sí |
-
-El borrado de hallazgos requiere específicamente el rol `ADMIN`.
-
-Si no existe un token válido:
-
-```http
-401 Unauthorized
-```
-
-Si el usuario está autenticado pero no tiene permisos suficientes:
-
-```http
-403 Forbidden
-```
-
-Las respuestas de seguridad se devuelven en formato JSON controlado.
-
-## Roles de Keycloak
-
-El realm utilizado localmente es:
-
-```text
-securefindings
-```
-
-Los roles principales son:
-
-```text
-ANALYST
-ADMIN
-```
-
-El cliente utilizado para las pruebas locales es:
-
-```text
-securefindings-cli
-```
-
-`KeycloakRealmRoleConverter` transforma los roles del realm en autoridades reconocidas por Spring Security.
-
-Por ejemplo:
-
-```java
-.hasRole("ANALYST")
-```
-
-requiere que el usuario tenga el rol `ANALYST`.
-
-## Claim de organización
-
-Los usuarios deben tener configurado el atributo:
-
-```text
-organization_id
-```
-
-El cliente de Keycloak utiliza un mapper para incluirlo en el access token:
-
-```json
-{
-  "preferred_username": "analista",
-  "organization_id": "00000000-0000-0000-0000-000000000001"
-}
-```
-
-El mapper debe:
-
-- Incluir el claim en el access token.
-- Utilizar el tipo `String`.
-- No permitir que el usuario lo modifique desde la petición.
-- No exponerlo innecesariamente en otros tokens.
-
-## Aislamiento entre organizaciones
-
-La API no acepta el identificador de organización desde:
-
-- Parámetros de consulta.
-- Cuerpo JSON.
-- Cabeceras controladas por el cliente.
-- Identificadores enviados manualmente por el usuario.
-
-El valor se obtiene exclusivamente del token validado.
-
-### Flujo de validación
-
-1. Keycloak autentica al usuario.
-2. Keycloak emite un JWT.
-3. Spring Security valida la firma, el emisor y la vigencia.
-4. `OrganizationContext` obtiene `organization_id`.
-5. El valor se convierte en `UUID`.
-6. Se comprueba que la organización existe.
-7. Los servicios utilizan esa organización.
-8. Los repositorios filtran las operaciones.
-9. Los eventos de auditoría quedan asociados a ella.
-
-Si el claim:
-
-- No existe.
-- Está vacío.
-- No tiene formato UUID.
-- Hace referencia a una organización inexistente.
-
-La operación se rechaza mediante `AccessDeniedException`.
-
-## Defensa en profundidad
-
-El aislamiento no depende de una única comprobación.
-
-### Capa de contexto
-
-`OrganizationContext` valida la organización procedente del token y evita confiar en valores proporcionados por el cliente.
-
-### Capa de aplicación
-
-Los servicios obtienen siempre la organización actual antes de consultar o modificar datos.
-
-No reciben la organización desde:
-
-- El cuerpo de la petición.
-- El path.
-- Los parámetros de consulta.
-- Las cabeceras del cliente.
-
-### Capa de persistencia
-
-Los repositorios utilizan métodos que incluyen el identificador de organización:
-
-```java
-findByIdAndOrganizationId(...)
-existsByIdAndOrganizationId(...)
-deleteByIdAndOrganizationId(...)
-findByOrganizationId(...)
-findByFindingIdAndOrganizationId(...)
-findByFindingIdAndOrganizationIdOrderByOccurredAtAsc(...)
-findByFindingIdAndOrganizationIdOrderByOccurredAtAsc(..., Pageable)
-findByFindingIdAndOrganizationIdOrderByCreatedAtAscIdAsc(...)
-```
-
-Esto evita recuperar o modificar registros pertenecientes a otra organización.
-
-### Capa de base de datos
-
-Las tablas principales contienen `organization_id`:
-
-- `findings`
-- `finding_audit`
-- `finding_comments`
-
-Las columnas son obligatorias y tienen claves foráneas hacia `organizations`.
-
-Los comentarios también tienen una relación obligatoria con el hallazgo mediante `finding_id`.
-
-## Comentarios de hallazgos
-
-Los comentarios se crean mediante:
-
-```http
-POST /api/v1/findings/{id}/comments
-```
-
-El cuerpo solo contiene el contenido:
-
-```json
-{
-  "content": "Se ha validado la entrada."
-}
-```
-
-La API no acepta desde el cliente:
-
-- El autor.
-- La organización.
-- La fecha de creación.
-- El identificador del comentario.
-
-El autor se obtiene preferentemente del claim:
+El contexto de seguridad utiliza principalmente:
 
 ```text
 preferred_username
+organization_id
 ```
 
-Si no está disponible, se utiliza el nombre de la autenticación o el actor técnico `system`.
+### `preferred_username`
 
-El contenido:
+Identifica al usuario que realiza la operación.
 
-- Es obligatorio.
-- No puede estar vacío.
-- Tiene una longitud máxima de 5000 caracteres.
-- Se valida en la capa HTTP.
-- Se valida también en el dominio.
-- Está protegido por una restricción de base de datos.
+Este valor se utiliza como actor en los eventos de auditoría.
 
-La consulta de comentarios es paginada:
+Si no existe un usuario autenticado, las operaciones técnicas o de prueba pueden utilizar:
 
-```http
-GET /api/v1/findings/{id}/comments?page=0&size=20
+```text
+system
 ```
 
-Solo devuelve comentarios del hallazgo y de la organización actual.
+### `organization_id`
+
+Identifica la organización activa del usuario.
+
+Debe:
+
+- Tener formato UUID.
+- Estar presente en el token.
+- Corresponder con una organización existente.
+- Utilizarse para limitar el acceso a los datos.
+
+Si el token:
+
+- No contiene `organization_id`.
+- Contiene un valor con formato inválido.
+- Hace referencia a una organización inexistente.
+
+La petición debe rechazarse.
+
+La organización nunca debe aceptarse desde un parámetro enviado por el cliente como mecanismo de autorización.
+
+## Autorización
+
+Los permisos se aplican por endpoint:
+
+| Operación | `ANALYST` | `ADMIN` |
+|---|---:|---:|
+| Consultar hallazgos | Sí | Sí |
+| Crear hallazgos | Sí | Sí |
+| Actualizar hallazgos | Sí | Sí |
+| Actualizar estados | Sí | Sí |
+| Consultar auditoría | Sí | Sí |
+| Consultar comentarios | Sí | Sí |
+| Crear comentarios | Sí | Sí |
+| Eliminar hallazgos | No | Sí |
+
+La API responde:
+
+- `401 UNAUTHORIZED` cuando falta autenticación válida.
+- `403 FORBIDDEN` cuando el usuario está autenticado pero no tiene permisos suficientes.
+
+La eliminación de hallazgos está restringida exclusivamente al rol `ADMIN`.
+
+## Aislamiento entre organizaciones
+
+Todos los accesos a hallazgos, comentarios y auditoría deben estar limitados a la organización incluida en el token.
+
+El aislamiento se aplica en:
+
+- `OrganizationContext`.
+- Servicios de aplicación.
+- Métodos de repositorio.
+- Consultas paginadas.
+- Búsquedas.
+- Filtros.
+- Consulta por identificador.
+- Actualizaciones.
+- Eliminaciones.
+- Auditoría.
+- Comentarios.
+
+Las consultas combinan el identificador del recurso con el identificador de organización. Conceptualmente:
+
+```text
+finding_id + organization_id
+```
+
+Esto impide que conocer un UUID permita acceder a información de otra organización.
+
+Cuando un recurso no pertenece a la organización actual, la aplicación puede responder con `404` para no revelar si el identificador existe en otra organización.
+
+La base de datos refuerza este diseño mediante:
+
+- Columna `organization_id` obligatoria.
+- Claves externas hacia `organizations`.
+- Índices por organización.
+- Relación de organización en hallazgos.
+- Relación de organización en auditoría.
+- Relación de organización en comentarios.
+
+## Validación de entradas
+
+Las peticiones se validan antes de llegar al servicio.
+
+Se controlan, entre otros:
+
+- Campos obligatorios.
+- Cadenas vacías.
+- Longitudes máximas.
+- Severidades permitidas.
+- Estados permitidos.
+- Número de página.
+- Tamaño de página.
+- Longitud de la búsqueda textual.
+- Identificadores UUID.
+- Campos de ordenación.
+- Direcciones de ordenación.
+- Contenido de comentarios.
+
+Los valores inválidos producen una respuesta `400` con formato uniforme:
+
+```json
+{
+  "code": "VALIDATION_ERROR",
+  "message": "La petición contiene datos no válidos",
+  "errors": {
+    "field": "Descripción del error"
+  }
+}
+```
+
+## Búsqueda textual
+
+La búsqueda textual se realiza sobre el título y la descripción del hallazgo.
+
+El parámetro `q`:
+
+- Tiene una longitud máxima.
+- Se normaliza antes de ejecutar la consulta.
+- Ignora diferencias entre mayúsculas y minúsculas.
+- Se procesa mediante parámetros enlazados.
+- No se concatena directamente en una consulta SQL.
+- Puede omitirse sin provocar errores de tipo en PostgreSQL.
+
+Un valor vacío se trata como ausencia de filtro.
+
+## Ordenación segura
+
+La API únicamente permite ordenar por campos previamente definidos:
+
+```text
+createdAt
+updatedAt
+title
+severity
+status
+```
+
+Las direcciones disponibles son:
+
+```text
+ASC
+DESC
+```
+
+Los valores se validan mediante enums antes de crear el objeto `Pageable`.
+
+No se permite que el cliente proporcione directamente:
+
+- Propiedades JPA arbitrarias.
+- Nombres de columnas SQL.
+- Expresiones SQL.
+- Fragmentos de una cláusula `ORDER BY`.
+
+Por ejemplo, el siguiente valor debe rechazarse:
+
+```text
+sortBy=password
+```
+
+La respuesta esperada es:
+
+```json
+{
+  "code": "VALIDATION_ERROR",
+  "message": "La petición contiene datos no válidos",
+  "errors": {
+    "parameter": "El campo de ordenación no está permitido: password"
+  }
+}
+```
+
+Esta validación evita utilizar la ordenación como mecanismo para manipular consultas o acceder a propiedades internas de persistencia.
+
+La ordenación predeterminada es:
+
+```text
+createdAt DESC
+id ASC
+```
+
+El identificador se utiliza como criterio secundario para garantizar resultados deterministas.
+
+## Protección frente a inyección SQL
+
+La aplicación utiliza Spring Data JPA y parámetros enlazados.
+
+Las consultas no deben construirse concatenando directamente:
+
+- Identificadores recibidos.
+- Texto de búsqueda.
+- Severidades.
+- Estados.
+- Valores de organización.
+- Campos de ordenación.
+- Direcciones de ordenación.
+
+La búsqueda se realiza mediante parámetros enlazados.
+
+La ordenación se valida mediante una lista blanca antes de construir el `Pageable`.
+
+Las consultas que reciben un término de búsqueda nulo utilizan `COALESCE` para mantener un tipo textual compatible con PostgreSQL y evitar errores derivados de la inferencia de tipos del controlador JDBC.
 
 ## Auditoría
 
-Las operaciones de negocio generan eventos en `finding_audit`.
-
-Acciones disponibles:
+Se registran las operaciones relevantes:
 
 ```text
 CREATED
@@ -284,374 +353,272 @@ DELETED
 COMMENTED
 ```
 
-Cada evento almacena:
+Los eventos incluyen:
 
-- Identificador del evento.
 - Identificador del hallazgo.
-- Identificador de la organización.
-- Acción.
+- Acción realizada.
 - Actor.
-- Fecha y hora UTC.
+- Fecha de ocurrencia.
+- Organización.
 
-El evento `COMMENTED` se registra cuando se crea un comentario correctamente.
+La auditoría permite conocer quién realizó una operación y cuándo se produjo.
 
-El registro de auditoría se realiza después de guardar el comentario dentro de la misma operación transaccional.
+Las operaciones auditadas incluyen:
 
-El actor se obtiene preferentemente de:
+- Creación de hallazgos.
+- Actualización de datos.
+- Actualización de estados.
+- Eliminación de hallazgos.
+- Creación de comentarios.
+
+La eliminación de un hallazgo conserva su evento de auditoría para mantener la trazabilidad histórica.
+
+## Comentarios
+
+Los comentarios pertenecen a una organización y a un hallazgo concreto.
+
+La aplicación valida:
+
+- Que el hallazgo exista dentro de la organización.
+- Que el contenido sea obligatorio.
+- Que el contenido respete la longitud permitida.
+- Que el usuario tenga permisos para crear el comentario.
+
+La creación de un comentario genera un evento de auditoría:
 
 ```text
-preferred_username
+COMMENTED
 ```
 
-Las operaciones internas o de prueba pueden utilizar:
+Los comentarios de una organización no deben ser visibles para usuarios de otra organización.
 
-```text
-system
-```
+## Manejo de errores
 
-El historial se consulta de forma paginada y aislada por organización.
+Las excepciones controladas se transforman en respuestas JSON.
 
-Un usuario no puede consultar el historial de un hallazgo perteneciente a otra organización.
+La API evita devolver:
 
-## Prueba de aislamiento
+- Stack traces.
+- Rutas internas.
+- Consultas SQL.
+- Contraseñas.
+- Tokens.
+- Claves privadas.
+- Información innecesaria de infraestructura.
 
-La prueba:
+Errores principales:
 
-```text
-FindingOrganizationIsolationIntegrationTest
-```
+| HTTP | Código | Situación |
+|---:|---|---|
+| `400` | `VALIDATION_ERROR` | Datos o parámetros inválidos |
+| `401` | `UNAUTHORIZED` | Token ausente o inválido |
+| `403` | `FORBIDDEN` | Usuario sin permisos suficientes |
+| `404` | `FINDING_NOT_FOUND` | Hallazgo no disponible para la organización |
+| `500` | Error interno | Error no controlado |
 
-utiliza:
-
-- Spring Boot.
-- PostgreSQL real mediante Testcontainers.
-- Dos organizaciones.
-- Contextos JWT simulados.
-- Servicios de aplicación.
-- Repositorios JPA.
-- Flyway.
-
-El flujo probado es:
-
-1. Autenticar una organización A.
-2. Crear un hallazgo.
-3. Cambiar a una organización B.
-4. Intentar recuperar el hallazgo.
-5. Verificar que el resultado es vacío.
-6. Intentar eliminarlo.
-7. Verificar que se lanza `FindingNotFoundException`.
-8. Volver a la organización A.
-9. Verificar que el hallazgo sigue existiendo.
-
-El mismo principio se aplica a:
-
-- Comentarios.
-- Auditoría.
-- Consultas paginadas.
-- Operaciones de actualización.
-- Operaciones de eliminación.
-
-## Validación de entradas
-
-Las peticiones REST utilizan Jakarta Validation.
-
-Se validan:
-
-- Campos obligatorios.
-- Longitudes máximas.
-- Valores permitidos de severidad.
-- Valores permitidos de estado.
-- Contenido de comentarios.
-- Tamaño de página.
-- Número de página.
-- Formato de identificadores UUID.
-- Estructura de las peticiones JSON.
-
-La API devuelve errores controlados en formato JSON.
-
-Ejemplo:
+Ejemplo de error de autenticación:
 
 ```json
 {
-  "code": "VALIDATION_ERROR",
-  "message": "La petición contiene datos no válidos",
-  "errors": {
-    "content": "El contenido no puede estar vacío"
-  }
+  "code": "UNAUTHORIZED",
+  "message": "La autenticación es necesaria para acceder a este recurso",
+  "errors": {}
 }
 ```
 
-La validación se realiza en:
+Ejemplo de error de autorización:
 
-1. Entrada HTTP.
-2. Objetos de dominio.
-3. Servicios de aplicación.
-4. Restricciones de base de datos.
-
-## Persistencia segura
-
-Hibernate está configurado con:
-
-```properties
-spring.jpa.hibernate.ddl-auto=validate
+```json
+{
+  "code": "FORBIDDEN",
+  "message": "El usuario no tiene permisos para acceder a este recurso",
+  "errors": {}
+}
 ```
 
-La aplicación no modifica automáticamente el esquema de producción.
+## Base de datos y migraciones
 
-Flyway controla la evolución mediante migraciones versionadas:
+La base de datos utilizada en desarrollo es PostgreSQL.
 
-```text
-V1__crear_tabla_findings.sql
-V2__crear_tabla_finding_audit.sql
-V3__crear_organizaciones_y_asignar_hallazgos.sql
-V4__crear_comentarios_de_hallazgos.sql
-V5__permitir_auditoria_de_comentarios.sql
-```
+Los cambios de esquema se gestionan con Flyway mediante migraciones versionadas.
 
-La migración V4 crea la tabla de comentarios con:
+Las migraciones actuales incluyen cambios relacionados con:
 
-- Clave primaria UUID.
-- Clave foránea hacia `findings`.
-- Clave foránea hacia `organizations`.
-- Contenido obligatorio.
-- Restricción de contenido no vacío.
-- Índice por hallazgo, organización y fecha.
+- Estructura inicial de hallazgos.
+- Creación de organizaciones.
+- Asignación de hallazgos a organizaciones.
+- Creación de comentarios.
+- Auditoría de comentarios.
 
-La migración V5 actualiza la restricción de acciones de auditoría para aceptar `COMMENTED`.
+Las migraciones no deben modificarse después de haberse aplicado en un entorno compartido.
 
-## Inyección SQL
+Para nuevos cambios debe crearse una nueva migración versionada.
 
-La aplicación utiliza Spring Data JPA y métodos derivados de repositorio.
+Antes de aplicar una migración se debe comprobar:
 
-No se construyen consultas SQL concatenando directamente valores procedentes del usuario.
-
-Los filtros y búsquedas se reciben como parámetros controlados por Spring Data y Hibernate.
-
-La validación de entradas y el aislamiento organizativo se mantienen aunque el usuario manipule los parámetros de consulta.
+- Que sea compatible con los datos existentes.
+- Que no elimine información sin una estrategia de recuperación.
+- Que las restricciones sean compatibles con migraciones anteriores.
+- Que existan pruebas de integración suficientes.
 
 ## Gestión de secretos
 
-Nunca deben incluirse en Git:
+No deben subirse al repositorio:
 
-- Contraseñas de PostgreSQL.
-- Contraseñas de Keycloak.
+- Contraseñas.
 - Tokens JWT.
 - Claves privadas.
-- Credenciales de producción.
-- Archivos `.env`.
-- Secretos utilizados en pruebas manuales.
+- Credenciales de Keycloak.
+- Credenciales de PostgreSQL.
+- Archivos `.env` reales.
+- Dumps con datos sensibles.
+- Certificados privados.
 
-La configuración local utiliza:
-
-```text
-.env
-```
-
-El repositorio debe contener únicamente:
+Debe utilizarse:
 
 ```text
 .env.example
 ```
 
-Los tokens utilizados manualmente no deben imprimirse completos en la terminal ni incluirse en capturas.
+para documentar las variables necesarias sin incluir valores reales.
 
-## Integración continua
+En producción se recomienda utilizar:
 
-Los workflows están en:
+- Secret managers.
+- Variables protegidas del entorno.
+- Rotación periódica.
+- Credenciales diferentes por entorno.
+- Principio de mínimo privilegio.
+- Cuentas de base de datos con permisos limitados.
+- Separación de credenciales de desarrollo y producción.
 
-```text
-.github/workflows/
-```
+## Docker y entorno local
 
-La integración continua se ejecuta en:
+Docker Compose se utiliza para levantar la infraestructura local.
 
-- `push`.
-- `pull_request`.
+El entorno local no debe exponerse directamente a Internet.
 
-Las comprobaciones incluyen:
+Para entornos reales se recomienda:
 
-- Compilación con Java 21.
-- Tests unitarios.
-- Tests web.
-- Tests de integración con Testcontainers.
-- Revisión de dependencias.
-- Análisis CodeQL.
+- No utilizar contraseñas de desarrollo.
+- Restringir los puertos publicados.
+- Actualizar PostgreSQL y Keycloak.
+- Utilizar redes privadas.
+- Configurar TLS.
+- Aplicar límites de recursos.
+- Revisar los logs antes de almacenarlos.
+- Evitar registrar tokens o datos sensibles.
+- Ejecutar los contenedores con el menor privilegio posible.
+- Escanear las imágenes utilizadas.
 
-Los workflows deben utilizar permisos mínimos:
+## Dependencias y automatización
 
-```yaml
-permissions:
-  contents: read
-```
-
-También se debe evitar la persistencia innecesaria de credenciales:
-
-```yaml
-persist-credentials: false
-```
-
-### Revisión de dependencias
-
-La revisión de dependencias se ejecuta en pull requests.
-
-Busca:
-
-- Dependencias vulnerables nuevas.
-- Cambios con severidad moderada o superior.
-- Problemas de licencias según la configuración de GitHub.
-
-No sustituye a:
-
-- Actualizaciones periódicas.
-- Revisión de avisos de seguridad.
-- SAST.
-- DAST.
-- Escaneo de secretos.
-- Revisión manual.
-
-### CodeQL
-
-CodeQL analiza el código Java para detectar patrones potencialmente inseguros.
-
-El análisis se ejecuta en:
-
-- Pull requests.
-- Pushes a la rama principal.
-- Ejecuciones programadas.
-
-Los resultados deben revisarse antes de fusionar cambios relevantes.
-
-## Docker
-
-Docker Compose ejecuta PostgreSQL y Keycloak localmente.
-
-Los datos se almacenan en volúmenes Docker:
+El repositorio dispone de:
 
 ```text
-securefindings_postgres_data
-securefindings-keycloak-data
+.github/workflows/ci.yml
+.github/workflows/codeql.yml
 ```
 
-Detener los servicios sin borrar datos:
+El workflow de integración continua:
 
-```powershell
-docker compose stop
-```
+- Compila el proyecto.
+- Ejecuta las pruebas.
+- Revisa dependencias en pull requests.
 
-Eliminar los contenedores conservando volúmenes:
+La revisión de dependencias está definida dentro de `ci.yml`. No existe un workflow independiente llamado `dependency-review.yml`.
 
-```powershell
-docker compose down
-```
+CodeQL analiza el código Java para detectar posibles vulnerabilidades y problemas de seguridad.
 
-Eliminar también los datos persistidos:
-
-```powershell
-docker compose down -v
-```
-
-Este último comando debe utilizarse únicamente cuando se quiera reiniciar completamente el entorno local.
-
-En producción:
-
-- PostgreSQL no debe exponerse directamente a Internet.
-- Keycloak no debe ejecutarse con `start-dev`.
-- Debe utilizarse HTTPS.
-- Deben aplicarse controles de red.
-- Las credenciales deben gestionarse mediante un sistema seguro de secretos.
-
-## Respuestas de error
-
-La API utiliza respuestas controladas para evitar exponer trazas internas.
-
-Ejemplo de recurso inexistente:
-
-```json
-{
-  "code": "FINDING_NOT_FOUND",
-  "message": "No se ha encontrado el hallazgo",
-  "errors": {}
-}
-```
-
-Códigos habituales:
-
-| Código | Significado |
-|---:|---|
-| 400 | Petición inválida |
-| 401 | Falta autenticación o el token no es válido |
-| 403 | El usuario no tiene permisos |
-| 404 | El recurso no existe dentro de la organización |
-| 409 | Conflicto de datos |
-| 500 | Error interno no esperado |
-
-Para evitar filtraciones, un hallazgo perteneciente a otra organización se trata como no encontrado.
-
-## Tests de seguridad
-
-El proyecto incluye pruebas para:
-
-- Validación del contexto de organización.
-- Claims ausentes o inválidos.
-- Organizaciones inexistentes.
-- Autorización por roles.
-- Acceso de `ANALYST`.
-- Acceso de `ADMIN`.
-- Restricción de eliminación.
-- Aislamiento entre organizaciones.
-- Creación y consulta de comentarios.
-- Auditoría de comentarios.
-- Persistencia en PostgreSQL.
-- Validación de errores HTTP.
-- Paginación y límites de página.
-
-Los tests se ejecutan localmente con:
+Antes de integrar cambios debe comprobarse:
 
 ```powershell
 .\mvnw.cmd clean test
 ```
 
-Y automáticamente en GitHub Actions mediante:
+## Pruebas de seguridad existentes
 
-```bash
-./mvnw clean verify
+El proyecto incluye pruebas para comprobar:
+
+- Acceso sin token.
+- Acceso con rol insuficiente.
+- Permisos de `ANALYST`.
+- Permisos de `ADMIN`.
+- Rechazo de claims inválidos.
+- Rechazo de organizaciones inexistentes.
+- Aislamiento entre organizaciones.
+- Consulta de hallazgos de otra organización.
+- Validación de datos.
+- Parámetros de paginación.
+- Filtros y búsqueda.
+- Ordenación permitida.
+- Ordenación no permitida.
+- Persistencia de auditoría.
+- Persistencia de comentarios.
+- Respuestas JSON `401`.
+- Respuestas JSON `403`.
+- Respuestas JSON `404`.
+
+Las pruebas de integración utilizan PostgreSQL para verificar el comportamiento real de las consultas y restricciones de persistencia.
+
+## Limitaciones actuales
+
+Antes de utilizar la aplicación en producción deberían revisarse, como mínimo:
+
+- Rate limiting.
+- Configuración CORS.
+- Gestión centralizada de secretos.
+- TLS y terminación HTTPS.
+- Monitorización y alertas.
+- Rotación de claves.
+- Política de retención de auditoría.
+- Copias de seguridad.
+- Restauración ante incidentes.
+- Hardening de contenedores.
+- Escaneo de imágenes Docker.
+- Gestión formal de usuarios y organizaciones.
+- Pruebas de penetración.
+- Revisión de configuración de Keycloak.
+- Política de bloqueo ante abuso.
+- Protección frente a ataques automatizados.
+- Límites de tamaño de petición.
+- Gestión de logs y datos personales.
+
+## Respuesta ante incidentes
+
+Ante una posible vulnerabilidad:
+
+1. No publicar detalles sensibles en una issue pública.
+2. Abrir un aviso privado de seguridad.
+3. Revocar o rotar las credenciales afectadas.
+4. Invalidar tokens comprometidos cuando sea posible.
+5. Revisar logs y eventos de auditoría.
+6. Identificar las organizaciones afectadas.
+7. Determinar el periodo de exposición.
+8. Aplicar una corrección en una rama independiente.
+9. Ejecutar la suite completa de pruebas.
+10. Revisar CodeQL y las dependencias.
+11. Integrar mediante pull request.
+12. Documentar el impacto y la solución.
+13. Comunicar las medidas correctivas a los afectados cuando corresponda.
+
+## Revisión de cambios
+
+Todo cambio que afecte a seguridad debe incluir:
+
+- Explicación del riesgo.
+- Justificación de la mitigación.
+- Pruebas automatizadas.
+- Revisión del impacto en organizaciones.
+- Revisión de permisos.
+- Revisión de entradas y salidas.
+- Comprobación de que no se han añadido secretos.
+- Revisión de las migraciones de base de datos.
+- Actualización de la documentación cuando corresponda.
+- Ejecución de la suite completa de pruebas.
+
+Comando mínimo recomendado:
+
+```powershell
+.\mvnw.cmd clean test
 ```
-
-## Consideraciones para producción
-
-Antes de desplegar el proyecto en producción sería necesario:
-
-- Utilizar HTTPS.
-- No usar `start-dev` en Keycloak.
-- Crear cuentas administrativas controladas.
-- Eliminar usuarios temporales.
-- Utilizar una base de datos gestionada.
-- Utilizar secretos externos.
-- Restringir la red de PostgreSQL.
-- No publicar PostgreSQL directamente a Internet.
-- Configurar logs centralizados.
-- Añadir monitorización.
-- Configurar límites de peticiones.
-- Revisar las políticas CORS.
-- Rotar credenciales.
-- Validar la configuración de Keycloak.
-- Revisar los permisos de los roles.
-- Ejecutar análisis de dependencias.
-- Incorporar SAST y DAST.
-- Incorporar escaneo de secretos.
-- Proteger la rama principal.
-- Exigir que los workflows pasen antes de fusionar pull requests.
-- Revisar periódicamente las migraciones y restricciones de base de datos.
-
-## Notificación de vulnerabilidades
-
-Las vulnerabilidades deben comunicarse de forma responsable y no publicarse antes de que exista una solución.
-
-La comunicación debería incluir:
-
-- Descripción del problema.
-- Pasos para reproducirlo.
-- Impacto.
-- Evidencias mínimas.
-- Posible mitigación.
-- Versión afectada.
