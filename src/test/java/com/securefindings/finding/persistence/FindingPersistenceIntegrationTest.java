@@ -12,6 +12,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.junit.jupiter.Container;
@@ -262,5 +264,45 @@ class FindingPersistenceIntegrationTest {
                                 secondPage.getContent().get(0).getActor());
                 assertEquals(false, secondPage.isFirst());
                 assertEquals(true, secondPage.isLast());
+        }
+
+        @Test
+        void deberiaOrdenarLosHallazgosPorTituloEnPostgreSQL() {
+
+                FindingEntity zeta = findingRepository.save(
+                                new FindingEntity(
+                                                Finding.create(
+                                                                "Zeta",
+                                                                "Descripción Z",
+                                                                FindingSeverity.MEDIUM),
+                                                ORGANIZATION_ID));
+
+                FindingEntity alpha = findingRepository.save(
+                                new FindingEntity(
+                                                Finding.create(
+                                                                "Alpha",
+                                                                "Descripción A",
+                                                                FindingSeverity.MEDIUM),
+                                                ORGANIZATION_ID));
+
+                Page<FindingEntity> result = findingRepository.findPageByFilters(
+                                ORGANIZATION_ID,
+                                null,
+                                null,
+                                null,
+                                PageRequest.of(
+                                                0,
+                                                20,
+                                                Sort.by(
+                                                                Sort.Order.asc("title"),
+                                                                Sort.Order.asc("id"))));
+
+                assertEquals(2, result.getTotalElements());
+                assertEquals(
+                                "Alpha",
+                                result.getContent().get(0).getTitle());
+                assertEquals(
+                                "Zeta",
+                                result.getContent().get(1).getTitle());
         }
 }
