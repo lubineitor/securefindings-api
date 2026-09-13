@@ -27,6 +27,7 @@ Actualmente se trabajan los siguientes conceptos:
 
 - Gestión completa de hallazgos.
 - Severidad y estado.
+- Ciclo de vida controlado.
 - Búsqueda textual.
 - Filtros combinables.
 - Ordenación segura.
@@ -67,6 +68,40 @@ Cada hallazgo contiene:
 - Fecha de creación.
 - Fecha de actualización.
 
+### Ciclo de vida de los hallazgos
+
+Los estados disponibles son:
+
+- `OPEN`
+- `IN_PROGRESS`
+- `RESOLVED`
+- `FALSE_POSITIVE`
+
+Las transiciones se validan dentro del dominio:
+
+| Estado actual | Estados permitidos |
+|---|---|
+| `OPEN` | `OPEN`, `IN_PROGRESS`, `RESOLVED`, `FALSE_POSITIVE` |
+| `IN_PROGRESS` | `OPEN`, `IN_PROGRESS`, `RESOLVED`, `FALSE_POSITIVE` |
+| `RESOLVED` | `RESOLVED`, `OPEN` |
+| `FALSE_POSITIVE` | `FALSE_POSITIVE`, `OPEN` |
+
+Los estados `RESOLVED` y `FALSE_POSITIVE` pueden reabrirse utilizando `OPEN`, pero no pueden cambiar directamente entre sí.
+
+Una transición no permitida devuelve:
+
+```http
+409 Conflict
+```
+
+con el código:
+
+```text
+INVALID_STATUS_TRANSITION
+```
+
+La validación se realiza antes de guardar el hallazgo y antes de registrar el evento de auditoría.
+
 ### Búsqueda y filtros
 
 El listado permite combinar:
@@ -103,7 +138,7 @@ id ASC
 
 El identificador se utiliza como segundo criterio para garantizar resultados deterministas cuando varios hallazgos tienen el mismo valor principal.
 
-Los valores de ordenación no se incorporan directamente a la consulta. Primero se validan mediante enums, evitando que el cliente proporcione propiedades JPA o SQL arbitrarias.
+Los valores de ordenación se validan mediante enums. No se aceptan nombres de propiedades JPA o SQL arbitrarios.
 
 ### Auditoría
 
@@ -125,6 +160,8 @@ Cada evento registra:
 El usuario se obtiene del claim `preferred_username` del token JWT. En operaciones técnicas o pruebas sin autenticación se utiliza el actor `system`.
 
 La auditoría puede consultarse de forma paginada y se conserva incluso cuando el hallazgo es eliminado.
+
+Las transiciones de estado no permitidas no generan eventos de auditoría.
 
 ### Comentarios
 
@@ -288,7 +325,18 @@ Errores principales:
 | `401` | `UNAUTHORIZED` | Token ausente o inválido |
 | `403` | `FORBIDDEN` | Usuario sin permisos suficientes |
 | `404` | `FINDING_NOT_FOUND` | Hallazgo no disponible para la organización |
+| `409` | `INVALID_STATUS_TRANSITION` | Transición de estado no permitida |
 | `500` | Error interno | Error no controlado |
+
+Ejemplo de transición inválida:
+
+```json
+{
+  "code": "INVALID_STATUS_TRANSITION",
+  "message": "No se puede cambiar el estado del hallazgo a una transición no permitida",
+  "errors": {}
+}
+```
 
 Los errores de ordenación inválida también se responden con `400`:
 
@@ -390,20 +438,6 @@ src/
     └── java/
 ```
 
-Las migraciones de base de datos se encuentran en:
-
-```text
-src/main/resources/db/migration
-```
-
-Las migraciones actuales incluyen cambios relacionados con:
-
-- Estructura inicial de hallazgos.
-- Creación de organizaciones.
-- Asignación de hallazgos a organizaciones.
-- Creación de comentarios.
-- Auditoría de comentarios.
-
 ## Requisitos locales
 
 Se necesita:
@@ -472,10 +506,11 @@ Ejecutar una clase concreta:
 Las pruebas cubren:
 
 - Dominio de hallazgos.
+- Transiciones válidas e inválidas.
 - Servicios de aplicación.
 - Controladores REST.
 - Validación de peticiones.
-- Respuestas `400`, `401`, `403` y `404`.
+- Respuestas `400`, `401`, `403`, `404` y `409`.
 - Seguridad y roles.
 - Contexto de organización.
 - Persistencia con PostgreSQL.
@@ -496,17 +531,15 @@ El repositorio incluye los siguientes workflows:
 .github/workflows/codeql.yml
 ```
 
-### CI
+El workflow de integración continua:
 
-El workflow de integración continua compila el proyecto y ejecuta las pruebas.
+- Compila el proyecto.
+- Ejecuta las pruebas.
+- Revisa dependencias en pull requests.
 
-También incluye la revisión de dependencias para las pull requests. Esta funcionalidad forma parte de `ci.yml`; no existe un archivo independiente llamado `dependency-review.yml`.
-
-### CodeQL
+La revisión de dependencias está definida dentro de `ci.yml`; no existe un workflow independiente llamado `dependency-review.yml`.
 
 CodeQL analiza el código Java para detectar posibles problemas de seguridad y calidad.
-
-Los resultados aparecen en la sección **Security** del repositorio de GitHub.
 
 ## Flujo de trabajo Git
 
@@ -523,11 +556,7 @@ git switch develop
 git pull --ff-only origin develop
 ```
 
-Crear una rama de funcionalidad:
-
-```powershell
-git switch -c feature/nombre-descriptivo
-```
+Todo el desarrollo se realiza directamente en `develop`. No se crean ramas adicionales de funcionalidad.
 
 Comprobar los cambios:
 
@@ -547,7 +576,7 @@ Los commits deben ser pequeños y representar un único cambio coherente.
 Ejemplo:
 
 ```text
-funcionalidad: añadir ordenacion segura a los hallazgos
+funcionalidad: validar transiciones de estado
 ```
 
 Las pull requests hacia `main` se reservan para cambios importantes o para agrupar varios commits relacionados.
