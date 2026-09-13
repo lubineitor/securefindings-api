@@ -18,6 +18,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.core.MethodParameter;
 
 import com.securefindings.finding.application.FindingNotFoundException;
+import com.securefindings.finding.application.FindingStatusTransitionException;
 
 import jakarta.validation.ConstraintViolationException;
 
@@ -192,5 +193,16 @@ public class GlobalExceptionHandler {
                 }
 
                 return propertyPath.substring(lastSeparator + 1);
+        }
+
+        @ExceptionHandler(FindingStatusTransitionException.class)
+        @ResponseStatus(HttpStatus.CONFLICT)
+        public ApiErrorResponse handleFindingStatusTransition(
+                        FindingStatusTransitionException exception) {
+
+                return new ApiErrorResponse(
+                                "INVALID_STATUS_TRANSITION",
+                                exception.getMessage(),
+                                Map.of());
         }
 }

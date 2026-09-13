@@ -123,7 +123,9 @@ public class FindingController {
                         @ApiResponse(responseCode = "400", description = "El estado enviado no es válido"),
                         @ApiResponse(responseCode = "401", description = "Token ausente o inválido"),
                         @ApiResponse(responseCode = "403", description = "El usuario no tiene permisos"),
-                        @ApiResponse(responseCode = "404", description = "El hallazgo no existe")
+                        @ApiResponse(responseCode = "404", description = "El hallazgo no existe"),
+                        @ApiResponse(responseCode = "409", description = "La transición de estado no está permitida")
+
         })
         public Finding updateStatus(
                         @Parameter(description = "Identificador del hallazgo", required = true) @PathVariable UUID id,
