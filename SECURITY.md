@@ -23,6 +23,7 @@ Esta política cubre:
 - Aislamiento entre organizaciones.
 - Validación de entradas.
 - Persistencia de hallazgos.
+- Ciclo de vida de los hallazgos.
 - Auditoría.
 - Comentarios.
 - Búsqueda y ordenación.
@@ -75,6 +76,7 @@ Los principales riesgos considerados son:
 | Activo | Amenaza | Control aplicado |
 |---|---|---|
 | Hallazgos | Acceso entre organizaciones | Filtros obligatorios por `organization_id` |
+| Estados | Cambios de ciclo de vida no autorizados | Validación de transiciones en el dominio |
 | Operaciones administrativas | Eliminación por usuarios no autorizados | Rol `ADMIN` |
 | API REST | Acceso sin autenticación | OAuth2 Resource Server y JWT |
 | Tokens | Manipulación o falsificación | Validación de firma, emisor y expiración |
@@ -104,7 +106,7 @@ La aplicación funciona como un OAuth2 Resource Server y valida:
 - Claims necesarios.
 - Roles asociados.
 
-La aplicación no utiliza sesiones de usuario:
+La aplicación no mantiene sesiones de usuario:
 
 ```text
 SessionCreationPolicy.STATELESS
@@ -175,20 +177,19 @@ Los permisos se aplican por endpoint:
 | Crear comentarios | Sí | Sí |
 | Eliminar hallazgos | No | Sí |
 
-La API responde:
+La aplicación responde:
 
 - `401 UNAUTHORIZED` cuando falta autenticación válida.
 - `403 FORBIDDEN` cuando el usuario está autenticado pero no tiene permisos suficientes.
-
-La eliminación de hallazgos está restringida exclusivamente al rol `ADMIN`.
+- `409 INVALID_STATUS_TRANSITION` cuando la operación es válida para el usuario, pero no para el estado actual del hallazgo.
 
 ## Aislamiento entre organizaciones
 
-Todos los accesos a hallazgos, comentarios y auditoría deben estar limitados a la organización incluida en el token.
+Todos los accesos a hallazgos, comentarios y auditoría deben estar limitados a la organización del token.
 
 El aislamiento se aplica en:
 
-- `OrganizationContext`.
+- Contexto de organización.
 - Servicios de aplicación.
 - Métodos de repositorio.
 - Consultas paginadas.
@@ -206,7 +207,7 @@ Las consultas combinan el identificador del recurso con el identificador de orga
 finding_id + organization_id
 ```
 
-Esto impide que conocer un UUID permita acceder a información de otra organización.
+Esto evita que conocer un UUID permita acceder a información de otra organización.
 
 Cuando un recurso no pertenece a la organización actual, la aplicación puede responder con `404` para no revelar si el identificador existe en otra organización.
 
@@ -218,6 +219,69 @@ La base de datos refuerza este diseño mediante:
 - Relación de organización en hallazgos.
 - Relación de organización en auditoría.
 - Relación de organización en comentarios.
+
+## Ciclo de vida y transiciones de estado
+
+Los estados disponibles son:
+
+```text
+OPEN
+IN_PROGRESS
+RESOLVED
+FALSE_POSITIVE
+```
+
+Las transiciones permitidas son:
+
+| Estado actual | Estados permitidos |
+|---|---|
+| `OPEN` | `OPEN`, `IN_PROGRESS`, `RESOLVED`, `FALSE_POSITIVE` |
+| `IN_PROGRESS` | `OPEN`, `IN_PROGRESS`, `RESOLVED`, `FALSE_POSITIVE` |
+| `RESOLVED` | `RESOLVED`, `OPEN` |
+| `FALSE_POSITIVE` | `FALSE_POSITIVE`, `OPEN` |
+
+Se permite mantener el mismo estado para que las operaciones sean idempotentes.
+
+Los estados finales:
+
+- `RESOLVED`
+- `FALSE_POSITIVE`
+
+solo pueden mantenerse o reabrirse como `OPEN`.
+
+No se permite cambiar directamente:
+
+```text
+RESOLVED -> FALSE_POSITIVE
+FALSE_POSITIVE -> RESOLVED
+```
+
+La validación se realiza en el dominio mediante una regla explícita de transición.
+
+El servicio comprueba la transición antes de:
+
+- Crear una nueva entidad para guardar.
+- Ejecutar `save`.
+- Registrar auditoría.
+- Devolver una respuesta de éxito.
+
+Una transición inválida produce:
+
+```http
+409 Conflict
+```
+
+Ejemplo:
+
+```json
+{
+  "code": "INVALID_STATUS_TRANSITION",
+  "message": "No se puede cambiar el estado del hallazgo...",
+  "errors": {}
+}
+```
+
+Las transiciones rechazadas no modifican el hallazgo ni generan eventos de auditoría.
 
 ## Validación de entradas
 
@@ -260,7 +324,7 @@ El parámetro `q`:
 - Se normaliza antes de ejecutar la consulta.
 - Ignora diferencias entre mayúsculas y minúsculas.
 - Se procesa mediante parámetros enlazados.
-- No se concatena directamente en una consulta SQL.
+- No se concatena directamente en SQL.
 - Puede omitirse sin provocar errores de tipo en PostgreSQL.
 
 Un valor vacío se trata como ausencia de filtro.
@@ -311,16 +375,7 @@ La respuesta esperada es:
 }
 ```
 
-Esta validación evita utilizar la ordenación como mecanismo para manipular consultas o acceder a propiedades internas de persistencia.
-
-La ordenación predeterminada es:
-
-```text
-createdAt DESC
-id ASC
-```
-
-El identificador se utiliza como criterio secundario para garantizar resultados deterministas.
+Esta validación evita utilizar el parámetro de ordenación como vector para manipular consultas o acceder a propiedades internas de persistencia.
 
 ## Protección frente a inyección SQL
 
@@ -363,15 +418,9 @@ Los eventos incluyen:
 
 La auditoría permite conocer quién realizó una operación y cuándo se produjo.
 
-Las operaciones auditadas incluyen:
-
-- Creación de hallazgos.
-- Actualización de datos.
-- Actualización de estados.
-- Eliminación de hallazgos.
-- Creación de comentarios.
-
 La eliminación de un hallazgo conserva su evento de auditoría para mantener la trazabilidad histórica.
+
+Las transiciones de estado inválidas no registran eventos porque la operación no llega a modificar el recurso.
 
 ## Comentarios
 
@@ -414,27 +463,8 @@ Errores principales:
 | `401` | `UNAUTHORIZED` | Token ausente o inválido |
 | `403` | `FORBIDDEN` | Usuario sin permisos suficientes |
 | `404` | `FINDING_NOT_FOUND` | Hallazgo no disponible para la organización |
+| `409` | `INVALID_STATUS_TRANSITION` | Transición de estado no permitida |
 | `500` | Error interno | Error no controlado |
-
-Ejemplo de error de autenticación:
-
-```json
-{
-  "code": "UNAUTHORIZED",
-  "message": "La autenticación es necesaria para acceder a este recurso",
-  "errors": {}
-}
-```
-
-Ejemplo de error de autorización:
-
-```json
-{
-  "code": "FORBIDDEN",
-  "message": "El usuario no tiene permisos para acceder a este recurso",
-  "errors": {}
-}
-```
 
 ## Base de datos y migraciones
 
@@ -453,13 +483,6 @@ Las migraciones actuales incluyen cambios relacionados con:
 Las migraciones no deben modificarse después de haberse aplicado en un entorno compartido.
 
 Para nuevos cambios debe crearse una nueva migración versionada.
-
-Antes de aplicar una migración se debe comprobar:
-
-- Que sea compatible con los datos existentes.
-- Que no elimine información sin una estrategia de recuperación.
-- Que las restricciones sean compatibles con migraciones anteriores.
-- Que existan pruebas de integración suficientes.
 
 ## Gestión de secretos
 
@@ -553,6 +576,11 @@ El proyecto incluye pruebas para comprobar:
 - Filtros y búsqueda.
 - Ordenación permitida.
 - Ordenación no permitida.
+- Transiciones válidas.
+- Transiciones inválidas.
+- Respuesta `409` ante transiciones no permitidas.
+- Ausencia de guardado tras una transición inválida.
+- Ausencia de auditoría tras una transición inválida.
 - Persistencia de auditoría.
 - Persistencia de comentarios.
 - Respuestas JSON `401`.
@@ -595,10 +623,10 @@ Ante una posible vulnerabilidad:
 5. Revisar logs y eventos de auditoría.
 6. Identificar las organizaciones afectadas.
 7. Determinar el periodo de exposición.
-8. Aplicar una corrección en una rama independiente.
+8. Aplicar una corrección en `develop`.
 9. Ejecutar la suite completa de pruebas.
 10. Revisar CodeQL y las dependencias.
-11. Integrar mediante pull request.
+11. Integrar mediante pull request hacia `main`.
 12. Documentar el impacto y la solución.
 13. Comunicar las medidas correctivas a los afectados cuando corresponda.
 

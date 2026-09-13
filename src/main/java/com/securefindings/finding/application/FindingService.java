@@ -177,6 +177,13 @@ public class FindingService {
 
                 Finding currentFinding = getById(id);
 
+                if (!currentFinding.status().canTransitionTo(status)) {
+                        throw new FindingStatusTransitionException(
+                                        id,
+                                        currentFinding.status(),
+                                        status);
+                }
+
                 Finding updatedFinding = currentFinding.withStatus(status);
 
                 Finding savedFinding = save(

@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
@@ -405,5 +406,32 @@ class FindingServiceTest {
                                 pageable.getSort()
                                                 .getOrderFor("id")
                                                 .getDirection());
+        }
+
+        @Test
+        void deberiaRechazarUnaTransicionDeEstadoInvalida() {
+
+                Finding finding = Finding.create(
+                                "SQL Injection",
+                                "Entrada sin validar",
+                                FindingSeverity.HIGH)
+                                .withStatus(FindingStatus.RESOLVED);
+
+                when(findingRepository.findByIdAndOrganizationId(
+                                finding.id(),
+                                TEST_ORGANIZATION_ID))
+                                .thenReturn(Optional.of(
+                                                new FindingEntity(finding)));
+
+                assertThrows(
+                                FindingStatusTransitionException.class,
+                                () -> findingService.updateStatus(
+                                                finding.id(),
+                                                FindingStatus.FALSE_POSITIVE));
+
+                verify(findingRepository, never())
+                                .save(any(FindingEntity.class));
+
+                verifyNoInteractions(auditService);
         }
 }

@@ -33,6 +33,7 @@ import org.springframework.web.context.WebApplicationContext;
 import com.securefindings.api.error.GlobalExceptionHandler;
 import com.securefindings.finding.application.FindingNotFoundException;
 import com.securefindings.finding.application.FindingService;
+import com.securefindings.finding.application.FindingStatusTransitionException;
 import com.securefindings.finding.domain.Finding;
 import com.securefindings.finding.domain.FindingSeverity;
 import com.securefindings.finding.domain.FindingStatus;
@@ -633,5 +634,34 @@ class FindingControllerTest {
                                                 .value("VALIDATION_ERROR"));
 
                 verifyNoInteractions(findingService);
+        }
+
+        @Test
+        void deberiaRechazarUnaTransicionDeEstadoInvalida()
+                        throws Exception {
+
+                UUID id = UUID.randomUUID();
+
+                doThrow(new FindingStatusTransitionException(
+                                id,
+                                FindingStatus.RESOLVED,
+                                FindingStatus.FALSE_POSITIVE))
+                                .when(findingService)
+                                .updateStatus(
+                                                id,
+                                                FindingStatus.FALSE_POSITIVE);
+
+                mockMvc.perform(patch(
+                                "/api/v1/findings/{id}/status",
+                                id)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                                {
+                                                    "status": "FALSE_POSITIVE"
+                                                }
+                                                """))
+                                .andExpect(status().isConflict())
+                                .andExpect(jsonPath("$.code")
+                                                .value("INVALID_STATUS_TRANSITION"));
         }
 }
