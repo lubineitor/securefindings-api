@@ -18,6 +18,7 @@ El proyecto se encuentra en una fase activa de construcción. Su objetivo es ser
 - Integración continua.
 - Control de acceso.
 - Aislamiento de datos por organización.
+- Protección frente al abuso de la API.
 
 ## Objetivo
 
@@ -39,6 +40,7 @@ Actualmente se trabajan los siguientes conceptos:
 - Manejo controlado de errores.
 - Autenticación mediante JWT.
 - Autorización basada en roles.
+- Limitación de peticiones.
 - Persistencia con PostgreSQL.
 - Migraciones versionadas.
 - Pruebas unitarias, web e integración.
@@ -199,6 +201,67 @@ El identificador de organización:
 
 Un usuario puede recibir una respuesta `404` al intentar acceder a un identificador perteneciente a otra organización, evitando revelar información sobre su existencia.
 
+### Limitación de peticiones
+
+La API incorpora un límite configurable para proteger los endpoints internos frente a un uso excesivo o automatizado.
+
+El límite se aplica a los endpoints bajo:
+
+```text
+/api/v1/
+```
+
+El endpoint público de health check queda excluido:
+
+```text
+/api/v1/health
+```
+
+La clave utilizada para aplicar el límite es:
+
+- Usuario autenticado: nombre principal obtenido del contexto de seguridad.
+- Petición no autenticada: dirección IP remota obtenida mediante `getRemoteAddr()`.
+
+La aplicación no confía directamente en cabeceras como `X-Forwarded-For`, porque podrían ser manipuladas por el cliente si no existe un proxy de confianza correctamente configurado.
+
+La configuración predeterminada es:
+
+```properties
+securefindings.rate-limit.max-requests=60
+securefindings.rate-limit.window=60s
+```
+
+También puede configurarse mediante variables de entorno:
+
+```text
+SECUREFINDINGS_RATE_LIMIT_MAX_REQUESTS=60
+SECUREFINDINGS_RATE_LIMIT_WINDOW=60s
+```
+
+Cuando se supera el límite, la API devuelve:
+
+```http
+429 Too Many Requests
+```
+
+Incluyendo la cabecera:
+
+```http
+Retry-After: <segundos>
+```
+
+Ejemplo de respuesta:
+
+```json
+{
+  "code": "RATE_LIMIT_EXCEEDED",
+  "message": "Se ha superado el límite de peticiones",
+  "errors": {}
+}
+```
+
+El límite actual se mantiene en memoria dentro de cada instancia de la aplicación. Para un despliegue con varias instancias se deberá utilizar un almacén compartido, un API Gateway o una solución distribuida equivalente.
+
 ## API REST
 
 ### Health check
@@ -207,7 +270,7 @@ Un usuario puede recibir una respuesta `404` al intentar acceder a un identifica
 GET /api/v1/health
 ```
 
-Este endpoint está disponible sin autenticación.
+Este endpoint está disponible sin autenticación y no consume cuota del límite de peticiones.
 
 ### Hallazgos
 
@@ -326,6 +389,7 @@ Errores principales:
 | `403` | `FORBIDDEN` | Usuario sin permisos suficientes |
 | `404` | `FINDING_NOT_FOUND` | Hallazgo no disponible para la organización |
 | `409` | `INVALID_STATUS_TRANSITION` | Transición de estado no permitida |
+| `429` | `RATE_LIMIT_EXCEEDED` | Límite de peticiones superado |
 | `500` | Error interno | Error no controlado |
 
 Ejemplo de transición inválida:
@@ -333,7 +397,22 @@ Ejemplo de transición inválida:
 ```json
 {
   "code": "INVALID_STATUS_TRANSITION",
-  "message": "No se puede cambiar el estado del hallazgo a una transición no permitida",
+  "message": "No se puede cambiar el estado del hallazgo...",
+  "errors": {}
+}
+```
+
+Ejemplo de límite superado:
+
+```http
+HTTP/1.1 429 Too Many Requests
+Retry-After: 34
+```
+
+```json
+{
+  "code": "RATE_LIMIT_EXCEEDED",
+  "message": "Se ha superado el límite de peticiones",
   "errors": {}
 }
 ```
@@ -429,6 +508,7 @@ src/
 │   │           ├── comment/
 │   │           ├── finding/
 │   │           ├── health/
+│   │           ├── organization/
 │   │           └── security/
 │   └── resources/
 │       ├── application.properties
@@ -468,6 +548,24 @@ Comprobar los servicios:
 ```powershell
 docker compose ps
 ```
+
+### Configuración del límite de peticiones
+
+Los valores predeterminados son:
+
+```properties
+securefindings.rate-limit.max-requests=${SECUREFINDINGS_RATE_LIMIT_MAX_REQUESTS:60}
+securefindings.rate-limit.window=${SECUREFINDINGS_RATE_LIMIT_WINDOW:60s}
+```
+
+Para modificar el límite localmente, pueden definirse estas variables en `.env`:
+
+```properties
+SECUREFINDINGS_RATE_LIMIT_MAX_REQUESTS=60
+SECUREFINDINGS_RATE_LIMIT_WINDOW=60s
+```
+
+En producción, los valores deben gestionarse mediante la configuración segura del entorno.
 
 ## Ejecución de la aplicación
 
@@ -510,7 +608,7 @@ Las pruebas cubren:
 - Servicios de aplicación.
 - Controladores REST.
 - Validación de peticiones.
-- Respuestas `400`, `401`, `403`, `404` y `409`.
+- Respuestas `400`, `401`, `403`, `404`, `409` y `429`.
 - Seguridad y roles.
 - Contexto de organización.
 - Persistencia con PostgreSQL.
@@ -521,6 +619,11 @@ Las pruebas cubren:
 - Filtros.
 - Ordenación.
 - Rechazo de parámetros de ordenación no permitidos.
+- Limitación por dirección IP.
+- Limitación por usuario autenticado.
+- Cabecera `Retry-After`.
+- Exclusión del endpoint de health check.
+- Integración del filtro en Spring Security.
 
 ## Integración continua
 
@@ -576,7 +679,7 @@ Los commits deben ser pequeños y representar un único cambio coherente.
 Ejemplo:
 
 ```text
-funcionalidad: validar transiciones de estado
+seguridad: limitar peticiones de la API
 ```
 
 Las pull requests hacia `main` se reservan para cambios importantes o para agrupar varios commits relacionados.
@@ -595,7 +698,7 @@ El proyecto continúa en desarrollo. Algunas líneas futuras son:
 
 - Mejorar la administración de organizaciones.
 - Añadir más reglas de autorización.
-- Incorporar rate limiting.
+- Incorporar rate limiting distribuido.
 - Añadir métricas y observabilidad.
 - Mejorar la configuración de producción.
 - Automatizar la configuración de Keycloak.

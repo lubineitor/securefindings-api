@@ -13,6 +13,8 @@ Actualmente no debe considerarse una solución preparada para producción sin un
 - Control de acceso.
 - Hardening de contenedores.
 - Pruebas de seguridad.
+- Rate limiting distribuido.
+- Protección perimetral.
 
 ## Alcance
 
@@ -27,6 +29,7 @@ Esta política cubre:
 - Auditoría.
 - Comentarios.
 - Búsqueda y ordenación.
+- Limitación de peticiones.
 - Configuración de Docker y PostgreSQL.
 - Migraciones de base de datos.
 - Workflows de GitHub Actions.
@@ -65,7 +68,7 @@ No incluyas en el informe:
 | Nivel | Descripción |
 |---|---|
 | Crítico | Compromiso completo de la aplicación, bypass de autenticación o acceso masivo entre organizaciones |
-| Alto | Acceso no autorizado a datos sensibles o modificación de información de otra organización |
+| Alto | Acceso no autorizado a datos sensibles, modificación de información de otra organización o abuso masivo de la API |
 | Medio | Escalada de privilegios limitada, filtrado de información o fallo relevante de autorización |
 | Bajo | Problema con impacto limitado o condiciones de explotación poco probables |
 
@@ -79,6 +82,7 @@ Los principales riesgos considerados son:
 | Estados | Cambios de ciclo de vida no autorizados | Validación de transiciones en el dominio |
 | Operaciones administrativas | Eliminación por usuarios no autorizados | Rol `ADMIN` |
 | API REST | Acceso sin autenticación | OAuth2 Resource Server y JWT |
+| API REST | Abuso automatizado o exceso de solicitudes | Rate limiting configurable |
 | Tokens | Manipulación o falsificación | Validación de firma, emisor y expiración |
 | Parámetros de búsqueda | Inyección o consultas no controladas | Parámetros enlazados mediante JPA |
 | Ordenación | Manipulación de propiedades internas | Lista blanca de campos permitidos |
@@ -133,7 +137,7 @@ organization_id
 
 Identifica al usuario que realiza la operación.
 
-Este valor se utiliza como actor en los eventos de auditoría.
+Este valor se utiliza como actor en los eventos de auditoría y como identificador del cliente autenticado para el límite de peticiones.
 
 Si no existe un usuario autenticado, las operaciones técnicas o de prueba pueden utilizar:
 
@@ -182,6 +186,126 @@ La aplicación responde:
 - `401 UNAUTHORIZED` cuando falta autenticación válida.
 - `403 FORBIDDEN` cuando el usuario está autenticado pero no tiene permisos suficientes.
 - `409 INVALID_STATUS_TRANSITION` cuando la operación es válida para el usuario, pero no para el estado actual del hallazgo.
+- `429 RATE_LIMIT_EXCEEDED` cuando el cliente supera el límite configurado.
+
+## Limitación de peticiones
+
+La API incorpora un filtro de limitación de peticiones para reducir el impacto de:
+
+- Abuso automatizado.
+- Repetición excesiva de solicitudes.
+- Uso accidentalmente elevado.
+- Ataques básicos de agotamiento de recursos.
+
+El filtro se aplica a las rutas bajo:
+
+```text
+/api/v1/
+```
+
+El endpoint público:
+
+```text
+/api/v1/health
+```
+
+queda excluido para que pueda utilizarse en comprobaciones de disponibilidad.
+
+### Identificación del cliente
+
+Para usuarios autenticados se utiliza el nombre del principal obtenido del contexto de seguridad.
+
+Para peticiones no autenticadas se utiliza la dirección remota:
+
+```text
+HttpServletRequest.getRemoteAddr()
+```
+
+La aplicación no utiliza directamente cabeceras controladas por el cliente como:
+
+```text
+X-Forwarded-For
+```
+
+Estas cabeceras solo deberían interpretarse cuando existe un proxy de confianza y la infraestructura elimina o sobrescribe los valores enviados externamente.
+
+### Configuración
+
+Los valores predeterminados son:
+
+```properties
+securefindings.rate-limit.max-requests=60
+securefindings.rate-limit.window=60s
+```
+
+También pueden configurarse mediante:
+
+```text
+SECUREFINDINGS_RATE_LIMIT_MAX_REQUESTS
+SECUREFINDINGS_RATE_LIMIT_WINDOW
+```
+
+Los valores deben validarse al iniciar la aplicación:
+
+- El número máximo de peticiones debe ser positivo.
+- La duración de la ventana debe ser positiva.
+- No deben utilizarse valores excesivamente bajos para endpoints necesarios por monitores o clientes legítimos.
+- No deben utilizarse valores excesivamente altos como sustituto de una protección perimetral.
+
+### Respuesta cuando se supera el límite
+
+Cuando se supera el límite se devuelve:
+
+```http
+429 Too Many Requests
+```
+
+La respuesta incluye:
+
+```http
+Retry-After: <segundos>
+```
+
+Ejemplo:
+
+```json
+{
+  "code": "RATE_LIMIT_EXCEEDED",
+  "message": "Se ha superado el límite de peticiones",
+  "errors": {}
+}
+```
+
+La respuesta utiliza:
+
+```http
+Cache-Control: no-store
+```
+
+para evitar que un error temporal se almacene en cachés.
+
+### Limitaciones de la implementación actual
+
+El contador se almacena en memoria dentro de cada instancia de la aplicación.
+
+Por tanto:
+
+- El límite se reinicia al reiniciar la aplicación.
+- Varias instancias tienen contadores independientes.
+- No existe sincronización entre nodos.
+- No protege por sí solo frente a ataques distribuidos.
+- No sustituye a un firewall, WAF, API Gateway o protección DDoS.
+- La configuración debe coordinarse con balanceadores y proxies.
+
+Para producción se recomienda utilizar:
+
+- Rate limiting en el API Gateway.
+- Un almacén compartido como Redis.
+- Límites por usuario, organización y dirección IP.
+- Límites diferenciados por endpoint.
+- Métricas de solicitudes rechazadas.
+- Alertas ante incrementos anómalos.
+- Protección adicional para endpoints costosos.
 
 ## Aislamiento entre organizaciones
 
@@ -271,16 +395,6 @@ Una transición inválida produce:
 409 Conflict
 ```
 
-Ejemplo:
-
-```json
-{
-  "code": "INVALID_STATUS_TRANSITION",
-  "message": "No se puede cambiar el estado del hallazgo...",
-  "errors": {}
-}
-```
-
 Las transiciones rechazadas no modifican el hallazgo ni generan eventos de auditoría.
 
 ## Validación de entradas
@@ -356,24 +470,6 @@ No se permite que el cliente proporcione directamente:
 - Nombres de columnas SQL.
 - Expresiones SQL.
 - Fragmentos de una cláusula `ORDER BY`.
-
-Por ejemplo, el siguiente valor debe rechazarse:
-
-```text
-sortBy=password
-```
-
-La respuesta esperada es:
-
-```json
-{
-  "code": "VALIDATION_ERROR",
-  "message": "La petición contiene datos no válidos",
-  "errors": {
-    "parameter": "El campo de ordenación no está permitido: password"
-  }
-}
-```
 
 Esta validación evita utilizar el parámetro de ordenación como vector para manipular consultas o acceder a propiedades internas de persistencia.
 
@@ -464,6 +560,7 @@ Errores principales:
 | `403` | `FORBIDDEN` | Usuario sin permisos suficientes |
 | `404` | `FINDING_NOT_FOUND` | Hallazgo no disponible para la organización |
 | `409` | `INVALID_STATUS_TRANSITION` | Transición de estado no permitida |
+| `429` | `RATE_LIMIT_EXCEEDED` | Límite de peticiones superado |
 | `500` | Error interno | Error no controlado |
 
 ## Base de datos y migraciones
@@ -533,6 +630,7 @@ Para entornos reales se recomienda:
 - Evitar registrar tokens o datos sensibles.
 - Ejecutar los contenedores con el menor privilegio posible.
 - Escanear las imágenes utilizadas.
+- Aplicar el rate limiting en un componente compartido o perimetral.
 
 ## Dependencias y automatización
 
@@ -586,6 +684,12 @@ El proyecto incluye pruebas para comprobar:
 - Respuestas JSON `401`.
 - Respuestas JSON `403`.
 - Respuestas JSON `404`.
+- Limitación por dirección IP.
+- Limitación por usuario autenticado.
+- Respuesta `429`.
+- Cabecera `Retry-After`.
+- Exclusión del endpoint de health check.
+- Integración del filtro con Spring Security.
 
 Las pruebas de integración utilizan PostgreSQL para verificar el comportamiento real de las consultas y restricciones de persistencia.
 
@@ -593,7 +697,7 @@ Las pruebas de integración utilizan PostgreSQL para verificar el comportamiento
 
 Antes de utilizar la aplicación en producción deberían revisarse, como mínimo:
 
-- Rate limiting.
+- Rate limiting distribuido.
 - Configuración CORS.
 - Gestión centralizada de secretos.
 - TLS y terminación HTTPS.
@@ -608,7 +712,7 @@ Antes de utilizar la aplicación en producción deberían revisarse, como mínim
 - Pruebas de penetración.
 - Revisión de configuración de Keycloak.
 - Política de bloqueo ante abuso.
-- Protección frente a ataques automatizados.
+- Protección DDoS.
 - Límites de tamaño de petición.
 - Gestión de logs y datos personales.
 
@@ -621,14 +725,15 @@ Ante una posible vulnerabilidad:
 3. Revocar o rotar las credenciales afectadas.
 4. Invalidar tokens comprometidos cuando sea posible.
 5. Revisar logs y eventos de auditoría.
-6. Identificar las organizaciones afectadas.
-7. Determinar el periodo de exposición.
-8. Aplicar una corrección en `develop`.
-9. Ejecutar la suite completa de pruebas.
-10. Revisar CodeQL y las dependencias.
-11. Integrar mediante pull request hacia `main`.
-12. Documentar el impacto y la solución.
-13. Comunicar las medidas correctivas a los afectados cuando corresponda.
+6. Revisar solicitudes rechazadas por rate limiting.
+7. Identificar las organizaciones afectadas.
+8. Determinar el periodo de exposición.
+9. Aplicar una corrección en `develop`.
+10. Ejecutar la suite completa de pruebas.
+11. Revisar CodeQL y las dependencias.
+12. Integrar mediante pull request hacia `main`.
+13. Documentar el impacto y la solución.
+14. Comunicar las medidas correctivas a los afectados cuando corresponda.
 
 ## Revisión de cambios
 
@@ -642,6 +747,7 @@ Todo cambio que afecte a seguridad debe incluir:
 - Revisión de entradas y salidas.
 - Comprobación de que no se han añadido secretos.
 - Revisión de las migraciones de base de datos.
+- Revisión de límites y configuración de rate limiting.
 - Actualización de la documentación cuando corresponda.
 - Ejecución de la suite completa de pruebas.
 
