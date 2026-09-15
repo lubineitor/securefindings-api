@@ -1,5 +1,8 @@
 package com.securefindings.security;
 
+import java.time.Clock;
+
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -9,10 +12,12 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.server.resource.authentication.DelegatingJwtGrantedAuthoritiesConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration(proxyBeanMethods = false)
 @EnableWebSecurity
+@EnableConfigurationProperties(RateLimitProperties.class)
 public class SecurityConfig {
 
         @Bean
@@ -21,10 +26,26 @@ public class SecurityConfig {
         }
 
         @Bean
+        Clock rateLimitClock() {
+                return Clock.systemUTC();
+        }
+
+        @Bean
+        RateLimitFilter rateLimitFilter(
+                        RateLimitProperties properties,
+                        Clock rateLimitClock) {
+
+                return new RateLimitFilter(
+                                properties,
+                                rateLimitClock);
+        }
+
+        @Bean
         SecurityFilterChain securityFilterChain(
                         HttpSecurity http,
                         JwtAuthenticationConverter jwtAuthenticationConverter,
-                        SecurityErrorHandler securityErrorHandler)
+                        SecurityErrorHandler securityErrorHandler,
+                        RateLimitFilter rateLimitFilter)
                         throws Exception {
 
                 http
@@ -86,6 +107,10 @@ public class SecurityConfig {
                                                 .jwt(jwt -> jwt
                                                                 .jwtAuthenticationConverter(
                                                                                 jwtAuthenticationConverter)))
+
+                                .addFilterAfter(
+                                                rateLimitFilter,
+                                                BearerTokenAuthenticationFilter.class)
 
                                 .formLogin(form -> form.disable())
                                 .httpBasic(basic -> basic.disable());
