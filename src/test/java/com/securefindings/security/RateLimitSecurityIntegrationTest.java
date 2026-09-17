@@ -23,50 +23,64 @@ import com.securefindings.health.HealthController;
 @WebMvcTest(controllers = HealthController.class)
 @Import(SecurityConfig.class)
 @TestPropertySource(properties = {
-        "securefindings.rate-limit.max-requests=1",
-        "securefindings.rate-limit.window=60s"
+                "securefindings.rate-limit.max-requests=1",
+                "securefindings.rate-limit.window=60s"
 })
 class RateLimitSecurityIntegrationTest {
 
-    @Autowired
-    private WebApplicationContext context;
+        @Autowired
+        private WebApplicationContext context;
 
-    private MockMvc mockMvc;
+        private MockMvc mockMvc;
 
-    @BeforeEach
-    void configurarMockMvc() {
-        mockMvc = MockMvcBuilders
-                .webAppContextSetup(context)
-                .apply(springSecurity())
-                .build();
-    }
+        @BeforeEach
+        void configurarMockMvc() {
+                mockMvc = MockMvcBuilders
+                                .webAppContextSetup(context)
+                                .apply(springSecurity())
+                                .build();
+        }
 
-    @Test
-    void deberiaAplicarElLimiteEnLaCadenaDeSeguridad()
-            throws Exception {
+        @Test
+        void deberiaAplicarElLimiteEnLaCadenaDeSeguridad()
+                        throws Exception {
 
-        mockMvc.perform(get("/api/v1/findings"))
-                .andExpect(status().isUnauthorized());
+                String requestId = "rate-limit-test-123";
 
-        mockMvc.perform(get("/api/v1/findings"))
-                .andExpect(status().isTooManyRequests())
-                .andExpect(content().contentTypeCompatibleWith(
-                        MediaType.APPLICATION_JSON))
-                .andExpect(header().string(
-                        "Retry-After",
-                        "60"))
-                .andExpect(jsonPath("$.code")
-                        .value("RATE_LIMIT_EXCEEDED"));
-    }
+                mockMvc.perform(get("/api/v1/findings")
+                                .header(
+                                                RequestCorrelationFilter.HEADER_NAME,
+                                                requestId))
+                                .andExpect(status().isUnauthorized())
+                                .andExpect(header().string(
+                                                RequestCorrelationFilter.HEADER_NAME,
+                                                requestId));
 
-    @Test
-    void noDebeAplicarElLimiteAlHealthCheck()
-            throws Exception {
+                mockMvc.perform(get("/api/v1/findings")
+                                .header(
+                                                RequestCorrelationFilter.HEADER_NAME,
+                                                requestId))
+                                .andExpect(status().isTooManyRequests())
+                                .andExpect(content().contentTypeCompatibleWith(
+                                                MediaType.APPLICATION_JSON))
+                                .andExpect(header().string(
+                                                "Retry-After",
+                                                "60"))
+                                .andExpect(header().string(
+                                                RequestCorrelationFilter.HEADER_NAME,
+                                                requestId))
+                                .andExpect(jsonPath("$.code")
+                                                .value("RATE_LIMIT_EXCEEDED"));
+        }
 
-        mockMvc.perform(get("/api/v1/health"))
-                .andExpect(status().isOk());
+        @Test
+        void noDebeAplicarElLimiteAlHealthCheck()
+                        throws Exception {
 
-        mockMvc.perform(get("/api/v1/health"))
-                .andExpect(status().isOk());
-    }
+                mockMvc.perform(get("/api/v1/health"))
+                                .andExpect(status().isOk());
+
+                mockMvc.perform(get("/api/v1/health"))
+                                .andExpect(status().isOk());
+        }
 }
