@@ -26,6 +26,11 @@ public class SecurityConfig {
         }
 
         @Bean
+        RequestCorrelationFilter requestCorrelationFilter() {
+                return new RequestCorrelationFilter();
+        }
+
+        @Bean
         Clock rateLimitClock() {
                 return Clock.systemUTC();
         }
@@ -45,6 +50,7 @@ public class SecurityConfig {
                         HttpSecurity http,
                         JwtAuthenticationConverter jwtAuthenticationConverter,
                         SecurityErrorHandler securityErrorHandler,
+                        RequestCorrelationFilter requestCorrelationFilter,
                         RateLimitFilter rateLimitFilter)
                         throws Exception {
 
@@ -107,6 +113,10 @@ public class SecurityConfig {
                                                 .jwt(jwt -> jwt
                                                                 .jwtAuthenticationConverter(
                                                                                 jwtAuthenticationConverter)))
+
+                                .addFilterBefore(
+                                                requestCorrelationFilter,
+                                                BearerTokenAuthenticationFilter.class)
 
                                 .addFilterAfter(
                                                 rateLimitFilter,

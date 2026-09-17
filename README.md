@@ -19,6 +19,7 @@ El proyecto se encuentra en una fase activa de construcción. Su objetivo es ser
 - Control de acceso.
 - Aislamiento de datos por organización.
 - Protección frente al abuso de la API.
+- Trazabilidad de peticiones.
 
 ## Objetivo
 
@@ -41,6 +42,7 @@ Actualmente se trabajan los siguientes conceptos:
 - Autenticación mediante JWT.
 - Autorización basada en roles.
 - Limitación de peticiones.
+- Trazabilidad de peticiones mediante `X-Request-ID`.
 - Persistencia con PostgreSQL.
 - Migraciones versionadas.
 - Pruebas unitarias, web e integración.
@@ -262,6 +264,44 @@ Ejemplo de respuesta:
 
 El límite actual se mantiene en memoria dentro de cada instancia de la aplicación. Para un despliegue con varias instancias se deberá utilizar un almacén compartido, un API Gateway o una solución distribuida equivalente.
 
+### Trazabilidad de peticiones
+
+La API asigna a cada petición un identificador de correlación mediante la cabecera:
+
+```http
+X-Request-ID
+```
+
+Comportamiento:
+
+- Si el cliente envía un identificador válido, se conserva.
+- Si no se envía, la aplicación genera un UUID.
+- Si el valor recibido no cumple el formato permitido, se reemplaza.
+- El identificador se devuelve en la respuesta HTTP.
+- También está disponible en el contexto MDC de los logs.
+
+Los identificadores recibidos deben contener entre 1 y 64 caracteres alfanuméricos, puntos, guiones o guiones bajos.
+
+Ejemplo:
+
+```http
+X-Request-ID: finding-request-123
+```
+
+La aplicación utiliza el siguiente patrón de logs:
+
+```properties
+logging.pattern.console=%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] [requestId=%X{requestId}] %logger{36} - %msg%n
+```
+
+Ejemplo:
+
+```text
+2026-09-17 10:15:23.421 INFO [http-nio-8080-exec-1] [requestId=finding-request-123] ...
+```
+
+El identificador sirve únicamente para correlacionar peticiones y logs. No sustituye la autenticación, la autorización ni la identidad del usuario.
+
 ## API REST
 
 ### Health check
@@ -380,6 +420,14 @@ Las respuestas de error utilizan un formato uniforme:
 }
 ```
 
+Además, las respuestas incluyen la cabecera:
+
+```http
+X-Request-ID: <identificador>
+```
+
+Esto permite relacionar una respuesta de error con los logs de la aplicación.
+
 Errores principales:
 
 | HTTP | Código | Situación |
@@ -394,6 +442,10 @@ Errores principales:
 
 Ejemplo de transición inválida:
 
+```http
+X-Request-ID: status-transition-123
+```
+
 ```json
 {
   "code": "INVALID_STATUS_TRANSITION",
@@ -407,6 +459,7 @@ Ejemplo de límite superado:
 ```http
 HTTP/1.1 429 Too Many Requests
 Retry-After: 34
+X-Request-ID: rate-limit-123
 ```
 
 ```json
@@ -567,6 +620,16 @@ SECUREFINDINGS_RATE_LIMIT_WINDOW=60s
 
 En producción, los valores deben gestionarse mediante la configuración segura del entorno.
 
+### Configuración de logs
+
+El identificador de correlación se muestra en los logs mediante MDC:
+
+```properties
+logging.pattern.console=%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] [requestId=%X{requestId}] %logger{36} - %msg%n
+```
+
+No deben registrarse tokens JWT, contraseñas, claves privadas ni datos sensibles.
+
 ## Ejecución de la aplicación
 
 Desde PowerShell:
@@ -623,6 +686,9 @@ Las pruebas cubren:
 - Limitación por usuario autenticado.
 - Cabecera `Retry-After`.
 - Exclusión del endpoint de health check.
+- Generación y validación de `X-Request-ID`.
+- Propagación del identificador en respuestas de error.
+- Limpieza del contexto MDC.
 - Integración del filtro en Spring Security.
 
 ## Integración continua
