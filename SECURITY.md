@@ -30,6 +30,7 @@ Esta política cubre:
 - Comentarios.
 - Búsqueda y ordenación.
 - Limitación de peticiones.
+- Trazabilidad de peticiones y logs.
 - Configuración de Docker y PostgreSQL.
 - Migraciones de base de datos.
 - Workflows de GitHub Actions.
@@ -88,6 +89,7 @@ Los principales riesgos considerados son:
 | Ordenación | Manipulación de propiedades internas | Lista blanca de campos permitidos |
 | Datos recibidos | Valores inválidos o excesivos | Bean Validation |
 | Historial | Falta de trazabilidad | Eventos de auditoría |
+| Peticiones | Dificultad para relacionar errores y logs | Cabecera `X-Request-ID` y MDC |
 | Comentarios | Contenido no validado | Validación de longitud y obligatoriedad |
 | Credenciales | Exposición en el repositorio | `.env` excluido y `.env.example` sin secretos |
 | Dependencias | Vulnerabilidades conocidas | Revisión automatizada y CodeQL |
@@ -266,6 +268,12 @@ La respuesta incluye:
 Retry-After: <segundos>
 ```
 
+También incluye un identificador de correlación:
+
+```http
+X-Request-ID: <identificador>
+```
+
 Ejemplo:
 
 ```json
@@ -306,6 +314,81 @@ Para producción se recomienda utilizar:
 - Métricas de solicitudes rechazadas.
 - Alertas ante incrementos anómalos.
 - Protección adicional para endpoints costosos.
+
+## Trazabilidad de peticiones
+
+Cada petición recibe un identificador de correlación mediante:
+
+```http
+X-Request-ID
+```
+
+El filtro de correlación se ejecuta antes de la autenticación y garantiza que el identificador esté disponible también para:
+
+- Respuestas `401`.
+- Respuestas `403`.
+- Respuestas `429`.
+- Respuestas de validación.
+- Errores de la aplicación.
+- Logs generados durante el procesamiento.
+
+### Validación del identificador
+
+Si el cliente envía un valor válido, se conserva.
+
+Los valores válidos deben contener entre 1 y 64 caracteres de los siguientes tipos:
+
+```text
+A-Z
+a-z
+0-9
+.
+_
+-
+```
+
+Si el valor:
+
+- No existe.
+- Está vacío.
+- Contiene espacios.
+- Contiene saltos de línea.
+- Contiene caracteres no permitidos.
+- Supera la longitud máxima.
+
+La aplicación genera un UUID nuevo.
+
+Esto evita que una cabecera controlada por el cliente introduzca valores peligrosos en las respuestas o en los logs.
+
+### Uso en logs
+
+El identificador se almacena temporalmente en MDC con la clave:
+
+```text
+requestId
+```
+
+La configuración de consola es:
+
+```properties
+logging.pattern.console=%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] [requestId=%X{requestId}] %logger{36} - %msg%n
+```
+
+El contexto MDC se limpia al finalizar la petición para evitar que un identificador se reutilice accidentalmente en otra solicitud atendida por el mismo hilo.
+
+### Consideraciones de seguridad
+
+El `X-Request-ID`:
+
+- No es un mecanismo de autenticación.
+- No representa la identidad del usuario.
+- No sustituye al token JWT.
+- No debe utilizarse para autorizar operaciones.
+- No debe contener información personal.
+- No debe contener tokens ni secretos.
+- No debe almacenarse como sustituto de la auditoría funcional.
+
+Su objetivo es facilitar la correlación técnica entre una petición, su respuesta y los logs asociados.
 
 ## Aislamiento entre organizaciones
 
@@ -428,6 +511,8 @@ Los valores inválidos producen una respuesta `400` con formato uniforme:
 }
 ```
 
+Las respuestas de validación incluyen la cabecera `X-Request-ID` para facilitar su localización en los logs.
+
 ## Búsqueda textual
 
 La búsqueda textual se realiza sobre el título y la descripción del hallazgo.
@@ -518,6 +603,8 @@ La eliminación de un hallazgo conserva su evento de auditoría para mantener la
 
 Las transiciones de estado inválidas no registran eventos porque la operación no llega a modificar el recurso.
 
+El identificador `X-Request-ID` facilita la trazabilidad técnica de la petición que generó un evento, pero no sustituye al actor ni se persiste actualmente como campo independiente de la auditoría.
+
 ## Comentarios
 
 Los comentarios pertenecen a una organización y a un hallazgo concreto.
@@ -541,7 +628,13 @@ Los comentarios de una organización no deben ser visibles para usuarios de otra
 
 Las excepciones controladas se transforman en respuestas JSON.
 
-La API evita devolver:
+Las respuestas incluyen:
+
+```http
+X-Request-ID: <identificador>
+```
+
+La aplicación evita devolver:
 
 - Stack traces.
 - Rutas internas.
@@ -688,6 +781,10 @@ El proyecto incluye pruebas para comprobar:
 - Limitación por usuario autenticado.
 - Respuesta `429`.
 - Cabecera `Retry-After`.
+- Cabecera `X-Request-ID`.
+- Generación de identificadores seguros.
+- Rechazo de identificadores no válidos.
+- Limpieza del contexto MDC.
 - Exclusión del endpoint de health check.
 - Integración del filtro con Spring Security.
 
@@ -715,6 +812,9 @@ Antes de utilizar la aplicación en producción deberían revisarse, como mínim
 - Protección DDoS.
 - Límites de tamaño de petición.
 - Gestión de logs y datos personales.
+- Almacenamiento centralizado de logs.
+- Correlación entre logs de diferentes instancias.
+- Propagación del identificador a sistemas externos.
 
 ## Respuesta ante incidentes
 
@@ -725,15 +825,16 @@ Ante una posible vulnerabilidad:
 3. Revocar o rotar las credenciales afectadas.
 4. Invalidar tokens comprometidos cuando sea posible.
 5. Revisar logs y eventos de auditoría.
-6. Revisar solicitudes rechazadas por rate limiting.
-7. Identificar las organizaciones afectadas.
-8. Determinar el periodo de exposición.
-9. Aplicar una corrección en `develop`.
-10. Ejecutar la suite completa de pruebas.
-11. Revisar CodeQL y las dependencias.
-12. Integrar mediante pull request hacia `main`.
-13. Documentar el impacto y la solución.
-14. Comunicar las medidas correctivas a los afectados cuando corresponda.
+6. Utilizar `X-Request-ID` para localizar las peticiones relacionadas.
+7. Revisar solicitudes rechazadas por rate limiting.
+8. Identificar las organizaciones afectadas.
+9. Determinar el periodo de exposición.
+10. Aplicar una corrección en `develop`.
+11. Ejecutar la suite completa de pruebas.
+12. Revisar CodeQL y las dependencias.
+13. Integrar mediante pull request hacia `main`.
+14. Documentar el impacto y la solución.
+15. Comunicar las medidas correctivas a los afectados cuando corresponda.
 
 ## Revisión de cambios
 
@@ -748,6 +849,8 @@ Todo cambio que afecte a seguridad debe incluir:
 - Comprobación de que no se han añadido secretos.
 - Revisión de las migraciones de base de datos.
 - Revisión de límites y configuración de rate limiting.
+- Revisión del tratamiento de `X-Request-ID`.
+- Comprobación de que no se registran datos sensibles.
 - Actualización de la documentación cuando corresponda.
 - Ejecución de la suite completa de pruebas.
 
