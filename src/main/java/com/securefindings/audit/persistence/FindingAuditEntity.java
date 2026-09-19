@@ -38,6 +38,9 @@ public class FindingAuditEntity {
     @Column(name = "occurred_at", nullable = false)
     private Instant occurredAt;
 
+    @Column(name = "request_id", length = 64, updatable = false)
+    private String requestId;
+
     protected FindingAuditEntity() {
     }
 
@@ -51,7 +54,26 @@ public class FindingAuditEntity {
                 event.organizationId(),
                 event.action(),
                 event.actor(),
-                event.occurredAt());
+                event.occurredAt(),
+                event.requestId());
+    }
+
+    public FindingAuditEntity(
+            UUID id,
+            UUID findingId,
+            UUID organizationId,
+            AuditAction action,
+            String actor,
+            Instant occurredAt,
+            String requestId) {
+
+        this.id = Objects.requireNonNull(id);
+        this.findingId = Objects.requireNonNull(findingId);
+        this.organizationId = Objects.requireNonNull(organizationId);
+        this.action = Objects.requireNonNull(action);
+        this.actor = Objects.requireNonNull(actor);
+        this.occurredAt = Objects.requireNonNull(occurredAt);
+        this.requestId = requestId;
     }
 
     public FindingAuditEntity(
@@ -62,12 +84,14 @@ public class FindingAuditEntity {
             String actor,
             Instant occurredAt) {
 
-        this.id = Objects.requireNonNull(id);
-        this.findingId = Objects.requireNonNull(findingId);
-        this.organizationId = Objects.requireNonNull(organizationId);
-        this.action = Objects.requireNonNull(action);
-        this.actor = Objects.requireNonNull(actor);
-        this.occurredAt = Objects.requireNonNull(occurredAt);
+        this(
+                id,
+                findingId,
+                organizationId,
+                action,
+                actor,
+                occurredAt,
+                null);
     }
 
     public UUID getId() {
@@ -93,5 +117,9 @@ public class FindingAuditEntity {
 
     public Instant getOccurredAt() {
         return occurredAt;
+    }
+
+    public String getRequestId() {
+        return requestId;
     }
 }

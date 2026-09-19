@@ -17,6 +17,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.MDC;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -26,6 +27,7 @@ import com.securefindings.audit.domain.AuditAction;
 import com.securefindings.audit.persistence.FindingAuditEntity;
 import com.securefindings.audit.persistence.FindingAuditRepository;
 import com.securefindings.security.OrganizationContext;
+import com.securefindings.security.RequestCorrelationFilter;
 
 @ExtendWith(MockitoExtension.class)
 class AuditServiceTest {
@@ -147,5 +149,35 @@ class AuditServiceTest {
                                                 eq(findingId),
                                                 eq(organizationId),
                                                 any(Pageable.class));
+        }
+
+        @Test
+        void deberiaPersistirElRequestIdActual() {
+                UUID findingId = UUID.randomUUID();
+
+                when(organizationContext.currentOrganizationId())
+                                .thenReturn(ORGANIZATION_ID);
+
+                MDC.put(
+                                RequestCorrelationFilter.MDC_KEY,
+                                "audit-request-123");
+
+                try {
+                        auditService.register(
+                                        findingId,
+                                        AuditAction.CREATED,
+                                        "analista");
+                } finally {
+                        MDC.remove(RequestCorrelationFilter.MDC_KEY);
+                }
+
+                ArgumentCaptor<FindingAuditEntity> captor = ArgumentCaptor.forClass(
+                                FindingAuditEntity.class);
+
+                verify(auditRepository).save(captor.capture());
+
+                assertEquals(
+                                "audit-request-123",
+                                captor.getValue().getRequestId());
         }
 }

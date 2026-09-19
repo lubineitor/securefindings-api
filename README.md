@@ -160,12 +160,15 @@ Cada evento registra:
 - Usuario responsable.
 - Fecha y hora de la operación.
 - Organización asociada.
+- Identificador de la petición HTTP (`requestId`), cuando existe.
 
 El usuario se obtiene del claim `preferred_username` del token JWT. En operaciones técnicas o pruebas sin autenticación se utiliza el actor `system`.
 
 La auditoría puede consultarse de forma paginada y se conserva incluso cuando el hallazgo es eliminado.
 
 Las transiciones de estado no permitidas no generan eventos de auditoría.
+
+El campo `requestId` se obtiene de la cabecera `X-Request-ID` y del contexto MDC. Se persiste en `finding_audit.request_id` y se devuelve al consultar el historial del hallazgo. En eventos técnicos o registros históricos puede ser `null`.
 
 ### Comentarios
 
@@ -279,6 +282,8 @@ Comportamiento:
 - Si el valor recibido no cumple el formato permitido, se reemplaza.
 - El identificador se devuelve en la respuesta HTTP.
 - También está disponible en el contexto MDC de los logs.
+
+Cuando una operación genera un evento de auditoría, el mismo identificador se almacena para relacionar la petición HTTP, los logs y el evento persistido.
 
 Los identificadores recibidos deben contener entre 1 y 64 caracteres alfanuméricos, puntos, guiones o guiones bajos.
 
@@ -690,6 +695,7 @@ Las pruebas cubren:
 - Propagación del identificador en respuestas de error.
 - Limpieza del contexto MDC.
 - Integración del filtro en Spring Security.
+- Persistencia y recuperación del `requestId` en auditoría.
 
 ## Integración continua
 
