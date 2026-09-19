@@ -13,65 +13,69 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 public final class RequestCorrelationFilter
-        extends OncePerRequestFilter {
+                extends OncePerRequestFilter {
 
-    public static final String HEADER_NAME = "X-Request-ID";
+        public static final String HEADER_NAME = "X-Request-ID";
 
-    public static final String REQUEST_ID_ATTRIBUTE = RequestCorrelationFilter.class.getName() + ".requestId";
+        public static final String REQUEST_ID_ATTRIBUTE = RequestCorrelationFilter.class.getName() + ".requestId";
 
-    private static final String MDC_KEY = "requestId";
+        public static final String MDC_KEY = "requestId";
 
-    private static final Pattern VALID_REQUEST_ID = Pattern.compile(
-            "[A-Za-z0-9][A-Za-z0-9._-]{0,63}");
+        private static final Pattern VALID_REQUEST_ID = Pattern.compile(
+                        "[A-Za-z0-9][A-Za-z0-9._-]{0,63}");
 
-    @Override
-    protected void doFilterInternal(
-            HttpServletRequest request,
-            HttpServletResponse response,
-            FilterChain filterChain)
-            throws ServletException, IOException {
+        @Override
+        protected void doFilterInternal(
+                        HttpServletRequest request,
+                        HttpServletResponse response,
+                        FilterChain filterChain)
+                        throws ServletException, IOException {
 
-        String requestId = resolveRequestId(request);
+                String requestId = resolveRequestId(request);
 
-        request.setAttribute(
-                REQUEST_ID_ATTRIBUTE,
-                requestId);
+                request.setAttribute(
+                                REQUEST_ID_ATTRIBUTE,
+                                requestId);
 
-        response.setHeader(
-                HEADER_NAME,
-                requestId);
+                response.setHeader(
+                                HEADER_NAME,
+                                requestId);
 
-        try (MDC.MDCCloseable ignored = MDC.putCloseable(
-                MDC_KEY,
-                requestId)) {
+                try (MDC.MDCCloseable ignored = MDC.putCloseable(
+                                MDC_KEY,
+                                requestId)) {
 
-            filterChain.doFilter(request, response);
-        } finally {
-            request.removeAttribute(REQUEST_ID_ATTRIBUTE);
-        }
-    }
-
-    private String resolveRequestId(
-            HttpServletRequest request) {
-
-        String requestedId = request.getHeader(HEADER_NAME);
-
-        if (requestedId != null
-                && VALID_REQUEST_ID.matcher(requestedId).matches()) {
-            return requestedId;
+                        filterChain.doFilter(request, response);
+                } finally {
+                        request.removeAttribute(REQUEST_ID_ATTRIBUTE);
+                }
         }
 
-        return UUID.randomUUID().toString();
-    }
+        private String resolveRequestId(
+                        HttpServletRequest request) {
 
-    public static String currentRequestId(
-            HttpServletRequest request) {
+                String requestedId = request.getHeader(HEADER_NAME);
 
-        Object requestId = request.getAttribute(
-                REQUEST_ID_ATTRIBUTE);
+                if (requestedId != null
+                                && VALID_REQUEST_ID.matcher(requestedId).matches()) {
+                        return requestedId;
+                }
 
-        return requestId instanceof String value
-                ? value
-                : null;
-    }
+                return UUID.randomUUID().toString();
+        }
+
+        public static String currentRequestId(
+                        HttpServletRequest request) {
+
+                Object requestId = request.getAttribute(
+                                REQUEST_ID_ATTRIBUTE);
+
+                return requestId instanceof String value
+                                ? value
+                                : null;
+        }
+
+        public static String currentRequestId() {
+                return MDC.get(MDC_KEY);
+        }
 }
