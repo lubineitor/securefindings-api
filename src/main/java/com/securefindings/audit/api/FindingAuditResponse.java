@@ -3,6 +3,7 @@ package com.securefindings.audit.api;
 import java.time.Instant;
 import java.util.UUID;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.securefindings.audit.domain.AuditAction;
 import com.securefindings.audit.persistence.FindingAuditEntity;
@@ -16,7 +17,9 @@ public record FindingAuditResponse(
 
         @JsonProperty("actor") String actor,
 
-        @JsonProperty("occurredAt") Instant occurredAt) {
+        @JsonProperty("occurredAt") Instant occurredAt,
+
+        @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("requestId") String requestId) {
 
     public static FindingAuditResponse from(
             FindingAuditEntity entity) {
@@ -26,6 +29,7 @@ public record FindingAuditResponse(
                 entity.getFindingId(),
                 entity.getAction(),
                 entity.getActor(),
-                entity.getOccurredAt());
+                entity.getOccurredAt(),
+                entity.getRequestId());
     }
 }

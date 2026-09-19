@@ -70,7 +70,8 @@ class FindingAuditControllerTest {
                                 ORGANIZATION_ID,
                                 AuditAction.CREATED,
                                 "analista",
-                                Instant.parse("2026-09-06T08:00:00Z"));
+                                Instant.parse("2026-09-06T08:00:00Z"),
+                                "audit-request-123");
 
                 FindingAuditEntity updatedEvent = new FindingAuditEntity(
                                 UUID.randomUUID(),
@@ -103,6 +104,8 @@ class FindingAuditControllerTest {
                                                 .value("CREATED"))
                                 .andExpect(jsonPath("$.content[0].actor")
                                                 .value("analista"))
+                                .andExpect(jsonPath("$.content[0].requestId")
+                                                .value("audit-request-123"))
                                 .andExpect(jsonPath("$.content[1].action")
                                                 .value("UPDATED"))
                                 .andExpect(jsonPath("$.page").value(0))

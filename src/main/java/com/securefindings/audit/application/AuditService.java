@@ -17,6 +17,7 @@ import com.securefindings.audit.domain.AuditEvent;
 import com.securefindings.audit.persistence.FindingAuditEntity;
 import com.securefindings.audit.persistence.FindingAuditRepository;
 import com.securefindings.security.OrganizationContext;
+import com.securefindings.security.RequestCorrelationFilter;
 
 @Service
 public class AuditService {
@@ -38,6 +39,20 @@ public class AuditService {
                         AuditAction action,
                         String actor) {
 
+                register(
+                                findingId,
+                                action,
+                                actor,
+                                RequestCorrelationFilter.currentRequestId());
+        }
+
+        @Transactional
+        public void register(
+                        UUID findingId,
+                        AuditAction action,
+                        String actor,
+                        String requestId) {
+
                 UUID organizationId = organizationContext.currentOrganizationId();
 
                 AuditEvent event = new AuditEvent(
@@ -45,7 +60,8 @@ public class AuditService {
                                 organizationId,
                                 action,
                                 actor,
-                                Instant.now());
+                                Instant.now(),
+                                requestId);
 
                 FindingAuditEntity entity = new FindingAuditEntity(
                                 UUID.randomUUID(),

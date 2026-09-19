@@ -9,6 +9,7 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.domain.Page;
@@ -28,6 +29,7 @@ import com.securefindings.finding.application.FindingService;
 import com.securefindings.finding.domain.Finding;
 import com.securefindings.finding.domain.FindingSeverity;
 import com.securefindings.finding.domain.FindingStatus;
+import com.securefindings.security.RequestCorrelationFilter;
 
 @Testcontainers
 @SpringBootTest
@@ -304,5 +306,33 @@ class FindingPersistenceIntegrationTest {
                 assertEquals(
                                 "Zeta",
                                 result.getContent().get(1).getTitle());
+        }
+
+        @Test
+        void deberiaPersistirElRequestIdEnLaAuditoria() {
+                Finding createdFinding;
+
+                MDC.put(
+                                RequestCorrelationFilter.MDC_KEY,
+                                "integration-request-123");
+
+                try {
+                        createdFinding = findingService.create(
+                                        "Hallazgo trazable",
+                                        "Auditoría con identificador de petición",
+                                        FindingSeverity.HIGH);
+                } finally {
+                        MDC.remove(RequestCorrelationFilter.MDC_KEY);
+                }
+
+                List<FindingAuditEntity> auditEvents = findingAuditRepository
+                                .findByFindingIdAndOrganizationIdOrderByOccurredAtAsc(
+                                                createdFinding.id(),
+                                                ORGANIZATION_ID);
+
+                assertEquals(1, auditEvents.size());
+                assertEquals(
+                                "integration-request-123",
+                                auditEvents.get(0).getRequestId());
         }
 }
