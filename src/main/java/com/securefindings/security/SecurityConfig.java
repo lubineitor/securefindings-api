@@ -55,7 +55,8 @@ public class SecurityConfig {
                         throws Exception {
 
                 http
-                                .csrf(csrf -> csrf.disable())
+                                .csrf(csrf -> csrf
+                                                .ignoringRequestMatchers("/api/v1/**"))
                                 .sessionManagement(session -> session
                                                 .sessionCreationPolicy(
                                                                 SessionCreationPolicy.STATELESS))

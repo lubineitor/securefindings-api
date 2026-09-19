@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.anonymous;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 import java.util.UUID;
 
@@ -27,77 +28,86 @@ import com.securefindings.health.HealthController;
 @Import(SecurityConfig.class)
 class SecurityConfigTest {
 
-    @Autowired
-    private WebApplicationContext context;
+        @Autowired
+        private WebApplicationContext context;
 
-    private MockMvc mockMvc;
+        private MockMvc mockMvc;
 
-    @BeforeEach
-    void configurarMockMvc() {
-        mockMvc = MockMvcBuilders
-                .webAppContextSetup(context)
-                .apply(springSecurity())
-                .build();
-    }
+        @BeforeEach
+        void configurarMockMvc() {
+                mockMvc = MockMvcBuilders
+                                .webAppContextSetup(context)
+                                .apply(springSecurity())
+                                .build();
+        }
 
-    @Test
-    void deberiaPermitirAccesoAlHealthSinAutenticacion() throws Exception {
-        mockMvc.perform(get("/api/v1/health"))
-                .andExpect(status().isOk());
-    }
+        @Test
+        void deberiaPermitirAccesoAlHealthSinAutenticacion() throws Exception {
+                mockMvc.perform(get("/api/v1/health"))
+                                .andExpect(status().isOk());
+        }
 
-    @Test
-    void deberiaRechazarAccesoAFindingsSinAutenticacion() throws Exception {
-        mockMvc.perform(get("/api/v1/findings"))
-                .andExpect(status().isUnauthorized());
-    }
+        @Test
+        void deberiaRechazarAccesoAFindingsSinAutenticacion() throws Exception {
+                mockMvc.perform(get("/api/v1/findings"))
+                                .andExpect(status().isUnauthorized());
+        }
 
-    @Test
-    @WithMockUser(username = "analista", roles = "ANALYST")
-    void analistaNoPuedeEliminarUnHallazgo() throws Exception {
-        mockMvc.perform(delete("/api/v1/findings/" + UUID.randomUUID()))
-                .andExpect(status().isForbidden());
-    }
+        @Test
+        @WithMockUser(username = "analista", roles = "ANALYST")
+        void analistaNoPuedeEliminarUnHallazgo() throws Exception {
+                mockMvc.perform(delete("/api/v1/findings/" + UUID.randomUUID()))
+                                .andExpect(status().isForbidden());
+        }
 
-    @Test
-    void deberiaDevolverUnaRespuestaJson401SinAutenticacion()
-            throws Exception {
+        @Test
+        void deberiaDevolverUnaRespuestaJson401SinAutenticacion()
+                        throws Exception {
 
-        mockMvc.perform(get("/api/v1/findings")
-                .with(anonymous()))
-                .andExpect(status().isUnauthorized())
-                .andExpect(content().contentTypeCompatibleWith(
-                        MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$.code")
-                        .value("UNAUTHORIZED"))
-                .andExpect(jsonPath("$.message")
-                        .value(
-                                "La autenticación es necesaria "
-                                        + "para acceder a este recurso"))
-                .andExpect(jsonPath("$.errors")
-                        .isEmpty());
-    }
+                mockMvc.perform(get("/api/v1/findings")
+                                .with(anonymous()))
+                                .andExpect(status().isUnauthorized())
+                                .andExpect(content().contentTypeCompatibleWith(
+                                                MediaType.APPLICATION_JSON))
+                                .andExpect(jsonPath("$.code")
+                                                .value("UNAUTHORIZED"))
+                                .andExpect(jsonPath("$.message")
+                                                .value(
+                                                                "La autenticación es necesaria "
+                                                                                + "para acceder a este recurso"))
+                                .andExpect(jsonPath("$.errors")
+                                                .isEmpty());
+        }
 
-    @Test
-    @WithMockUser(username = "analista", roles = "ANALYST")
-    void deberiaDevolverUnaRespuestaJson403SiElAnalistaElimina()
-            throws Exception {
+        @Test
+        @WithMockUser(username = "analista", roles = "ANALYST")
+        void deberiaDevolverUnaRespuestaJson403SiElAnalistaElimina()
+                        throws Exception {
 
-        UUID findingId = UUID.randomUUID();
+                UUID findingId = UUID.randomUUID();
 
-        mockMvc.perform(delete(
-                "/api/v1/findings/{id}",
-                findingId))
-                .andExpect(status().isForbidden())
-                .andExpect(content().contentTypeCompatibleWith(
-                        MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$.code")
-                        .value("FORBIDDEN"))
-                .andExpect(jsonPath("$.message")
-                        .value(
-                                "El usuario no tiene permisos "
-                                        + "para acceder a este recurso"))
-                .andExpect(jsonPath("$.errors")
-                        .isEmpty());
-    }
+                mockMvc.perform(delete(
+                                "/api/v1/findings/{id}",
+                                findingId))
+                                .andExpect(status().isForbidden())
+                                .andExpect(content().contentTypeCompatibleWith(
+                                                MediaType.APPLICATION_JSON))
+                                .andExpect(jsonPath("$.code")
+                                                .value("FORBIDDEN"))
+                                .andExpect(jsonPath("$.message")
+                                                .value(
+                                                                "El usuario no tiene permisos "
+                                                                                + "para acceder a este recurso"))
+                                .andExpect(jsonPath("$.errors")
+                                                .isEmpty());
+        }
+
+        @Test
+        @WithMockUser(username = "analista", roles = "ANALYST")
+        void deberiaMantenerCsrfFueraDeLaApi()
+                        throws Exception {
+
+                mockMvc.perform(post("/ruta-interna"))
+                                .andExpect(status().isForbidden());
+        }
 }
