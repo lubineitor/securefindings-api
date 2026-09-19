@@ -596,6 +596,7 @@ Los eventos incluyen:
 - Actor.
 - Fecha de ocurrencia.
 - Organización.
+- Identificador técnico de la petición (`requestId`), cuando existe.
 
 La auditoría permite conocer quién realizó una operación y cuándo se produjo.
 
@@ -603,7 +604,7 @@ La eliminación de un hallazgo conserva su evento de auditoría para mantener la
 
 Las transiciones de estado inválidas no registran eventos porque la operación no llega a modificar el recurso.
 
-El identificador `X-Request-ID` facilita la trazabilidad técnica de la petición que generó un evento, pero no sustituye al actor ni se persiste actualmente como campo independiente de la auditoría.
+El identificador `X-Request-ID` facilita la trazabilidad técnica de la petición que generó un evento, pero no sustituye al actor. El valor se persiste en `finding_audit.request_id` y permite relacionar el evento con los logs y la respuesta HTTP. En eventos técnicos o registros históricos puede ser `null`.
 
 ## Comentarios
 
@@ -669,6 +670,7 @@ Las migraciones actuales incluyen cambios relacionados con:
 - Asignación de hallazgos a organizaciones.
 - Creación de comentarios.
 - Auditoría de comentarios.
+- Persistencia del identificador de petición en auditoría mediante `V6__registrar_request_id_en_auditoria.sql`.
 
 Las migraciones no deben modificarse después de haberse aplicado en un entorno compartido.
 
@@ -773,6 +775,7 @@ El proyecto incluye pruebas para comprobar:
 - Ausencia de guardado tras una transición inválida.
 - Ausencia de auditoría tras una transición inválida.
 - Persistencia de auditoría.
+- Persistencia y recuperación del `requestId` en auditoría.
 - Persistencia de comentarios.
 - Respuestas JSON `401`.
 - Respuestas JSON `403`.
@@ -825,16 +828,17 @@ Ante una posible vulnerabilidad:
 3. Revocar o rotar las credenciales afectadas.
 4. Invalidar tokens comprometidos cuando sea posible.
 5. Revisar logs y eventos de auditoría.
-6. Utilizar `X-Request-ID` para localizar las peticiones relacionadas.
-7. Revisar solicitudes rechazadas por rate limiting.
-8. Identificar las organizaciones afectadas.
-9. Determinar el periodo de exposición.
-10. Aplicar una corrección en `develop`.
-11. Ejecutar la suite completa de pruebas.
-12. Revisar CodeQL y las dependencias.
-13. Integrar mediante pull request hacia `main`.
-14. Documentar el impacto y la solución.
-15. Comunicar las medidas correctivas a los afectados cuando corresponda.
+6. Comparar el `requestId` persistido en auditoría con los logs y la cabecera `X-Request-ID`.
+7. Utilizar `X-Request-ID` para localizar las peticiones relacionadas.
+8. Revisar solicitudes rechazadas por rate limiting.
+9. Identificar las organizaciones afectadas.
+10. Determinar el periodo de exposición.
+11. Aplicar una corrección en `develop`.
+12. Ejecutar la suite completa de pruebas.
+13. Revisar CodeQL y las dependencias.
+14. Integrar mediante pull request hacia `main`.
+15. Documentar el impacto y la solución.
+16. Comunicar las medidas correctivas a los afectados cuando corresponda.
 
 ## Revisión de cambios
 
@@ -848,14 +852,3 @@ Todo cambio que afecte a seguridad debe incluir:
 - Revisión de entradas y salidas.
 - Comprobación de que no se han añadido secretos.
 - Revisión de las migraciones de base de datos.
-- Revisión de límites y configuración de rate limiting.
-- Revisión del tratamiento de `X-Request-ID`.
-- Comprobación de que no se registran datos sensibles.
-- Actualización de la documentación cuando corresponda.
-- Ejecución de la suite completa de pruebas.
-
-Comando mínimo recomendado:
-
-```powershell
-.\mvnw.cmd clean test
-```
