@@ -1,6 +1,6 @@
 # SecureFindings API
 
-> API REST para registrar y gestionar hallazgos de seguridad mediante Java y Spring.
+> API REST segura para registrar y gestionar hallazgos de seguridad mediante Java y Spring.
 
 ## Estado
 
@@ -35,6 +35,7 @@ Actualmente se trabajan los siguientes conceptos:
 - Ordenación segura.
 - Paginación.
 - Auditoría de operaciones.
+- Filtros del historial de auditoría.
 - Comentarios asociados a hallazgos.
 - Aislamiento por organización.
 - Validación de datos.
@@ -168,7 +169,40 @@ La auditoría puede consultarse de forma paginada y se conserva incluso cuando e
 
 Las transiciones de estado no permitidas no generan eventos de auditoría.
 
-El campo `requestId` se obtiene de la cabecera `X-Request-ID` y del contexto MDC. Se persiste en `finding_audit.request_id` y se devuelve al consultar el historial del hallazgo. En eventos técnicos o registros históricos puede ser `null`.
+El campo `requestId` se obtiene de la cabecera `X-Request-ID` y del contexto MDC. Se persiste en `finding_audit.request_id` y se devuelve al consultar el historial del hallazgo.
+
+#### Filtros de auditoría
+
+El historial puede filtrarse por:
+
+- Acción de auditoría.
+- Identificador de petición.
+- Ambos filtros simultáneamente.
+
+Ejemplo:
+
+```text
+GET /api/v1/findings/{findingId}/audit?action=UPDATED&requestId=audit-request-123
+```
+
+Los valores permitidos para `action` son:
+
+```text
+CREATED
+UPDATED
+DELETED
+COMMENTED
+```
+
+El parámetro `requestId` debe contener entre 1 y 64 caracteres alfanuméricos, puntos, guiones o guiones bajos.
+
+Los filtros:
+
+- Se aplican siempre dentro de la organización actual.
+- Utilizan parámetros enlazados.
+- No permiten nombres de campos arbitrarios.
+- No permiten expresiones SQL.
+- Mantienen la paginación y el orden cronológico.
 
 ### Comentarios
 
@@ -282,8 +316,7 @@ Comportamiento:
 - Si el valor recibido no cumple el formato permitido, se reemplaza.
 - El identificador se devuelve en la respuesta HTTP.
 - También está disponible en el contexto MDC de los logs.
-
-Cuando una operación genera un evento de auditoría, el mismo identificador se almacena para relacionar la petición HTTP, los logs y el evento persistido.
+- Se persiste en los eventos de auditoría generados durante la petición.
 
 Los identificadores recibidos deben contener entre 1 y 64 caracteres alfanuméricos, puntos, guiones o guiones bajos.
 
@@ -302,7 +335,7 @@ logging.pattern.console=%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] [requestI
 Ejemplo:
 
 ```text
-2026-09-17 10:15:23.421 INFO [http-nio-8080-exec-1] [requestId=finding-request-123] ...
+2026-09-17 10:15:23.421 INFO [http-nio-8080-exec-1] [requestId=finding-request-123] ... 
 ```
 
 El identificador sirve únicamente para correlacionar peticiones y logs. No sustituye la autenticación, la autorización ni la identidad del usuario.
@@ -370,6 +403,8 @@ La respuesta paginada contiene:
 
 ### Auditoría
 
+Endpoint:
+
 ```text
 GET /api/v1/findings/{findingId}/audit
 ```
@@ -378,16 +413,26 @@ Permite consultar el historial paginado de un hallazgo.
 
 Parámetros:
 
-```text
-page
-size
-```
+| Parámetro | Obligatorio | Valor predeterminado | Descripción |
+|---|---:|---:|---|
+| `page` | No | `0` | Número de página. |
+| `size` | No | `20` | Elementos por página. Valores entre `1` y `100`. |
+| `action` | No | — | `CREATED`, `UPDATED`, `DELETED` o `COMMENTED`. |
+| `requestId` | No | — | Identificador de petición válido, máximo `64` caracteres. |
 
-Ejemplo:
+Ejemplo sin filtros:
 
 ```text
 GET /api/v1/findings/3bfa1ad2-eee1-4ea5-ba7c-16b47d1da147/audit?page=0&size=20
 ```
+
+Ejemplo filtrado:
+
+```text
+GET /api/v1/findings/3bfa1ad2-eee1-4ea5-ba7c-16b47d1da147/audit?action=UPDATED&requestId=audit-request-123
+```
+
+Los filtros siempre se aplican dentro de la organización asociada al token JWT.
 
 ### Comentarios
 
@@ -445,37 +490,7 @@ Errores principales:
 | `429` | `RATE_LIMIT_EXCEEDED` | Límite de peticiones superado |
 | `500` | Error interno | Error no controlado |
 
-Ejemplo de transición inválida:
-
-```http
-X-Request-ID: status-transition-123
-```
-
-```json
-{
-  "code": "INVALID_STATUS_TRANSITION",
-  "message": "No se puede cambiar el estado del hallazgo...",
-  "errors": {}
-}
-```
-
-Ejemplo de límite superado:
-
-```http
-HTTP/1.1 429 Too Many Requests
-Retry-After: 34
-X-Request-ID: rate-limit-123
-```
-
-```json
-{
-  "code": "RATE_LIMIT_EXCEEDED",
-  "message": "Se ha superado el límite de peticiones",
-  "errors": {}
-}
-```
-
-Los errores de ordenación inválida también se responden con `400`:
+Los errores de ordenación inválida se responden con `400`:
 
 ```json
 {
@@ -486,6 +501,8 @@ Los errores de ordenación inválida también se responden con `400`:
   }
 }
 ```
+
+Los errores de acción de auditoría inválida también se responden con `400`.
 
 ## Documentación OpenAPI
 
@@ -530,6 +547,14 @@ La aplicación no utiliza sesiones ni autenticación mediante formulario:
 ```text
 SessionCreationPolicy.STATELESS
 ```
+
+La protección CSRF se ignora únicamente en las rutas REST:
+
+```text
+/api/v1/**
+```
+
+Fuera de esas rutas, CSRF permanece activo.
 
 ## Tecnologías
 
@@ -616,7 +641,7 @@ securefindings.rate-limit.max-requests=${SECUREFINDINGS_RATE_LIMIT_MAX_REQUESTS:
 securefindings.rate-limit.window=${SECUREFINDINGS_RATE_LIMIT_WINDOW:60s}
 ```
 
-Para modificar el límite localmente, pueden definirse estas variables en `.env`:
+Para modificar el límite localmente:
 
 ```properties
 SECUREFINDINGS_RATE_LIMIT_MAX_REQUESTS=60
@@ -669,6 +694,12 @@ Ejecutar una clase concreta:
 .\mvnw.cmd -Dtest=FindingControllerTest test
 ```
 
+Ejecutar varias clases en PowerShell:
+
+```powershell
+.\mvnw.cmd "-Dtest=FindingAuditControllerTest,AuditServiceTest" test
+```
+
 Las pruebas cubren:
 
 - Dominio de hallazgos.
@@ -685,6 +716,9 @@ Las pruebas cubren:
 - Paginación.
 - Búsqueda.
 - Filtros.
+- Filtros de auditoría por acción.
+- Filtros de auditoría por `requestId`.
+- Filtros combinados de auditoría.
 - Ordenación.
 - Rechazo de parámetros de ordenación no permitidos.
 - Limitación por dirección IP.
@@ -699,7 +733,7 @@ Las pruebas cubren:
 
 ## Integración continua
 
-El repositorio incluye los siguientes workflows:
+El repositorio incluye:
 
 ```text
 .github/workflows/ci.yml
@@ -751,7 +785,7 @@ Los commits deben ser pequeños y representar un único cambio coherente.
 Ejemplo:
 
 ```text
-seguridad: limitar peticiones de la API
+funcionalidad: filtrar el historial de auditoría
 ```
 
 Las pull requests hacia `main` se reservan para cambios importantes o para agrupar varios commits relacionados.
