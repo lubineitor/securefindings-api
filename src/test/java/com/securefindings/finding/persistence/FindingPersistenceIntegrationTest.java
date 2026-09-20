@@ -335,4 +335,69 @@ class FindingPersistenceIntegrationTest {
                                 "integration-request-123",
                                 auditEvents.get(0).getRequestId());
         }
+
+        @Test
+        void deberiaFiltrarLaAuditoriaPersistidaPorAccionYRequestId() {
+                Finding createdFinding;
+
+                MDC.put(
+                                RequestCorrelationFilter.MDC_KEY,
+                                "audit-created-123");
+
+                try {
+                        createdFinding = findingService.create(
+                                        "Hallazgo filtrable",
+                                        "Auditoría con filtros",
+                                        FindingSeverity.HIGH);
+
+                        MDC.put(
+                                        RequestCorrelationFilter.MDC_KEY,
+                                        "audit-updated-456");
+
+                        findingService.updateStatus(
+                                        createdFinding.id(),
+                                        FindingStatus.IN_PROGRESS);
+                } finally {
+                        MDC.remove(RequestCorrelationFilter.MDC_KEY);
+                }
+
+                Page<FindingAuditEntity> createdEvents = auditService
+                                .findPageByFindingId(
+                                                createdFinding.id(),
+                                                0,
+                                                20,
+                                                AuditAction.CREATED,
+                                                null);
+
+                Page<FindingAuditEntity> requestEvents = auditService
+                                .findPageByFindingId(
+                                                createdFinding.id(),
+                                                0,
+                                                20,
+                                                null,
+                                                "audit-updated-456");
+
+                Page<FindingAuditEntity> combinedEvents = auditService
+                                .findPageByFindingId(
+                                                createdFinding.id(),
+                                                0,
+                                                20,
+                                                AuditAction.UPDATED,
+                                                "audit-updated-456");
+
+                assertEquals(1, createdEvents.getTotalElements());
+                assertEquals(
+                                AuditAction.CREATED,
+                                createdEvents.getContent().get(0).getAction());
+
+                assertEquals(1, requestEvents.getTotalElements());
+                assertEquals(
+                                "audit-updated-456",
+                                requestEvents.getContent().get(0).getRequestId());
+
+                assertEquals(1, combinedEvents.getTotalElements());
+                assertEquals(
+                                AuditAction.UPDATED,
+                                combinedEvents.getContent().get(0).getAction());
+        }
 }
