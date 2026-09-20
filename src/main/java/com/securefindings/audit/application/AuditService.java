@@ -103,4 +103,56 @@ public class AuditService {
                                                 organizationId,
                                                 pageable);
         }
+
+        @Transactional(readOnly = true)
+        public Page<FindingAuditEntity> findPageByFindingId(
+                        UUID findingId,
+                        int page,
+                        int size,
+                        AuditAction action,
+                        String requestId) {
+
+                UUID organizationId = organizationContext.currentOrganizationId();
+
+                Pageable pageable = PageRequest.of(
+                                page,
+                                size,
+                                Sort.by(
+                                                Sort.Order.asc("occurredAt"),
+                                                Sort.Order.asc("id")));
+
+                if (action != null && requestId != null) {
+                        return auditRepository
+                                        .findByFindingIdAndOrganizationIdAndActionAndRequestIdOrderByOccurredAtAsc(
+                                                        findingId,
+                                                        organizationId,
+                                                        action,
+                                                        requestId,
+                                                        pageable);
+                }
+
+                if (action != null) {
+                        return auditRepository
+                                        .findByFindingIdAndOrganizationIdAndActionOrderByOccurredAtAsc(
+                                                        findingId,
+                                                        organizationId,
+                                                        action,
+                                                        pageable);
+                }
+
+                if (requestId != null) {
+                        return auditRepository
+                                        .findByFindingIdAndOrganizationIdAndRequestIdOrderByOccurredAtAsc(
+                                                        findingId,
+                                                        organizationId,
+                                                        requestId,
+                                                        pageable);
+                }
+
+                return auditRepository
+                                .findByFindingIdAndOrganizationIdOrderByOccurredAtAsc(
+                                                findingId,
+                                                organizationId,
+                                                pageable);
+        }
 }

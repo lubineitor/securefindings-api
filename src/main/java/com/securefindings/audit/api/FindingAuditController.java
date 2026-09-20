@@ -2,6 +2,7 @@ package com.securefindings.audit.api;
 
 import java.util.UUID;
 
+import org.springframework.data.domain.Page;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -10,6 +11,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.securefindings.audit.application.AuditService;
+import com.securefindings.audit.domain.AuditAction;
+import com.securefindings.audit.persistence.FindingAuditEntity;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -22,6 +25,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Pattern;
 
 @Validated
 @RestController
@@ -43,19 +47,35 @@ public class FindingAuditController {
                         @ApiResponse(responseCode = "200", description = "Historial recuperado correctamente", content = @Content(mediaType = "application/json", schema = @Schema(implementation = FindingAuditPageResponse.class))),
                         @ApiResponse(responseCode = "401", description = "Token ausente o inválido"),
                         @ApiResponse(responseCode = "403", description = "El usuario no tiene permisos"),
-                        @ApiResponse(responseCode = "404", description = "El hallazgo no existe")
+                        @ApiResponse(responseCode = "404", description = "El hallazgo no existe"),
+                        @ApiResponse(responseCode = "400", description = "Los filtros o parámetros no son válidos")
         })
         public FindingAuditPageResponse findByFindingId(
                         @Parameter(description = "Identificador del hallazgo", in = ParameterIn.PATH, required = true) @PathVariable("findingId") UUID findingId,
 
                         @Parameter(description = "Número de página. Empieza en 0", example = "0", in = ParameterIn.QUERY) @RequestParam(name = "page", defaultValue = "0") @Min(0) int page,
 
-                        @Parameter(description = "Número máximo de eventos por página", example = "20", in = ParameterIn.QUERY) @RequestParam(name = "size", defaultValue = "20") @Min(1) @Max(100) int size) {
+                        @Parameter(description = "Número máximo de eventos por página", example = "20", in = ParameterIn.QUERY) @RequestParam(name = "size", defaultValue = "20") @Min(1) @Max(100) int size,
+                        @Parameter(description = "Filtrar por acción de auditoría", example = "UPDATED", in = ParameterIn.QUERY) @RequestParam(name = "action", required = false) AuditAction action,
 
-                return FindingAuditPageResponse.from(
-                                auditService.findPageByFindingId(
-                                                findingId,
-                                                page,
-                                                size));
+                        @Parameter(description = "Filtrar por identificador de petición", example = "audit-request-123", in = ParameterIn.QUERY) @RequestParam(name = "requestId", required = false) @Pattern(regexp = "[A-Za-z0-9][A-Za-z0-9._-]{0,63}", message = "El identificador de petición no tiene un formato válido") String requestId) {
+
+                Page<FindingAuditEntity> auditPage;
+
+                if (action == null && requestId == null) {
+                        auditPage = auditService.findPageByFindingId(
+                                        findingId,
+                                        page,
+                                        size);
+                } else {
+                        auditPage = auditService.findPageByFindingId(
+                                        findingId,
+                                        page,
+                                        size,
+                                        action,
+                                        requestId);
+                }
+
+                return FindingAuditPageResponse.from(auditPage);
         }
 }
