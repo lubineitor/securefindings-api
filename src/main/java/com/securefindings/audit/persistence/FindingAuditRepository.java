@@ -21,6 +21,10 @@ public interface FindingAuditRepository
                         UUID organizationId,
                         Pageable pageable);
 
+        boolean existsByFindingIdAndOrganizationId(
+                        UUID findingId,
+                        UUID organizationId);
+
         Page<FindingAuditEntity> findByFindingIdAndOrganizationIdAndActionOrderByOccurredAtAsc(
                         UUID findingId,
                         UUID organizationId,
