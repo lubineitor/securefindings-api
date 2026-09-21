@@ -30,6 +30,7 @@ import com.securefindings.api.error.GlobalExceptionHandler;
 import com.securefindings.audit.application.AuditService;
 import com.securefindings.audit.domain.AuditAction;
 import com.securefindings.audit.persistence.FindingAuditEntity;
+import com.securefindings.finding.application.FindingNotFoundException;
 import com.securefindings.security.SecurityConfig;
 
 @WebMvcTest(controllers = FindingAuditController.class)
@@ -146,6 +147,26 @@ class FindingAuditControllerTest {
                                 .andExpect(jsonPath("$.totalPages").value(0))
                                 .andExpect(jsonPath("$.first").value(true))
                                 .andExpect(jsonPath("$.last").value(true));
+        }
+
+        @Test
+        void deberiaDevolver404SiElHallazgoNoExiste()
+                        throws Exception {
+
+                UUID findingId = UUID.randomUUID();
+
+                when(auditService.findPageByFindingId(
+                                findingId,
+                                0,
+                                20))
+                                .thenThrow(new FindingNotFoundException(findingId));
+
+                mockMvc.perform(get(
+                                "/api/v1/findings/{findingId}/audit",
+                                findingId))
+                                .andExpect(status().isNotFound())
+                                .andExpect(jsonPath("$.code")
+                                                .value("FINDING_NOT_FOUND"));
         }
 
         @Test

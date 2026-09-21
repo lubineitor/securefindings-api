@@ -1,5 +1,6 @@
 package com.securefindings.finding.persistence;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -23,6 +24,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
+import com.securefindings.audit.application.AuditService;
 import com.securefindings.finding.application.FindingNotFoundException;
 import com.securefindings.finding.application.FindingService;
 import com.securefindings.finding.domain.Finding;
@@ -32,116 +34,146 @@ import com.securefindings.finding.domain.FindingSeverity;
 @SpringBootTest
 class FindingOrganizationIsolationIntegrationTest {
 
-    private static final UUID ORGANIZATION_A = UUID.fromString(
-            "00000000-0000-0000-0000-000000000001");
+        private static final UUID ORGANIZATION_A = UUID.fromString(
+                        "00000000-0000-0000-0000-000000000001");
 
-    private static final UUID ORGANIZATION_B = UUID.fromString(
-            "00000000-0000-0000-0000-000000000002");
+        private static final UUID ORGANIZATION_B = UUID.fromString(
+                        "00000000-0000-0000-0000-000000000002");
 
-    @SuppressWarnings("resource")
-    @Container
-    static final PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:17-alpine")
-            .withDatabaseName("securefindings_test")
-            .withUsername("securefindings_test")
-            .withPassword("securefindings_test");
+        @SuppressWarnings("resource")
+        @Container
+        static final PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:17-alpine")
+                        .withDatabaseName("securefindings_test")
+                        .withUsername("securefindings_test")
+                        .withPassword("securefindings_test");
 
-    @DynamicPropertySource
-    static void registerPostgresProperties(
-            DynamicPropertyRegistry registry) {
+        @DynamicPropertySource
+        static void registerPostgresProperties(
+                        DynamicPropertyRegistry registry) {
 
-        registry.add(
-                "spring.datasource.url",
-                postgres::getJdbcUrl);
+                registry.add(
+                                "spring.datasource.url",
+                                postgres::getJdbcUrl);
 
-        registry.add(
-                "spring.datasource.username",
-                postgres::getUsername);
+                registry.add(
+                                "spring.datasource.username",
+                                postgres::getUsername);
 
-        registry.add(
-                "spring.datasource.password",
-                postgres::getPassword);
-    }
+                registry.add(
+                                "spring.datasource.password",
+                                postgres::getPassword);
+        }
 
-    @Autowired
-    private JdbcTemplate jdbcTemplate;
+        @Autowired
+        private JdbcTemplate jdbcTemplate;
 
-    @Autowired
-    private FindingService findingService;
+        @Autowired
+        private FindingService findingService;
 
-    @Autowired
-    private FindingRepository findingRepository;
+        @Autowired
+        private AuditService auditService;
 
-    @BeforeEach
-    void prepararSegundaOrganizacion() {
-        findingRepository.deleteAll();
+        @Autowired
+        private FindingRepository findingRepository;
 
-        jdbcTemplate.update(
-                """
-                        INSERT INTO organizations (
-                            id,
-                            name,
-                            slug,
-                            created_at
-                        )
-                        VALUES (?, ?, ?, ?)
-                        ON CONFLICT (id) DO NOTHING
-                        """,
-                ORGANIZATION_B,
-                "Organización de pruebas",
-                "pruebas",
-                Timestamp.from(Instant.now()));
-    }
+        @BeforeEach
+        void prepararSegundaOrganizacion() {
+                findingRepository.deleteAll();
 
-    @AfterEach
-    void limpiarContextoDeSeguridad() {
-        SecurityContextHolder.clearContext();
-    }
+                jdbcTemplate.update(
+                                """
+                                                INSERT INTO organizations (
+                                                    id,
+                                                    name,
+                                                    slug,
+                                                    created_at
+                                                )
+                                                VALUES (?, ?, ?, ?)
+                                                ON CONFLICT (id) DO NOTHING
+                                                """,
+                                ORGANIZATION_B,
+                                "Organización de pruebas",
+                                "pruebas",
+                                Timestamp.from(Instant.now()));
+        }
 
-    @Test
-    void unaOrganizacionNoDebeAccederAlHallazgoDeOtra() {
-        autenticarEnOrganizacion(ORGANIZATION_A);
+        @AfterEach
+        void limpiarContextoDeSeguridad() {
+                SecurityContextHolder.clearContext();
+        }
 
-        Finding createdFinding = findingService.create(
-                "SQL Injection aislado",
-                "Hallazgo perteneciente a la organización A",
-                FindingSeverity.HIGH);
+        @Test
+        void unaOrganizacionNoDebeAccederAlHallazgoDeOtra() {
+                autenticarEnOrganizacion(ORGANIZATION_A);
 
-        autenticarEnOrganizacion(ORGANIZATION_B);
+                Finding createdFinding = findingService.create(
+                                "SQL Injection aislado",
+                                "Hallazgo perteneciente a la organización A",
+                                FindingSeverity.HIGH);
 
-        assertTrue(
-                findingService
-                        .findById(createdFinding.id())
-                        .isEmpty());
+                autenticarEnOrganizacion(ORGANIZATION_B);
 
-        assertThrows(
-                FindingNotFoundException.class,
-                () -> findingService.deleteById(createdFinding.id()));
+                assertTrue(
+                                findingService
+                                                .findById(createdFinding.id())
+                                                .isEmpty());
 
-        autenticarEnOrganizacion(ORGANIZATION_A);
+                assertThrows(
+                                FindingNotFoundException.class,
+                                () -> findingService.deleteById(createdFinding.id()));
 
-        assertTrue(
-                findingService
-                        .findById(createdFinding.id())
-                        .isPresent());
-    }
+                autenticarEnOrganizacion(ORGANIZATION_A);
 
-    private void autenticarEnOrganizacion(UUID organizationId) {
-        Jwt jwt = Jwt.withTokenValue("token-de-prueba")
-                .header("alg", "none")
-                .claim("preferred_username", "usuario-prueba")
-                .claim("organization_id", organizationId.toString())
-                .issuedAt(Instant.now().minusSeconds(60))
-                .expiresAt(Instant.now().plusSeconds(300))
-                .build();
+                assertTrue(
+                                findingService
+                                                .findById(createdFinding.id())
+                                                .isPresent());
+        }
 
-        JwtAuthenticationToken authentication = new JwtAuthenticationToken(jwt);
+        @Test
+        void unaOrganizacionNoDebeAccederAlHistorialDeOtra() {
+                autenticarEnOrganizacion(ORGANIZATION_A);
 
-        authentication.setAuthenticated(true);
+                Finding createdFinding = findingService.create(
+                                "Auditoría aislada",
+                                "El historial pertenece a la organización A",
+                                FindingSeverity.HIGH);
 
-        SecurityContext securityContext = SecurityContextHolder.createEmptyContext();
+                autenticarEnOrganizacion(ORGANIZATION_B);
 
-        securityContext.setAuthentication(authentication);
+                assertThrows(
+                                FindingNotFoundException.class,
+                                () -> auditService.findPageByFindingId(
+                                                createdFinding.id(),
+                                                0,
+                                                20));
 
-        SecurityContextHolder.setContext(securityContext);
-    }
+                autenticarEnOrganizacion(ORGANIZATION_A);
+
+                assertEquals(
+                                1,
+                                auditService
+                                                .findPageByFindingId(createdFinding.id(), 0, 20)
+                                                .getTotalElements());
+        }
+
+        private void autenticarEnOrganizacion(UUID organizationId) {
+                Jwt jwt = Jwt.withTokenValue("token-de-prueba")
+                                .header("alg", "none")
+                                .claim("preferred_username", "usuario-prueba")
+                                .claim("organization_id", organizationId.toString())
+                                .issuedAt(Instant.now().minusSeconds(60))
+                                .expiresAt(Instant.now().plusSeconds(300))
+                                .build();
+
+                JwtAuthenticationToken authentication = new JwtAuthenticationToken(jwt);
+
+                authentication.setAuthenticated(true);
+
+                SecurityContext securityContext = SecurityContextHolder.createEmptyContext();
+
+                securityContext.setAuthentication(authentication);
+
+                SecurityContextHolder.setContext(securityContext);
+        }
 }
