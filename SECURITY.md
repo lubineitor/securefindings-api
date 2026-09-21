@@ -27,6 +27,7 @@ Esta política cubre:
 - Persistencia de hallazgos.
 - Ciclo de vida de los hallazgos.
 - Auditoría.
+- Filtros del historial de auditoría.
 - Comentarios.
 - Búsqueda y ordenación.
 - Limitación de peticiones.
@@ -87,6 +88,7 @@ Los principales riesgos considerados son:
 | Tokens | Manipulación o falsificación | Validación de firma, emisor y expiración |
 | Parámetros de búsqueda | Inyección o consultas no controladas | Parámetros enlazados mediante JPA |
 | Ordenación | Manipulación de propiedades internas | Lista blanca de campos permitidos |
+| Filtros de auditoría | Acceso a eventos de otra organización o filtros arbitrarios | Organización derivada del token, enums y parámetros enlazados |
 | Datos recibidos | Valores inválidos o excesivos | Bean Validation |
 | Historial | Falta de trazabilidad | Eventos de auditoría |
 | Peticiones | Dificultad para relacionar errores y logs | Cabecera `X-Request-ID` y MDC |
@@ -122,9 +124,16 @@ También se deshabilitan:
 
 - Form Login.
 - HTTP Basic.
-- CSRF para la API stateless.
 
-La desactivación de CSRF se realiza porque la API utiliza autenticación mediante token Bearer y no cookies de sesión como mecanismo principal de autenticación.
+La protección CSRF se ignora únicamente para las rutas REST:
+
+```text
+/api/v1/**
+```
+
+Fuera de estas rutas, la protección CSRF permanece activa.
+
+La exclusión limitada se utiliza porque la API REST emplea autenticación mediante token Bearer y no cookies de sesión como mecanismo principal de autenticación.
 
 ## Claims utilizados
 
@@ -408,7 +417,9 @@ El aislamiento se aplica en:
 - Auditoría.
 - Comentarios.
 
-Las consultas combinan el identificador del recurso con el identificador de organización. Conceptualmente:
+Las consultas combinan el identificador del recurso con el identificador de organización.
+
+Conceptualmente:
 
 ```text
 finding_id + organization_id
@@ -491,9 +502,11 @@ Se controlan, entre otros:
 - Longitudes máximas.
 - Severidades permitidas.
 - Estados permitidos.
+- Acciones de auditoría permitidas.
 - Número de página.
 - Tamaño de página.
 - Longitud de la búsqueda textual.
+- Formato de `requestId`.
 - Identificadores UUID.
 - Campos de ordenación.
 - Direcciones de ordenación.
@@ -558,6 +571,55 @@ No se permite que el cliente proporcione directamente:
 
 Esta validación evita utilizar el parámetro de ordenación como vector para manipular consultas o acceder a propiedades internas de persistencia.
 
+## Filtros del historial de auditoría
+
+El historial de auditoría permite filtrar por:
+
+```text
+action
+requestId
+```
+
+Las acciones válidas son:
+
+```text
+CREATED
+UPDATED
+DELETED
+COMMENTED
+```
+
+El `requestId` debe cumplir el mismo formato que la cabecera `X-Request-ID`:
+
+- Entre 1 y 64 caracteres.
+- Letras mayúsculas y minúsculas.
+- Dígitos.
+- Puntos.
+- Guiones.
+- Guiones bajos.
+
+Los filtros de auditoría:
+
+- Se aplican junto al `organization_id` obtenido del token.
+- No aceptan un identificador de organización enviado por el cliente.
+- No permiten campos de filtrado arbitrarios.
+- Utilizan métodos de repositorio con parámetros enlazados.
+- Mantienen el orden cronológico.
+- Mantienen la paginación.
+- No exponen eventos de otra organización.
+
+Ejemplo:
+
+```text
+GET /api/v1/findings/{findingId}/audit?action=UPDATED&requestId=audit-request-123
+```
+
+Una acción inválida o un `requestId` con formato incorrecto producen:
+
+```http
+400 Bad Request
+```
+
 ## Protección frente a inyección SQL
 
 La aplicación utiliza Spring Data JPA y parámetros enlazados.
@@ -568,15 +630,17 @@ Las consultas no deben construirse concatenando directamente:
 - Texto de búsqueda.
 - Severidades.
 - Estados.
+- Acciones de auditoría.
+- Identificadores de petición.
 - Valores de organización.
 - Campos de ordenación.
 - Direcciones de ordenación.
 
-La búsqueda se realiza mediante parámetros enlazados.
+La búsqueda y los filtros de auditoría se realizan mediante parámetros enlazados.
 
 La ordenación se valida mediante una lista blanca antes de construir el `Pageable`.
 
-Las consultas que reciben un término de búsqueda nulo utilizan `COALESCE` para mantener un tipo textual compatible con PostgreSQL y evitar errores derivados de la inferencia de tipos del controlador JDBC.
+Las consultas que reciben un término de búsqueda nulo utilizan una construcción compatible con PostgreSQL para evitar errores derivados de la inferencia de tipos del controlador JDBC.
 
 ## Auditoría
 
@@ -604,7 +668,22 @@ La eliminación de un hallazgo conserva su evento de auditoría para mantener la
 
 Las transiciones de estado inválidas no registran eventos porque la operación no llega a modificar el recurso.
 
-El identificador `X-Request-ID` facilita la trazabilidad técnica de la petición que generó un evento, pero no sustituye al actor. El valor se persiste en `finding_audit.request_id` y permite relacionar el evento con los logs y la respuesta HTTP. En eventos técnicos o registros históricos puede ser `null`.
+El identificador `X-Request-ID` facilita la trazabilidad técnica de la petición que generó un evento, pero no sustituye al actor.
+
+El valor se persiste en:
+
+```text
+finding_audit.request_id
+```
+
+Esto permite relacionar el evento con:
+
+- Los logs.
+- La respuesta HTTP.
+- La petición original.
+- Otros eventos de la misma operación.
+
+En eventos técnicos o registros históricos puede ser `null`.
 
 ## Comentarios
 
@@ -769,6 +848,11 @@ El proyecto incluye pruebas para comprobar:
 - Filtros y búsqueda.
 - Ordenación permitida.
 - Ordenación no permitida.
+- Filtros de auditoría por acción.
+- Filtros de auditoría por `requestId`.
+- Filtros combinados de auditoría.
+- Rechazo de acciones de auditoría inválidas.
+- Rechazo de identificadores de petición inválidos.
 - Transiciones válidas.
 - Transiciones inválidas.
 - Respuesta `409` ante transiciones no permitidas.

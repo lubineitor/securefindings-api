@@ -1,5 +1,6 @@
 package com.securefindings.audit.api;
 
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
@@ -29,6 +30,7 @@ import com.securefindings.api.error.GlobalExceptionHandler;
 import com.securefindings.audit.application.AuditService;
 import com.securefindings.audit.domain.AuditAction;
 import com.securefindings.audit.persistence.FindingAuditEntity;
+import com.securefindings.finding.application.FindingNotFoundException;
 import com.securefindings.security.SecurityConfig;
 
 @WebMvcTest(controllers = FindingAuditController.class)
@@ -148,6 +150,75 @@ class FindingAuditControllerTest {
         }
 
         @Test
+        void deberiaDevolver404SiElHallazgoNoExiste()
+                        throws Exception {
+
+                UUID findingId = UUID.randomUUID();
+
+                when(auditService.findPageByFindingId(
+                                findingId,
+                                0,
+                                20))
+                                .thenThrow(new FindingNotFoundException(findingId));
+
+                mockMvc.perform(get(
+                                "/api/v1/findings/{findingId}/audit",
+                                findingId))
+                                .andExpect(status().isNotFound())
+                                .andExpect(jsonPath("$.code")
+                                                .value("FINDING_NOT_FOUND"));
+        }
+
+        @Test
+        void deberiaFiltrarElHistorialPorAccionYRequestId()
+                        throws Exception {
+
+                UUID findingId = UUID.randomUUID();
+
+                FindingAuditEntity updatedEvent = new FindingAuditEntity(
+                                UUID.randomUUID(),
+                                findingId,
+                                ORGANIZATION_ID,
+                                AuditAction.UPDATED,
+                                "analista",
+                                Instant.parse("2026-09-06T08:05:00Z"),
+                                "audit-request-123");
+
+                Page<FindingAuditEntity> auditPage = new PageImpl<>(
+                                List.of(updatedEvent),
+                                PageRequest.of(0, 20),
+                                1);
+
+                when(auditService.findPageByFindingId(
+                                findingId,
+                                0,
+                                20,
+                                AuditAction.UPDATED,
+                                "audit-request-123"))
+                                .thenReturn(auditPage);
+
+                mockMvc.perform(get(
+                                "/api/v1/findings/{findingId}/audit",
+                                findingId)
+                                .param("action", "UPDATED")
+                                .param("requestId", "audit-request-123"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.content.length()").value(1))
+                                .andExpect(jsonPath("$.content[0].action")
+                                                .value("UPDATED"))
+                                .andExpect(jsonPath("$.content[0].requestId")
+                                                .value("audit-request-123"))
+                                .andExpect(jsonPath("$.totalElements").value(1));
+
+                verify(auditService).findPageByFindingId(
+                                findingId,
+                                0,
+                                20,
+                                AuditAction.UPDATED,
+                                "audit-request-123");
+        }
+
+        @Test
         void deberiaRechazarUnaPaginaNegativa()
                         throws Exception {
 
@@ -194,6 +265,44 @@ class FindingAuditControllerTest {
                                 .andExpect(status().isBadRequest())
                                 .andExpect(jsonPath("$.code")
                                                 .value("VALIDATION_ERROR"));
+
+                verifyNoInteractions(auditService);
+        }
+
+        @Test
+        void deberiaRechazarUnaAccionDeAuditoriaInvalida()
+                        throws Exception {
+
+                UUID findingId = UUID.randomUUID();
+
+                mockMvc.perform(get(
+                                "/api/v1/findings/{findingId}/audit",
+                                findingId)
+                                .param("action", "INVALID"))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.code")
+                                                .value("VALIDATION_ERROR"))
+                                .andExpect(jsonPath("$.errors.action")
+                                                .exists());
+
+                verifyNoInteractions(auditService);
+        }
+
+        @Test
+        void deberiaRechazarUnRequestIdInvalido()
+                        throws Exception {
+
+                UUID findingId = UUID.randomUUID();
+
+                mockMvc.perform(get(
+                                "/api/v1/findings/{findingId}/audit",
+                                findingId)
+                                .param("requestId", "request id invalido"))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.code")
+                                                .value("VALIDATION_ERROR"))
+                                .andExpect(jsonPath("$.errors.requestId")
+                                                .value("El identificador de petición no tiene un formato válido"));
 
                 verifyNoInteractions(auditService);
         }

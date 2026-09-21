@@ -6,7 +6,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
+import org.springframework.core.MethodParameter;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.method.ParameterValidationResult;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -15,7 +17,6 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
-import org.springframework.core.MethodParameter;
 
 import com.securefindings.finding.application.FindingNotFoundException;
 import com.securefindings.finding.application.FindingStatusTransitionException;
@@ -90,6 +91,18 @@ public class GlobalExceptionHandler {
                                 "VALIDATION_ERROR",
                                 "La petición contiene parámetros no válidos",
                                 Map.of(parameterName, message));
+        }
+
+        @ExceptionHandler(HttpMessageNotReadableException.class)
+        @ResponseStatus(HttpStatus.BAD_REQUEST)
+        public ApiErrorResponse handleUnreadableMessage() {
+
+                return new ApiErrorResponse(
+                                "VALIDATION_ERROR",
+                                "La petición contiene datos no válidos",
+                                Map.of(
+                                                "body",
+                                                "El cuerpo de la petición no tiene un formato válido"));
         }
 
         @ExceptionHandler(FindingNotFoundException.class)
