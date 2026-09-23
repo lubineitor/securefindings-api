@@ -24,142 +24,189 @@ import jakarta.servlet.FilterChain;
 
 class RateLimitFilterTest {
 
-    private static final Instant START = Instant.parse("2026-09-15T00:00:00Z");
+        private static final Instant START = Instant.parse("2026-09-15T00:00:00Z");
 
-    private FilterChain filterChain;
-    private RateLimitFilter rateLimitFilter;
+        private FilterChain filterChain;
+        private RateLimitFilter rateLimitFilter;
 
-    @BeforeEach
-    void configurarFiltro() {
-        filterChain = mock(FilterChain.class);
-        rateLimitFilter = createFilter(2);
-        SecurityContextHolder.clearContext();
-    }
+        @BeforeEach
+        void configurarFiltro() {
+                filterChain = mock(FilterChain.class);
+                rateLimitFilter = createFilter(2);
+                SecurityContextHolder.clearContext();
+        }
 
-    @AfterEach
-    void limpiarContextoDeSeguridad() {
-        SecurityContextHolder.clearContext();
-    }
+        @AfterEach
+        void limpiarContextoDeSeguridad() {
+                SecurityContextHolder.clearContext();
+        }
 
-    @Test
-    void deberiaBloquearLaPeticionQueSuperaElLimite()
-            throws Exception {
+        @Test
+        void deberiaExponerElEstadoDelLimiteEnRespuestasPermitidas()
+                        throws Exception {
 
-        invoke("/api/v1/findings", "10.0.0.1");
-        invoke("/api/v1/findings", "10.0.0.1");
+                MockHttpServletResponse response = invoke(
+                                "/api/v1/findings",
+                                "10.0.0.1");
 
-        MockHttpServletResponse limitedResponse = invoke("/api/v1/findings", "10.0.0.1");
+                assertEquals(200, response.getStatus());
+                assertEquals(
+                                "2",
+                                response.getHeader("X-RateLimit-Limit"));
+                assertEquals(
+                                "1",
+                                response.getHeader("X-RateLimit-Remaining"));
+                assertEquals(
+                                String.valueOf(START.plusSeconds(60).getEpochSecond()),
+                                response.getHeader("X-RateLimit-Reset"));
+        }
 
-        assertEquals(429, limitedResponse.getStatus());
-        assertEquals(
-                "60",
-                limitedResponse.getHeader("Retry-After"));
-        assertTrue(
-                limitedResponse.getContentAsString()
-                        .contains("RATE_LIMIT_EXCEEDED"));
+        @Test
+        void deberiaBloquearLaPeticionQueSuperaElLimite()
+                        throws Exception {
 
-        verify(filterChain, times(2))
-                .doFilter(any(), any());
-    }
+                invoke("/api/v1/findings", "10.0.0.1");
+                invoke("/api/v1/findings", "10.0.0.1");
 
-    @Test
-    void deberiaMantenerUnLimiteIndependientePorDireccionIp()
-            throws Exception {
+                MockHttpServletResponse limitedResponse = invoke(
+                                "/api/v1/findings",
+                                "10.0.0.1");
 
-        rateLimitFilter = createFilter(1);
+                assertEquals(429, limitedResponse.getStatus());
+                assertEquals(
+                                "60",
+                                limitedResponse.getHeader("Retry-After"));
+                assertEquals(
+                                "2",
+                                limitedResponse.getHeader("X-RateLimit-Limit"));
+                assertEquals(
+                                "0",
+                                limitedResponse.getHeader("X-RateLimit-Remaining"));
+                assertEquals(
+                                String.valueOf(START.plusSeconds(60).getEpochSecond()),
+                                limitedResponse.getHeader("X-RateLimit-Reset"));
+                assertTrue(
+                                limitedResponse.getContentAsString()
+                                                .contains("RATE_LIMIT_EXCEEDED"));
 
-        MockHttpServletResponse firstResponse = invoke("/api/v1/findings", "10.0.0.1");
+                verify(filterChain, times(2))
+                                .doFilter(any(), any());
+        }
 
-        MockHttpServletResponse repeatedResponse = invoke("/api/v1/findings", "10.0.0.1");
+        @Test
+        void deberiaMantenerUnLimiteIndependientePorDireccionIp()
+                        throws Exception {
 
-        MockHttpServletResponse otherClientResponse = invoke("/api/v1/findings", "10.0.0.2");
+                rateLimitFilter = createFilter(1);
 
-        assertEquals(200, firstResponse.getStatus());
-        assertEquals(429, repeatedResponse.getStatus());
-        assertEquals(200, otherClientResponse.getStatus());
+                MockHttpServletResponse firstResponse = invoke(
+                                "/api/v1/findings",
+                                "10.0.0.1");
 
-        verify(filterChain, times(2))
-                .doFilter(any(), any());
-    }
+                MockHttpServletResponse repeatedResponse = invoke(
+                                "/api/v1/findings",
+                                "10.0.0.1");
 
-    @Test
-    void deberiaMantenerUnLimiteIndependientePorUsuario()
-            throws Exception {
+                MockHttpServletResponse otherClientResponse = invoke(
+                                "/api/v1/findings",
+                                "10.0.0.2");
 
-        rateLimitFilter = createFilter(1);
+                assertEquals(200, firstResponse.getStatus());
+                assertEquals(429, repeatedResponse.getStatus());
+                assertEquals(200, otherClientResponse.getStatus());
 
-        autenticarComo("analista");
+                verify(filterChain, times(2))
+                                .doFilter(any(), any());
+        }
 
-        MockHttpServletResponse firstUserResponse = invoke("/api/v1/findings", "10.0.0.1");
+        @Test
+        void deberiaMantenerUnLimiteIndependientePorUsuario()
+                        throws Exception {
 
-        MockHttpServletResponse repeatedUserResponse = invoke("/api/v1/findings", "10.0.0.1");
+                rateLimitFilter = createFilter(1);
 
-        autenticarComo("administrador");
+                autenticarComo("analista");
 
-        MockHttpServletResponse otherUserResponse = invoke("/api/v1/findings", "10.0.0.1");
+                MockHttpServletResponse firstUserResponse = invoke(
+                                "/api/v1/findings",
+                                "10.0.0.1");
 
-        assertEquals(200, firstUserResponse.getStatus());
-        assertEquals(429, repeatedUserResponse.getStatus());
-        assertEquals(200, otherUserResponse.getStatus());
+                MockHttpServletResponse repeatedUserResponse = invoke(
+                                "/api/v1/findings",
+                                "10.0.0.1");
 
-        verify(filterChain, times(2))
-                .doFilter(any(), any());
-    }
+                autenticarComo("administrador");
 
-    @Test
-    void noDebeAplicarElLimiteAlHealthCheck()
-            throws Exception {
+                MockHttpServletResponse otherUserResponse = invoke(
+                                "/api/v1/findings",
+                                "10.0.0.1");
 
-        rateLimitFilter = createFilter(1);
+                assertEquals(200, firstUserResponse.getStatus());
+                assertEquals(429, repeatedUserResponse.getStatus());
+                assertEquals(200, otherUserResponse.getStatus());
 
-        MockHttpServletResponse firstResponse = invoke("/api/v1/health", "10.0.0.1");
+                verify(filterChain, times(2))
+                                .doFilter(any(), any());
+        }
 
-        MockHttpServletResponse secondResponse = invoke("/api/v1/health", "10.0.0.1");
+        @Test
+        void noDebeAplicarElLimiteAlHealthCheck()
+                        throws Exception {
 
-        assertEquals(200, firstResponse.getStatus());
-        assertEquals(200, secondResponse.getStatus());
+                rateLimitFilter = createFilter(1);
 
-        verify(filterChain, times(2))
-                .doFilter(any(), any());
-    }
+                MockHttpServletResponse firstResponse = invoke(
+                                "/api/v1/health",
+                                "10.0.0.1");
 
-    private RateLimitFilter createFilter(int maxRequests) {
-        return new RateLimitFilter(
-                new RateLimitProperties(
-                        maxRequests,
-                        Duration.ofMinutes(1)),
-                Clock.fixed(
-                        START,
-                        ZoneOffset.UTC));
-    }
+                MockHttpServletResponse secondResponse = invoke(
+                                "/api/v1/health",
+                                "10.0.0.1");
 
-    private MockHttpServletResponse invoke(
-            String path,
-            String remoteAddress)
-            throws Exception {
+                assertEquals(200, firstResponse.getStatus());
+                assertEquals(200, secondResponse.getStatus());
 
-        MockHttpServletRequest request = new MockHttpServletRequest();
+                verify(filterChain, times(2))
+                                .doFilter(any(), any());
+        }
 
-        request.setMethod("GET");
-        request.setRequestURI(path);
-        request.setRemoteAddr(remoteAddress);
+        private RateLimitFilter createFilter(int maxRequests) {
+                return new RateLimitFilter(
+                                new RateLimitProperties(
+                                                maxRequests,
+                                                Duration.ofMinutes(1)),
+                                Clock.fixed(
+                                                START,
+                                                ZoneOffset.UTC));
+        }
 
-        MockHttpServletResponse response = new MockHttpServletResponse();
+        private MockHttpServletResponse invoke(
+                        String path,
+                        String remoteAddress)
+                        throws Exception {
 
-        rateLimitFilter.doFilter(
-                request,
-                response,
-                filterChain);
+                MockHttpServletRequest request = new MockHttpServletRequest();
 
-        return response;
-    }
+                request.setMethod("GET");
+                request.setRequestURI(path);
+                request.setRemoteAddr(remoteAddress);
 
-    private void autenticarComo(String username) {
-        SecurityContextHolder.getContext()
-                .setAuthentication(
-                        new TestingAuthenticationToken(
-                                username,
-                                "credentials",
-                                "ROLE_ANALYST"));
-    }
+                MockHttpServletResponse response = new MockHttpServletResponse();
+
+                rateLimitFilter.doFilter(
+                                request,
+                                response,
+                                filterChain);
+
+                return response;
+        }
+
+        private void autenticarComo(String username) {
+                SecurityContextHolder.getContext()
+                                .setAuthentication(
+                                                new TestingAuthenticationToken(
+                                                                username,
+                                                                "credentials",
+                                                                "ROLE_ANALYST"));
+        }
 }
