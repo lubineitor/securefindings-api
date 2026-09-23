@@ -54,7 +54,15 @@ class RateLimitSecurityIntegrationTest {
                                 .andExpect(status().isUnauthorized())
                                 .andExpect(header().string(
                                                 RequestCorrelationFilter.HEADER_NAME,
-                                                requestId));
+                                                requestId))
+                                .andExpect(header().string(
+                                                "X-RateLimit-Limit",
+                                                "1"))
+                                .andExpect(header().string(
+                                                "X-RateLimit-Remaining",
+                                                "0"))
+                                .andExpect(header().exists(
+                                                "X-RateLimit-Reset"));
 
                 mockMvc.perform(get("/api/v1/findings")
                                 .header(
@@ -66,6 +74,14 @@ class RateLimitSecurityIntegrationTest {
                                 .andExpect(header().string(
                                                 "Retry-After",
                                                 "60"))
+                                .andExpect(header().string(
+                                                "X-RateLimit-Limit",
+                                                "1"))
+                                .andExpect(header().string(
+                                                "X-RateLimit-Remaining",
+                                                "0"))
+                                .andExpect(header().exists(
+                                                "X-RateLimit-Reset"))
                                 .andExpect(header().string(
                                                 RequestCorrelationFilter.HEADER_NAME,
                                                 requestId))
