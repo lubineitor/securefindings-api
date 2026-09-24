@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -59,6 +60,8 @@ class AuditServiceTest {
 
                 when(organizationContext.currentOrganizationId())
                                 .thenReturn(ORGANIZATION_ID);
+
+                stubFindingExists(findingId, ORGANIZATION_ID);
 
                 auditService.register(
                                 findingId,
@@ -392,6 +395,8 @@ class AuditServiceTest {
                 when(organizationContext.currentOrganizationId())
                                 .thenReturn(ORGANIZATION_ID);
 
+                stubFindingExists(findingId, ORGANIZATION_ID);
+
                 MDC.put(
                                 RequestCorrelationFilter.MDC_KEY,
                                 "audit-request-123");
@@ -413,6 +418,53 @@ class AuditServiceTest {
                 assertEquals(
                                 "audit-request-123",
                                 captor.getValue().getRequestId());
+        }
+
+        @Test
+        void deberiaRechazarRegistrarAuditoriaDeUnHallazgoDeOtraOrganizacion() {
+                UUID findingId = UUID.randomUUID();
+
+                when(organizationContext.currentOrganizationId())
+                                .thenReturn(ORGANIZATION_ID);
+
+                when(findingRepository.findByIdAndOrganizationId(
+                                findingId,
+                                ORGANIZATION_ID))
+                                .thenReturn(Optional.empty());
+
+                assertThrows(
+                                FindingNotFoundException.class,
+                                () -> auditService.register(
+                                                findingId,
+                                                AuditAction.UPDATED,
+                                                "analista"));
+
+                verify(auditRepository, never()).save(any(FindingAuditEntity.class));
+        }
+
+        @Test
+        void deberiaPermitirRegistrarLaEliminacionDeUnHallazgoYaEliminado() {
+                UUID findingId = UUID.randomUUID();
+
+                when(organizationContext.currentOrganizationId())
+                                .thenReturn(ORGANIZATION_ID);
+
+                when(findingRepository.findByIdAndOrganizationId(
+                                findingId,
+                                ORGANIZATION_ID))
+                                .thenReturn(Optional.empty());
+
+                when(auditRepository.existsByFindingIdAndOrganizationId(
+                                findingId,
+                                ORGANIZATION_ID))
+                                .thenReturn(true);
+
+                auditService.register(
+                                findingId,
+                                AuditAction.DELETED,
+                                "analista");
+
+                verify(auditRepository).save(any(FindingAuditEntity.class));
         }
 
         private FindingAuditEntity crearEvento(
