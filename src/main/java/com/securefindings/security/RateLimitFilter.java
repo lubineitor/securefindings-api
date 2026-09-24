@@ -6,6 +6,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicLong;
@@ -16,6 +17,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import jakarta.servlet.FilterChain;
@@ -168,7 +170,9 @@ public final class RateLimitFilter extends OncePerRequestFilter {
                         if (name != null
                                         && !name.isBlank()
                                         && !ANONYMOUS_USER.equals(name)) {
-                                return "user:" + name;
+                                return authenticatedClientKey(
+                                                authentication,
+                                                name);
                         }
                 }
 
@@ -178,6 +182,31 @@ public final class RateLimitFilter extends OncePerRequestFilter {
                                 || remoteAddress.isBlank()
                                                 ? "unknown"
                                                 : remoteAddress);
+        }
+
+        private String authenticatedClientKey(
+                        Authentication authentication,
+                        String name) {
+
+                if (!(authentication instanceof JwtAuthenticationToken jwtAuthentication)) {
+                        return "user:" + name;
+                }
+
+                String organizationClaim = jwtAuthentication
+                                .getToken()
+                                .getClaimAsString("organization_id");
+
+                if (organizationClaim == null || organizationClaim.isBlank()) {
+                        return "user:" + name;
+                }
+
+                try {
+                        UUID organizationId = UUID.fromString(organizationClaim);
+
+                        return "organization:" + organizationId + ":user:" + name;
+                } catch (IllegalArgumentException exception) {
+                        return "user:" + name;
+                }
         }
 
         private void writeRateLimitHeaders(
