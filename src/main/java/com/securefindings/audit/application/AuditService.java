@@ -60,6 +60,11 @@ public class AuditService {
 
                 UUID organizationId = organizationContext.currentOrganizationId();
 
+                ensureFindingCanBeAudited(
+                                findingId,
+                                organizationId,
+                                action);
+
                 AuditEvent event = new AuditEvent(
                                 findingId,
                                 organizationId,
@@ -149,6 +154,36 @@ public class AuditService {
                                                 findingId,
                                                 organizationId,
                                                 pageable);
+        }
+
+        private void ensureFindingCanBeAudited(
+                        UUID findingId,
+                        UUID organizationId,
+                        AuditAction action) {
+
+                Objects.requireNonNull(
+                                action,
+                                "La acción de auditoría no puede ser nula");
+
+                boolean findingExists = findingRepository
+                                .findByIdAndOrganizationId(
+                                                findingId,
+                                                organizationId)
+                                .isPresent();
+
+                if (findingExists) {
+                        return;
+                }
+
+                boolean deletedFindingHasAudit = action == AuditAction.DELETED
+                                && auditRepository
+                                                .existsByFindingIdAndOrganizationId(
+                                                                findingId,
+                                                                organizationId);
+
+                if (!deletedFindingHasAudit) {
+                        throw new FindingNotFoundException(findingId);
+                }
         }
 
         private UUID ensureFindingBelongsToOrganization(UUID findingId) {
