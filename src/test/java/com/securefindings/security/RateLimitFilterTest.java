@@ -11,6 +11,8 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
+import java.util.UUID;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -19,6 +21,8 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 
 import jakarta.servlet.FilterChain;
 
@@ -150,6 +154,67 @@ class RateLimitFilterTest {
         }
 
         @Test
+        void deberiaSepararLosLimitesPorOrganizacionParaElMismoUsuario()
+                        throws Exception {
+
+                rateLimitFilter = createFilter(1);
+
+                autenticarConOrganizacion(
+                                "analista",
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"));
+
+                MockHttpServletResponse primeraOrganizacion = invoke(
+                                "/api/v1/findings",
+                                "10.0.0.1");
+
+                MockHttpServletResponse mismaOrganizacion = invoke(
+                                "/api/v1/findings",
+                                "10.0.0.1");
+
+                autenticarConOrganizacion(
+                                "analista",
+                                UUID.fromString("00000000-0000-0000-0000-000000000002"));
+
+                MockHttpServletResponse segundaOrganizacion = invoke(
+                                "/api/v1/findings",
+                                "10.0.0.1");
+
+                assertEquals(200, primeraOrganizacion.getStatus());
+                assertEquals(429, mismaOrganizacion.getStatus());
+                assertEquals(200, segundaOrganizacion.getStatus());
+
+                verify(filterChain, times(2))
+                                .doFilter(any(), any());
+        }
+
+        @Test
+        void unClaimDeOrganizacionInvalidoNoDebeCrearUnaCuotaNueva()
+                        throws Exception {
+
+                rateLimitFilter = createFilter(1);
+
+                autenticarComo("analista");
+
+                MockHttpServletResponse primeraPeticion = invoke(
+                                "/api/v1/findings",
+                                "10.0.0.1");
+
+                autenticarConClaimOrganizacion(
+                                "analista",
+                                "organizacion-invalida");
+
+                MockHttpServletResponse segundaPeticion = invoke(
+                                "/api/v1/findings",
+                                "10.0.0.1");
+
+                assertEquals(200, primeraPeticion.getStatus());
+                assertEquals(429, segundaPeticion.getStatus());
+
+                verify(filterChain)
+                                .doFilter(any(), any());
+        }
+
+        @Test
         void noDebeAplicarElLimiteAlHealthCheck()
                         throws Exception {
 
@@ -199,6 +264,35 @@ class RateLimitFilterTest {
                                 filterChain);
 
                 return response;
+        }
+
+        private void autenticarConOrganizacion(
+                        String username,
+                        UUID organizationId) {
+
+                autenticarConClaimOrganizacion(
+                                username,
+                                organizationId.toString());
+        }
+
+        private void autenticarConClaimOrganizacion(
+                        String username,
+                        String organizationClaim) {
+
+                Jwt jwt = Jwt.withTokenValue("token-de-prueba-" + organizationClaim)
+                                .header("alg", "none")
+                                .subject(username)
+                                .claim("preferred_username", username)
+                                .claim("organization_id", organizationClaim)
+                                .issuedAt(START.minusSeconds(60))
+                                .expiresAt(START.plusSeconds(300))
+                                .build();
+
+                SecurityContextHolder.getContext()
+                                .setAuthentication(new JwtAuthenticationToken(
+                                                jwt,
+                                                List.of(),
+                                                username));
         }
 
         private void autenticarComo(String username) {
