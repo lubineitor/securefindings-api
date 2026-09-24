@@ -167,6 +167,8 @@ El usuario se obtiene del claim `preferred_username` del token JWT. En operacion
 
 La auditoría puede consultarse de forma paginada y se conserva incluso cuando el hallazgo es eliminado.
 
+Antes de registrar un evento, el servicio verifica que el hallazgo pertenece a la organización actual. Para conservar la trazabilidad de una eliminación, permite el evento `DELETED` únicamente cuando ya existe historial de ese hallazgo en la misma organización.
+
 Las transiciones de estado no permitidas no generan eventos de auditoría.
 
 El campo `requestId` se obtiene de la cabecera `X-Request-ID` y del contexto MDC. Se persiste en `finding_audit.request_id` y se devuelve al consultar el historial del hallazgo.

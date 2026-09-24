@@ -429,6 +429,8 @@ Esto evita que conocer un UUID permita acceder a información de otra organizaci
 
 Cuando un recurso no pertenece a la organización actual, la aplicación puede responder con `404` para no revelar si el identificador existe en otra organización.
 
+El registro de auditoría aplica la misma defensa: antes de guardar un evento comprueba que el hallazgo pertenece a la organización activa. La excepción controlada es `DELETED`, que puede registrarse después de eliminar el hallazgo solo si ya existe historial de ese hallazgo dentro de la misma organización.
+
 La base de datos refuerza este diseño mediante:
 
 - Columna `organization_id` obligatoria.
