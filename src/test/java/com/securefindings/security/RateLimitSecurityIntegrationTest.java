@@ -1,5 +1,6 @@
 package com.securefindings.security;
 
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -7,14 +8,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.util.UUID;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
@@ -27,6 +32,11 @@ import com.securefindings.health.HealthController;
                 "securefindings.rate-limit.window=60s"
 })
 class RateLimitSecurityIntegrationTest {
+
+        private static final UUID ORGANIZATION_A = UUID.fromString(
+                        "00000000-0000-0000-0000-000000000001");
+        private static final UUID ORGANIZATION_B = UUID.fromString(
+                        "00000000-0000-0000-0000-000000000002");
 
         @Autowired
         private WebApplicationContext context;
@@ -90,6 +100,31 @@ class RateLimitSecurityIntegrationTest {
         }
 
         @Test
+        void deberiaSepararLasCuotasJwtPorOrganizacionEnLaCadenaDeSeguridad()
+                        throws Exception {
+
+                mockMvc.perform(get("/api/v1/findings")
+                                .with(jwtAutenticado(ORGANIZATION_A)))
+                                .andExpect(status().isNotFound())
+                                .andExpect(header().string(
+                                                "X-RateLimit-Remaining",
+                                                "0"));
+
+                mockMvc.perform(get("/api/v1/findings")
+                                .with(jwtAutenticado(ORGANIZATION_A)))
+                                .andExpect(status().isTooManyRequests())
+                                .andExpect(jsonPath("$.code")
+                                                .value("RATE_LIMIT_EXCEEDED"));
+
+                mockMvc.perform(get("/api/v1/findings")
+                                .with(jwtAutenticado(ORGANIZATION_B)))
+                                .andExpect(status().isNotFound())
+                                .andExpect(header().string(
+                                                "X-RateLimit-Remaining",
+                                                "0"));
+        }
+
+        @Test
         void noDebeAplicarElLimiteAlHealthCheck()
                         throws Exception {
 
@@ -98,5 +133,17 @@ class RateLimitSecurityIntegrationTest {
 
                 mockMvc.perform(get("/api/v1/health"))
                                 .andExpect(status().isOk());
+        }
+
+        private RequestPostProcessor jwtAutenticado(UUID organizationId) {
+                return jwt()
+                                .jwt(token -> token
+                                                .subject("analista")
+                                                .claim("preferred_username", "analista")
+                                                .claim(
+                                                                "organization_id",
+                                                                organizationId.toString()))
+                                .authorities(new SimpleGrantedAuthority(
+                                                "ROLE_ANALYST"));
         }
 }
