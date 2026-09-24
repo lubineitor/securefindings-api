@@ -260,8 +260,13 @@ El endpoint público de health check queda excluido:
 
 La clave utilizada para aplicar el límite es:
 
-- Usuario autenticado: nombre principal obtenido del contexto de seguridad.
+- JWT autenticado: organización del claim `organization_id` y nombre principal.
+- Otra autenticación: nombre principal obtenido del contexto de seguridad.
 - Petición no autenticada: dirección IP remota obtenida mediante `getRemoteAddr()`.
+
+Así, el mismo nombre principal mantiene cuotas independientes en organizaciones distintas. Si el claim de organización no contiene un UUID válido, se conserva la cuota por nombre principal.
+
+Este fallback solo determina qué contador consume la petición; no concede acceso. El contexto de organización sigue rechazando los tokens sin un claim válido.
 
 La aplicación no confía directamente en cabeceras como `X-Forwarded-For`, porque podrían ser manipuladas por el cliente si no existe un proxy de confianza correctamente configurado.
 
@@ -337,7 +342,7 @@ logging.pattern.console=%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] [requestI
 Ejemplo:
 
 ```text
-2026-09-17 10:15:23.421 INFO [http-nio-8080-exec-1] [requestId=finding-request-123] ... 
+2026-09-17 10:15:23.421 INFO [http-nio-8080-exec-1] [requestId=finding-request-123] ...
 ```
 
 El identificador sirve únicamente para correlacionar peticiones y logs. No sustituye la autenticación, la autorización ni la identidad del usuario.
@@ -725,6 +730,8 @@ Las pruebas cubren:
 - Rechazo de parámetros de ordenación no permitidos.
 - Limitación por dirección IP.
 - Limitación por usuario autenticado.
+- Cuotas independientes por organización para el mismo principal JWT.
+- Reutilización de la cuota por principal cuando el claim de organización no es un UUID válido.
 - Cabecera `Retry-After`.
 - Exclusión del endpoint de health check.
 - Generación y validación de `X-Request-ID`.

@@ -224,7 +224,11 @@ queda excluido para que pueda utilizarse en comprobaciones de disponibilidad.
 
 ### Identificación del cliente
 
-Para usuarios autenticados se utiliza el nombre del principal obtenido del contexto de seguridad.
+Para peticiones autenticadas con JWT, la clave combina el UUID del claim `organization_id` con el nombre del principal. Así, el mismo nombre de usuario en organizaciones distintas tiene contadores independientes. Si el claim no contiene un UUID válido, se utiliza la clave basada solo en el principal.
+
+Este fallback solo selecciona el contador del rate limiter; no autoriza la petición. El contexto de organización sigue rechazando tokens sin un claim `organization_id` válido o asociado a una organización existente.
+
+Para otras autenticaciones se utiliza el nombre del principal obtenido del contexto de seguridad.
 
 Para peticiones no autenticadas se utiliza la dirección remota:
 
@@ -868,6 +872,8 @@ El proyecto incluye pruebas para comprobar:
 - Respuestas JSON `404`.
 - Limitación por dirección IP.
 - Limitación por usuario autenticado.
+- Cuotas independientes por organización para el mismo principal JWT.
+- Reutilización de la cuota del principal cuando el claim de organización es inválido.
 - Respuesta `429`.
 - Cabecera `Retry-After`.
 - Cabecera `X-Request-ID`.
