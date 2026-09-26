@@ -1,6 +1,6 @@
 package com.securefindings.security;
 
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.util.List;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -17,6 +18,8 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
@@ -125,6 +128,34 @@ class RateLimitSecurityIntegrationTest {
         }
 
         @Test
+        void deberiaUsarLaIdentidadEstableDelJwtEnLaCadenaDeSeguridad()
+                        throws Exception {
+
+                mockMvc.perform(get("/api/v1/findings")
+                                .with(jwtAutenticado(
+                                                ORGANIZATION_A,
+                                                "analista",
+                                                "subject-1")))
+                                .andExpect(status().isNotFound());
+
+                mockMvc.perform(get("/api/v1/findings")
+                                .with(jwtAutenticado(
+                                                ORGANIZATION_A,
+                                                "analista",
+                                                "subject-2")))
+                                .andExpect(status().isNotFound());
+
+                mockMvc.perform(get("/api/v1/findings")
+                                .with(jwtAutenticado(
+                                                ORGANIZATION_A,
+                                                "analista-renombrado",
+                                                "subject-1")))
+                                .andExpect(status().isTooManyRequests())
+                                .andExpect(jsonPath("$.code")
+                                                .value("RATE_LIMIT_EXCEEDED"));
+        }
+
+        @Test
         void noDebeAplicarElLimiteAlHealthCheck()
                         throws Exception {
 
@@ -136,14 +167,33 @@ class RateLimitSecurityIntegrationTest {
         }
 
         private RequestPostProcessor jwtAutenticado(UUID organizationId) {
-                return jwt()
-                                .jwt(token -> token
-                                                .subject("analista")
-                                                .claim("preferred_username", "analista")
-                                                .claim(
-                                                                "organization_id",
-                                                                organizationId.toString()))
-                                .authorities(new SimpleGrantedAuthority(
-                                                "ROLE_ANALYST"));
+                return jwtAutenticado(
+                                organizationId,
+                                "analista",
+                                "analista");
+        }
+
+        private RequestPostProcessor jwtAutenticado(
+                        UUID organizationId,
+                        String username,
+                        String subject) {
+
+                Jwt token = Jwt.withTokenValue(
+                                "token-" + subject + "-" + organizationId)
+                                .header("alg", "none")
+                                .subject(subject)
+                                .claim("iss", "https://issuer.example.test/realms/securefindings")
+                                .claim("preferred_username", username)
+                                .claim(
+                                                "organization_id",
+                                                organizationId.toString())
+                                .build();
+
+                return authentication(
+                                new JwtAuthenticationToken(
+                                                token,
+                                                List.of(new SimpleGrantedAuthority(
+                                                                "ROLE_ANALYST")),
+                                                username));
         }
 }

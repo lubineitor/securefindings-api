@@ -188,6 +188,71 @@ class RateLimitFilterTest {
         }
 
         @Test
+        void deberiaSepararLasCuotasPorSubjectAunqueCoincidaElNombre()
+                        throws Exception {
+
+                rateLimitFilter = createFilter(1);
+                String organizationId = "00000000-0000-0000-0000-000000000001";
+
+                autenticarConClaimOrganizacion(
+                                "analista",
+                                "subject-analista-1",
+                                organizationId);
+
+                MockHttpServletResponse primeraIdentidad = invoke(
+                                "/api/v1/findings",
+                                "10.0.0.1");
+
+                autenticarConClaimOrganizacion(
+                                "analista",
+                                "subject-analista-2",
+                                organizationId);
+
+                MockHttpServletResponse segundaIdentidad = invoke(
+                                "/api/v1/findings",
+                                "10.0.0.1");
+
+                assertEquals(200, primeraIdentidad.getStatus());
+                assertEquals(200, segundaIdentidad.getStatus());
+
+                verify(filterChain, times(2))
+                                .doFilter(any(), any());
+        }
+
+        @Test
+        void deberiaConservarLaCuotaSiCambiaElNombreDelMismoSubject()
+                        throws Exception {
+
+                rateLimitFilter = createFilter(1);
+                String organizationId = "00000000-0000-0000-0000-000000000001";
+                String subject = "subject-analista-estable";
+
+                autenticarConClaimOrganizacion(
+                                "analista",
+                                subject,
+                                organizationId);
+
+                MockHttpServletResponse primeraPeticion = invoke(
+                                "/api/v1/findings",
+                                "10.0.0.1");
+
+                autenticarConClaimOrganizacion(
+                                "analista-renombrado",
+                                subject,
+                                organizationId);
+
+                MockHttpServletResponse peticionTrasRenombre = invoke(
+                                "/api/v1/findings",
+                                "10.0.0.1");
+
+                assertEquals(200, primeraPeticion.getStatus());
+                assertEquals(429, peticionTrasRenombre.getStatus());
+
+                verify(filterChain)
+                                .doFilter(any(), any());
+        }
+
+        @Test
         void unClaimDeOrganizacionInvalidoNoDebeCrearUnaCuotaNueva()
                         throws Exception {
 
@@ -279,9 +344,21 @@ class RateLimitFilterTest {
                         String username,
                         String organizationClaim) {
 
-                Jwt jwt = Jwt.withTokenValue("token-de-prueba-" + organizationClaim)
+                autenticarConClaimOrganizacion(
+                                username,
+                                username,
+                                organizationClaim);
+        }
+
+        private void autenticarConClaimOrganizacion(
+                        String username,
+                        String subject,
+                        String organizationClaim) {
+
+                Jwt jwt = Jwt.withTokenValue("token-de-prueba-" + organizationClaim + "-" + subject)
                                 .header("alg", "none")
-                                .subject(username)
+                                .subject(subject)
+                                .claim("iss", "https://issuer.example.test/realms/securefindings")
                                 .claim("preferred_username", username)
                                 .claim("organization_id", organizationClaim)
                                 .issuedAt(START.minusSeconds(60))
