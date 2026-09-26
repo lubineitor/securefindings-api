@@ -142,13 +142,19 @@ El contexto de seguridad utiliza principalmente:
 ```text
 preferred_username
 organization_id
+iss
+sub
 ```
 
 ### `preferred_username`
 
 Identifica al usuario que realiza la operación.
 
-Este valor se utiliza como actor en los eventos de auditoría y como identificador del cliente autenticado para el límite de peticiones.
+Este valor se utiliza como actor en los eventos de auditoría. Para la clave de rate limiting, la aplicación prioriza la identidad JWT estable formada por `iss` y `sub`, descrita más adelante.
+
+### `iss` y `sub`
+
+`iss` identifica al emisor del token y `sub` identifica al usuario dentro de ese emisor. La aplicación combina ambos claims con `organization_id` para mantener estable la cuota aunque cambie el nombre de usuario y para separar cuentas distintas con el mismo nombre.
 
 Si no existe un usuario autenticado, las operaciones técnicas o de prueba pueden utilizar:
 
@@ -224,7 +230,11 @@ queda excluido para que pueda utilizarse en comprobaciones de disponibilidad.
 
 ### Identificación del cliente
 
-Para usuarios autenticados se utiliza el nombre del principal obtenido del contexto de seguridad.
+Para peticiones autenticadas con JWT y un `organization_id` válido, la clave combina la organización con el emisor (`iss`) y el subject (`sub`). La pareja `iss` + `sub` identifica de forma estable la cuenta: un cambio de `preferred_username` no crea una cuota nueva, y dos cuentas distintas no comparten cuota aunque tengan el mismo nombre. Si falta `iss` o `sub`, el filtro usa el nombre del principal dentro de la organización.
+
+Si el claim `organization_id` falta o no contiene un UUID válido, se utiliza la clave basada solo en el nombre del principal. Este fallback solo selecciona el contador del rate limiter; no autoriza la petición. El contexto de organización sigue rechazando tokens sin un claim `organization_id` válido o asociado a una organización existente.
+
+Para otras autenticaciones se utiliza el nombre del principal obtenido del contexto de seguridad.
 
 Para peticiones no autenticadas se utiliza la dirección remota:
 
@@ -428,6 +438,8 @@ finding_id + organization_id
 Esto evita que conocer un UUID permita acceder a información de otra organización.
 
 Cuando un recurso no pertenece a la organización actual, la aplicación puede responder con `404` para no revelar si el identificador existe en otra organización.
+
+El registro de auditoría aplica la misma defensa: antes de guardar un evento comprueba que el hallazgo pertenece a la organización activa. La excepción controlada es `DELETED`, que puede registrarse después de eliminar el hallazgo solo si ya existe historial de ese hallazgo dentro de la misma organización.
 
 La base de datos refuerza este diseño mediante:
 
@@ -866,6 +878,10 @@ El proyecto incluye pruebas para comprobar:
 - Respuestas JSON `404`.
 - Limitación por dirección IP.
 - Limitación por usuario autenticado.
+- Cuotas JWT aisladas por organización y por la pareja estable `iss` + `sub`.
+- Subjects distintos no comparten cuota aunque coincida `preferred_username`.
+- Un cambio de `preferred_username` conserva la cuota del mismo subject.
+- Reutilización de la cuota por nombre principal cuando el claim de organización es inválido.
 - Respuesta `429`.
 - Cabecera `Retry-After`.
 - Cabecera `X-Request-ID`.

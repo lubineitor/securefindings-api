@@ -25,6 +25,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 import com.securefindings.audit.application.AuditService;
+import com.securefindings.audit.domain.AuditAction;
 import com.securefindings.finding.application.FindingNotFoundException;
 import com.securefindings.finding.application.FindingService;
 import com.securefindings.finding.domain.Finding;
@@ -147,6 +148,33 @@ class FindingOrganizationIsolationIntegrationTest {
                                                 createdFinding.id(),
                                                 0,
                                                 20));
+
+                autenticarEnOrganizacion(ORGANIZATION_A);
+
+                assertEquals(
+                                1,
+                                auditService
+                                                .findPageByFindingId(createdFinding.id(), 0, 20)
+                                                .getTotalElements());
+        }
+
+        @Test
+        void unaOrganizacionNoDebeRegistrarAuditoriaDeHallazgoDeOtra() {
+                autenticarEnOrganizacion(ORGANIZATION_A);
+
+                Finding createdFinding = findingService.create(
+                                "Auditoría protegida",
+                                "El evento no debe cruzar organizaciones",
+                                FindingSeverity.HIGH);
+
+                autenticarEnOrganizacion(ORGANIZATION_B);
+
+                assertThrows(
+                                FindingNotFoundException.class,
+                                () -> auditService.register(
+                                                createdFinding.id(),
+                                                AuditAction.UPDATED,
+                                                "usuario-b"));
 
                 autenticarEnOrganizacion(ORGANIZATION_A);
 

@@ -9,6 +9,7 @@ import java.util.stream.Collectors;
 import org.springframework.core.MethodParameter;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.method.ParameterValidationResult;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -103,6 +104,16 @@ public class GlobalExceptionHandler {
                                 Map.of(
                                                 "body",
                                                 "El cuerpo de la petición no tiene un formato válido"));
+        }
+
+        @ExceptionHandler(AccessDeniedException.class)
+        @ResponseStatus(HttpStatus.FORBIDDEN)
+        public ApiErrorResponse handleAccessDenied() {
+
+                return new ApiErrorResponse(
+                                "FORBIDDEN",
+                                "El usuario no tiene permisos para acceder a este recurso",
+                                Map.of());
         }
 
         @ExceptionHandler(FindingNotFoundException.class)

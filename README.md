@@ -167,6 +167,8 @@ El usuario se obtiene del claim `preferred_username` del token JWT. En operacion
 
 La auditoría puede consultarse de forma paginada y se conserva incluso cuando el hallazgo es eliminado.
 
+Antes de registrar un evento, el servicio verifica que el hallazgo pertenece a la organización actual. Para conservar la trazabilidad de una eliminación, permite el evento `DELETED` únicamente cuando ya existe historial de ese hallazgo en la misma organización.
+
 Las transiciones de estado no permitidas no generan eventos de auditoría.
 
 El campo `requestId` se obtiene de la cabecera `X-Request-ID` y del contexto MDC. Se persiste en `finding_audit.request_id` y se devuelve al consultar el historial del hallazgo.
@@ -258,8 +260,13 @@ El endpoint público de health check queda excluido:
 
 La clave utilizada para aplicar el límite es:
 
-- Usuario autenticado: nombre principal obtenido del contexto de seguridad.
+- JWT autenticado con `organization_id` UUID válido: organización, emisor (`iss`) y subject (`sub`).
+- JWT sin organización válida y otras autenticaciones: nombre principal obtenido del contexto de seguridad.
 - Petición no autenticada: dirección IP remota obtenida mediante `getRemoteAddr()`.
+
+La combinación de `iss` y `sub` mantiene la identidad estable aunque cambie `preferred_username`, y evita que dos cuentas con el mismo nombre compartan cuota. Si falta el emisor o el subject en un token con organización válida, se usa el nombre principal dentro de esa organización. Si el claim de organización no contiene un UUID válido, se conserva la cuota por nombre principal.
+
+Este fallback solo determina qué contador consume la petición; no concede acceso. El contexto de organización sigue rechazando los tokens sin un claim válido.
 
 La aplicación no confía directamente en cabeceras como `X-Forwarded-For`, porque podrían ser manipuladas por el cliente si no existe un proxy de confianza correctamente configurado.
 
@@ -335,7 +342,7 @@ logging.pattern.console=%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] [requestI
 Ejemplo:
 
 ```text
-2026-09-17 10:15:23.421 INFO [http-nio-8080-exec-1] [requestId=finding-request-123] ... 
+2026-09-17 10:15:23.421 INFO [http-nio-8080-exec-1] [requestId=finding-request-123] ...
 ```
 
 El identificador sirve únicamente para correlacionar peticiones y logs. No sustituye la autenticación, la autorización ni la identidad del usuario.
@@ -723,6 +730,10 @@ Las pruebas cubren:
 - Rechazo de parámetros de ordenación no permitidos.
 - Limitación por dirección IP.
 - Limitación por usuario autenticado.
+- Cuotas JWT separadas por organización y por identidad `iss` + `sub`.
+- Cuotas separadas para cuentas con el mismo nombre y subjects distintos.
+- Cuota conservada tras cambiar `preferred_username` del mismo subject.
+- Reutilización de la cuota por nombre principal cuando el claim de organización no es un UUID válido.
 - Cabecera `Retry-After`.
 - Exclusión del endpoint de health check.
 - Generación y validación de `X-Request-ID`.

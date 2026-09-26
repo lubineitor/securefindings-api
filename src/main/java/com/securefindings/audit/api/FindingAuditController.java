@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.securefindings.api.error.GlobalExceptionHandler.ApiErrorResponse;
 import com.securefindings.audit.application.AuditService;
 import com.securefindings.audit.domain.AuditAction;
 import com.securefindings.audit.persistence.FindingAuditEntity;
@@ -48,7 +49,8 @@ public class FindingAuditController {
                         @ApiResponse(responseCode = "401", description = "Token ausente o inválido"),
                         @ApiResponse(responseCode = "403", description = "El usuario no tiene permisos"),
                         @ApiResponse(responseCode = "404", description = "El hallazgo no existe"),
-                        @ApiResponse(responseCode = "400", description = "Los filtros o parámetros no son válidos")
+                        @ApiResponse(responseCode = "400", description = "Los filtros o parámetros no son válidos"),
+                        @ApiResponse(responseCode = "429", description = "Se ha superado el límite de peticiones", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
         })
         public FindingAuditPageResponse findByFindingId(
                         @Parameter(description = "Identificador del hallazgo", in = ParameterIn.PATH, required = true) @PathVariable("findingId") UUID findingId,
