@@ -13,9 +13,13 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.securefindings.api.error.GlobalExceptionHandler.ApiErrorResponse;
 import com.securefindings.comment.application.FindingCommentService;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -29,38 +33,40 @@ import jakarta.validation.constraints.Min;
 @SecurityRequirement(name = "bearerAuth")
 public class FindingCommentController {
 
-    private final FindingCommentService commentService;
+        private final FindingCommentService commentService;
 
-    public FindingCommentController(
-            FindingCommentService commentService) {
-        this.commentService = commentService;
-    }
+        public FindingCommentController(
+                        FindingCommentService commentService) {
+                this.commentService = commentService;
+        }
 
-    @PostMapping
-    @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Crear un comentario", description = "Añade un comentario al hallazgo indicado")
-    public FindingCommentResponse create(
-            @PathVariable("findingId") UUID findingId,
-            @Valid @RequestBody CreateFindingCommentRequest request) {
+        @PostMapping
+        @ResponseStatus(HttpStatus.CREATED)
+        @Operation(summary = "Crear un comentario", description = "Añade un comentario al hallazgo indicado")
+        @ApiResponse(responseCode = "429", description = "Se ha superado el límite de peticiones", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
+        public FindingCommentResponse create(
+                        @PathVariable("findingId") UUID findingId,
+                        @Valid @RequestBody CreateFindingCommentRequest request) {
 
-        return FindingCommentResponse.from(
-                commentService.create(
-                        findingId,
-                        request.content()));
-    }
+                return FindingCommentResponse.from(
+                                commentService.create(
+                                                findingId,
+                                                request.content()));
+        }
 
-    @GetMapping
-    @Operation(summary = "Consultar comentarios", description = "Devuelve los comentarios paginados y ordenados "
-            + "cronológicamente")
-    public FindingCommentPageResponse findPage(
-            @PathVariable("findingId") UUID findingId,
-            @RequestParam(name = "page", defaultValue = "0") @Min(0) int page,
-            @RequestParam(name = "size", defaultValue = "20") @Min(1) @Max(100) int size) {
+        @GetMapping
+        @Operation(summary = "Consultar comentarios", description = "Devuelve los comentarios paginados y ordenados "
+                        + "cronológicamente")
+        @ApiResponse(responseCode = "429", description = "Se ha superado el límite de peticiones", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
+        public FindingCommentPageResponse findPage(
+                        @PathVariable("findingId") UUID findingId,
+                        @RequestParam(name = "page", defaultValue = "0") @Min(0) int page,
+                        @RequestParam(name = "size", defaultValue = "20") @Min(1) @Max(100) int size) {
 
-        return FindingCommentPageResponse.from(
-                commentService.findPageByFindingId(
-                        findingId,
-                        page,
-                        size));
-    }
+                return FindingCommentPageResponse.from(
+                                commentService.findPageByFindingId(
+                                                findingId,
+                                                page,
+                                                size));
+        }
 }
