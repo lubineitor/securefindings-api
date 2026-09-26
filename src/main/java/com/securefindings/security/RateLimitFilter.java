@@ -202,11 +202,39 @@ public final class RateLimitFilter extends OncePerRequestFilter {
 
                 try {
                         UUID organizationId = UUID.fromString(organizationClaim);
+                        String principalKey = jwtPrincipalKey(
+                                        jwtAuthentication,
+                                        name);
 
-                        return "organization:" + organizationId + ":user:" + name;
+                        return "organization:" + organizationId + ":" + principalKey;
                 } catch (IllegalArgumentException exception) {
                         return "user:" + name;
                 }
+        }
+
+        private String jwtPrincipalKey(
+                        JwtAuthenticationToken jwtAuthentication,
+                        String name) {
+
+                String subject = jwtAuthentication
+                                .getToken()
+                                .getSubject();
+
+                Object issuerClaim = jwtAuthentication
+                                .getToken()
+                                .getClaims()
+                                .get("iss");
+
+                String issuer = issuerClaim == null
+                                ? null
+                                : issuerClaim.toString();
+
+                if (subject == null || subject.isBlank()
+                                || issuer == null || issuer.isBlank()) {
+                        return "user:" + name;
+                }
+
+                return "issuer:" + issuer + ":subject:" + subject;
         }
 
         private void writeRateLimitHeaders(
