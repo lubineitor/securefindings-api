@@ -260,11 +260,11 @@ El endpoint público de health check queda excluido:
 
 La clave utilizada para aplicar el límite es:
 
-- JWT autenticado: organización del claim `organization_id` y nombre principal.
-- Otra autenticación: nombre principal obtenido del contexto de seguridad.
+- JWT autenticado con `organization_id` UUID válido: organización, emisor (`iss`) y subject (`sub`).
+- JWT sin organización válida y otras autenticaciones: nombre principal obtenido del contexto de seguridad.
 - Petición no autenticada: dirección IP remota obtenida mediante `getRemoteAddr()`.
 
-Así, el mismo nombre principal mantiene cuotas independientes en organizaciones distintas. Si el claim de organización no contiene un UUID válido, se conserva la cuota por nombre principal.
+La combinación de `iss` y `sub` mantiene la identidad estable aunque cambie `preferred_username`, y evita que dos cuentas con el mismo nombre compartan cuota. Si falta el emisor o el subject en un token con organización válida, se usa el nombre principal dentro de esa organización. Si el claim de organización no contiene un UUID válido, se conserva la cuota por nombre principal.
 
 Este fallback solo determina qué contador consume la petición; no concede acceso. El contexto de organización sigue rechazando los tokens sin un claim válido.
 
@@ -730,8 +730,10 @@ Las pruebas cubren:
 - Rechazo de parámetros de ordenación no permitidos.
 - Limitación por dirección IP.
 - Limitación por usuario autenticado.
-- Cuotas independientes por organización para el mismo principal JWT.
-- Reutilización de la cuota por principal cuando el claim de organización no es un UUID válido.
+- Cuotas JWT separadas por organización y por identidad `iss` + `sub`.
+- Cuotas separadas para cuentas con el mismo nombre y subjects distintos.
+- Cuota conservada tras cambiar `preferred_username` del mismo subject.
+- Reutilización de la cuota por nombre principal cuando el claim de organización no es un UUID válido.
 - Cabecera `Retry-After`.
 - Exclusión del endpoint de health check.
 - Generación y validación de `X-Request-ID`.
