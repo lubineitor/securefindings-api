@@ -10,9 +10,11 @@ import static org.mockito.Mockito.verify;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,6 +34,7 @@ class RateLimitFilterTest {
 
         private FilterChain filterChain;
         private RateLimitFilter rateLimitFilter;
+        private MutableClock clock;
 
         @BeforeEach
         void configurarFiltro() {
@@ -61,7 +64,7 @@ class RateLimitFilterTest {
                                 "1",
                                 response.getHeader("X-RateLimit-Remaining"));
                 assertEquals(
-                                String.valueOf(START.plusSeconds(60).getEpochSecond()),
+                                String.valueOf(START.plusSeconds(30).getEpochSecond()),
                                 response.getHeader("X-RateLimit-Reset"));
         }
 
@@ -78,7 +81,7 @@ class RateLimitFilterTest {
 
                 assertEquals(429, limitedResponse.getStatus());
                 assertEquals(
-                                "60",
+                                "30",
                                 limitedResponse.getHeader("Retry-After"));
                 assertEquals(
                                 "2",
@@ -94,6 +97,45 @@ class RateLimitFilterTest {
                                                 .contains("RATE_LIMIT_EXCEEDED"));
 
                 verify(filterChain, times(2))
+                                .doFilter(any(), any());
+        }
+
+        @Test
+        void deberiaReponerGradualmenteLosTokens()
+                        throws Exception {
+
+                rateLimitFilter = createFilter(2);
+
+                invoke("/api/v1/findings", "10.0.0.1");
+                invoke("/api/v1/findings", "10.0.0.1");
+
+                clock.advance(Duration.ofSeconds(30));
+
+                MockHttpServletResponse refilledResponse = invoke(
+                                "/api/v1/findings",
+                                "10.0.0.1");
+
+                assertEquals(200, refilledResponse.getStatus());
+                assertEquals(
+                                "0",
+                                refilledResponse.getHeader("X-RateLimit-Remaining"));
+                assertEquals(
+                                String.valueOf(START.plusSeconds(90).getEpochSecond()),
+                                refilledResponse.getHeader("X-RateLimit-Reset"));
+
+                MockHttpServletResponse limitedResponse = invoke(
+                                "/api/v1/findings",
+                                "10.0.0.1");
+
+                assertEquals(429, limitedResponse.getStatus());
+                assertEquals(
+                                "30",
+                                limitedResponse.getHeader("Retry-After"));
+                assertEquals(
+                                String.valueOf(START.plusSeconds(90).getEpochSecond()),
+                                limitedResponse.getHeader("X-RateLimit-Reset"));
+
+                verify(filterChain, times(3))
                                 .doFilter(any(), any());
         }
 
@@ -301,13 +343,13 @@ class RateLimitFilterTest {
         }
 
         private RateLimitFilter createFilter(int maxRequests) {
+                clock = new MutableClock(START);
+
                 return new RateLimitFilter(
                                 new RateLimitProperties(
                                                 maxRequests,
                                                 Duration.ofMinutes(1)),
-                                Clock.fixed(
-                                                START,
-                                                ZoneOffset.UTC));
+                                clock);
         }
 
         private MockHttpServletResponse invoke(
@@ -379,5 +421,42 @@ class RateLimitFilterTest {
                                                                 username,
                                                                 "credentials",
                                                                 "ROLE_ANALYST"));
+        }
+
+        private static final class MutableClock extends Clock {
+
+                private final AtomicReference<Instant> currentInstant;
+                private final ZoneId zone;
+
+                private MutableClock(Instant initialInstant) {
+                        this(new AtomicReference<>(initialInstant), ZoneOffset.UTC);
+                }
+
+                private MutableClock(
+                                AtomicReference<Instant> currentInstant,
+                                ZoneId zone) {
+
+                        this.currentInstant = currentInstant;
+                        this.zone = zone;
+                }
+
+                private void advance(Duration duration) {
+                        currentInstant.updateAndGet(instant -> instant.plus(duration));
+                }
+
+                @Override
+                public ZoneId getZone() {
+                        return zone;
+                }
+
+                @Override
+                public Clock withZone(ZoneId zone) {
+                        return new MutableClock(currentInstant, zone);
+                }
+
+                @Override
+                public Instant instant() {
+                        return currentInstant.get();
+                }
         }
 }

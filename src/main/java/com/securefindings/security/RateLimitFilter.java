@@ -34,10 +34,11 @@ public final class RateLimitFilter extends OncePerRequestFilter {
         private static final String RATE_LIMIT_REMAINING_HEADER = "X-RateLimit-Remaining";
         private static final String RATE_LIMIT_RESET_HEADER = "X-RateLimit-Reset";
         private static final int CLEANUP_INTERVAL = 1_000;
+        private static final double TOKEN_EPSILON = 1.0e-9;
 
         private final RateLimitProperties properties;
         private final Clock clock;
-        private final ConcurrentMap<String, Window> windows = new ConcurrentHashMap<>();
+        private final ConcurrentMap<String, TokenBucket> buckets = new ConcurrentHashMap<>();
         private final AtomicLong requestsSinceCleanup = new AtomicLong();
 
         public RateLimitFilter(
@@ -93,58 +94,125 @@ public final class RateLimitFilter extends OncePerRequestFilter {
                         Instant now) {
 
                 AtomicReference<RateLimitDecision> decisionReference = new AtomicReference<>();
+                int capacity = properties.maxRequests();
+                double windowSeconds = durationInSeconds(properties.window());
+                double tokensPerSecond = capacity / windowSeconds;
 
-                windows.compute(clientKey, (ignored, currentWindow) -> {
-                        if (currentWindow == null
-                                        || !now.isBefore(currentWindow.resetAt())) {
+                buckets.compute(clientKey, (ignored, currentBucket) -> {
+                        Instant effectiveNow = currentBucket == null
+                                        || now.isAfter(currentBucket.lastRefillAt())
+                                                        ? now
+                                                        : currentBucket.lastRefillAt();
 
-                                Instant resetAt = now.plus(properties.window());
-                                int remaining = properties.maxRequests() - 1;
+                        double availableTokens = currentBucket == null
+                                        ? capacity
+                                        : currentBucket.tokens()
+                                                        + durationInSeconds(Duration.between(
+                                                                        currentBucket.lastRefillAt(),
+                                                                        effectiveNow))
+                                                                        * tokensPerSecond;
 
-                                decisionReference.set(
-                                                new RateLimitDecision(
-                                                                true,
-                                                                resetAt,
-                                                                remaining));
+                        availableTokens = normalizeTokens(
+                                        availableTokens,
+                                        capacity);
 
-                                return new Window(1, resetAt);
-                        }
+                        boolean allowed = availableTokens >= 1.0 - TOKEN_EPSILON;
+                        double remainingTokens = allowed
+                                        ? Math.max(0.0, availableTokens - 1.0)
+                                        : availableTokens;
 
-                        if (currentWindow.requests() >= properties.maxRequests()) {
+                        Instant resetAt = instantAfterRefill(
+                                        effectiveNow,
+                                        capacity - remainingTokens,
+                                        tokensPerSecond);
 
-                                decisionReference.set(
-                                                new RateLimitDecision(
-                                                                false,
-                                                                currentWindow.resetAt(),
-                                                                0));
+                        Instant retryAt = allowed
+                                        ? effectiveNow
+                                        : instantAfterRefill(
+                                                        effectiveNow,
+                                                        1.0 - remainingTokens,
+                                                        tokensPerSecond);
 
-                                return currentWindow;
-                        }
+                        decisionReference.set(new RateLimitDecision(
+                                        allowed,
+                                        resetAt,
+                                        retryAt,
+                                        allowed
+                                                        ? wholeRemainingTokens(remainingTokens)
+                                                        : 0));
 
-                        Window updatedWindow = new Window(
-                                        currentWindow.requests() + 1,
-                                        currentWindow.resetAt());
-
-                        int remaining = properties.maxRequests()
-                                        - updatedWindow.requests();
-
-                        decisionReference.set(
-                                        new RateLimitDecision(
-                                                        true,
-                                                        currentWindow.resetAt(),
-                                                        remaining));
-
-                        return updatedWindow;
+                        return new TokenBucket(
+                                        remainingTokens,
+                                        effectiveNow,
+                                        resetAt);
                 });
 
-                cleanupExpiredWindows(now);
+                cleanupExpiredBuckets(now);
 
                 return Objects.requireNonNull(
                                 decisionReference.get(),
                                 "No se pudo calcular el límite de peticiones");
         }
 
-        private void cleanupExpiredWindows(Instant now) {
+        private double normalizeTokens(
+                        double tokens,
+                        int capacity) {
+
+                double boundedTokens = Math.max(
+                                0.0,
+                                Math.min(capacity, tokens));
+
+                double nearestInteger = Math.rint(boundedTokens);
+
+                return Math.abs(boundedTokens - nearestInteger) <= TOKEN_EPSILON
+                                ? nearestInteger
+                                : boundedTokens;
+        }
+
+        private int wholeRemainingTokens(double tokens) {
+                return Math.max(
+                                0,
+                                Math.min(
+                                                properties.maxRequests(),
+                                                (int) Math.floor(tokens + TOKEN_EPSILON)));
+        }
+
+        private double durationInSeconds(Duration duration) {
+                return duration.getSeconds()
+                                + duration.getNano() / 1_000_000_000.0;
+        }
+
+        private Instant instantAfterRefill(
+                        Instant reference,
+                        double tokensToRefill,
+                        double tokensPerSecond) {
+
+                if (tokensToRefill <= 0.0) {
+                        return reference;
+                }
+
+                double secondsToRefill = tokensToRefill / tokensPerSecond;
+                double nearestWholeSecond = Math.rint(secondsToRefill);
+
+                if (Math.abs(secondsToRefill - nearestWholeSecond) <= TOKEN_EPSILON) {
+                        secondsToRefill = nearestWholeSecond;
+                }
+
+                long wholeSeconds = (long) Math.floor(secondsToRefill);
+                long nanoseconds = (long) Math.ceil(
+                                (secondsToRefill - wholeSeconds) * 1_000_000_000.0);
+
+                if (nanoseconds >= 1_000_000_000L) {
+                        wholeSeconds++;
+                        nanoseconds -= 1_000_000_000L;
+                }
+
+                return reference
+                                .plusSeconds(wholeSeconds)
+                                .plusNanos(nanoseconds);
+        }
+
+        private void cleanupExpiredBuckets(Instant now) {
                 long requests = requestsSinceCleanup.incrementAndGet();
 
                 if (requests < CLEANUP_INTERVAL
@@ -154,7 +222,8 @@ public final class RateLimitFilter extends OncePerRequestFilter {
                         return;
                 }
 
-                windows.entrySet().removeIf(entry -> !now.isBefore(entry.getValue().resetAt()));
+                buckets.entrySet().removeIf(
+                                entry -> !now.isBefore(entry.getValue().resetAt()));
         }
 
         private String clientKey(HttpServletRequest request) {
@@ -274,7 +343,7 @@ public final class RateLimitFilter extends OncePerRequestFilter {
                 response.setHeader(
                                 HttpHeaders.RETRY_AFTER,
                                 String.valueOf(
-                                                retryAfterSeconds(now, decision.resetAt())));
+                                                retryAfterSeconds(now, decision.retryAt())));
 
                 response.setHeader(
                                 HttpHeaders.CACHE_CONTROL,
@@ -291,11 +360,11 @@ public final class RateLimitFilter extends OncePerRequestFilter {
 
         private long retryAfterSeconds(
                         Instant now,
-                        Instant resetAt) {
+                        Instant retryAt) {
 
                 Duration remaining = Duration.between(
                                 now,
-                                resetAt);
+                                retryAt);
 
                 long seconds = remaining.getSeconds();
 
@@ -306,14 +375,16 @@ public final class RateLimitFilter extends OncePerRequestFilter {
                 return Math.max(1, seconds);
         }
 
-        private record Window(
-                        int requests,
+        private record TokenBucket(
+                        double tokens,
+                        Instant lastRefillAt,
                         Instant resetAt) {
         }
 
         private record RateLimitDecision(
                         boolean allowed,
                         Instant resetAt,
+                        Instant retryAt,
                         int remaining) {
         }
 }
