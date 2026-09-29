@@ -3,6 +3,7 @@ package com.securefindings.security;
 import java.time.Clock;
 
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -43,6 +44,17 @@ public class SecurityConfig {
                 return new RateLimitFilter(
                                 properties,
                                 rateLimitClock);
+        }
+
+        @Bean
+        FilterRegistrationBean<RateLimitFilter> rateLimitFilterServletRegistration(
+                        RateLimitFilter rateLimitFilter) {
+
+                FilterRegistrationBean<RateLimitFilter> registration = new FilterRegistrationBean<>();
+                registration.setFilter(rateLimitFilter);
+                registration.setEnabled(false);
+
+                return registration;
         }
 
         @Bean
