@@ -250,6 +250,16 @@ X-Forwarded-For
 
 Estas cabeceras solo deberían interpretarse cuando existe un proxy de confianza y la infraestructura elimina o sobrescribe los valores enviados externamente.
 
+### Algoritmo de reposición
+
+El filtro utiliza un cubo de tokens por cliente:
+
+- La capacidad inicial es `max-requests`.
+- Cada petición aceptada consume un token.
+- Los tokens se reponen continuamente. `window` es el tiempo necesario para reponer un cubo vacío hasta su capacidad completa.
+- Con `max-requests=60` y `window=60s`, la tasa de reposición es de un token por segundo.
+- El cliente puede consumir la capacidad disponible en una ráfaga. Después, las peticiones se aceptan conforme regresan tokens; no se reinicia toda la cuota en un instante fijo.
+
 ### Configuración
 
 Los valores predeterminados son:
@@ -286,6 +296,14 @@ La respuesta incluye:
 ```http
 Retry-After: <segundos>
 ```
+
+La respuesta incluye además estas cabeceras:
+
+- `X-RateLimit-Limit`: capacidad total del cubo.
+- `X-RateLimit-Remaining`: tokens enteros disponibles tras la petición.
+- `X-RateLimit-Reset`: instante Unix, en segundos, en que el cubo volverá a estar lleno.
+
+En respuestas `429`, `Retry-After` calcula el tiempo hasta el siguiente token disponible, mientras que `X-RateLimit-Reset` indica cuándo se recuperará toda la capacidad.
 
 También incluye un identificador de correlación:
 

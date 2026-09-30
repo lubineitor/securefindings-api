@@ -284,6 +284,8 @@ SECUREFINDINGS_RATE_LIMIT_MAX_REQUESTS=60
 SECUREFINDINGS_RATE_LIMIT_WINDOW=60s
 ```
 
+`max-requests` define la capacidad del cubo de tokens. `window` indica cuánto tarda en reponerse por completo un cubo vacío. Los tokens se recuperan de forma continua: con los valores predeterminados se repone un token por segundo. Cada petición aceptada consume un token; el cliente puede realizar una ráfaga inicial hasta agotar la capacidad y después recibe tokens gradualmente, sin un reinicio brusco en el límite de un intervalo.
+
 Cuando se supera el límite, la API devuelve:
 
 ```http
@@ -295,6 +297,14 @@ Incluyendo la cabecera:
 ```http
 Retry-After: <segundos>
 ```
+
+Las respuestas también incluyen:
+
+- `X-RateLimit-Limit`: capacidad total del cubo.
+- `X-RateLimit-Remaining`: tokens enteros disponibles tras la petición.
+- `X-RateLimit-Reset`: instante Unix, en segundos, en que el cubo volverá a estar lleno.
+
+En una respuesta `429`, `Retry-After` indica el tiempo hasta que se reponga el siguiente token; `X-RateLimit-Reset` señala cuándo se recuperará la capacidad completa.
 
 Ejemplo de respuesta:
 
