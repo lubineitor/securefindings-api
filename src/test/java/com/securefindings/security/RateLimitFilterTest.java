@@ -12,8 +12,14 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.AfterEach;
@@ -137,6 +143,74 @@ class RateLimitFilterTest {
 
                 verify(filterChain, times(3))
                                 .doFilter(any(), any());
+        }
+
+        @Test
+        void noDebeSuperarLaCuotaConPeticionesConcurrentes()
+                        throws Exception {
+
+                int maxRequests = 5;
+                int totalRequests = 20;
+                rateLimitFilter = createFilter(maxRequests);
+
+                ExecutorService executor = Executors.newFixedThreadPool(totalRequests);
+                CountDownLatch ready = new CountDownLatch(totalRequests);
+                CountDownLatch start = new CountDownLatch(1);
+                List<Future<Integer>> responses = new ArrayList<>(totalRequests);
+
+                try {
+                        for (int i = 0; i < totalRequests; i++) {
+                                responses.add(executor.submit(() -> {
+                                        ready.countDown();
+
+                                        if (!start.await(10, TimeUnit.SECONDS)) {
+                                                throw new IllegalStateException(
+                                                                "No se inició la ráfaga concurrente");
+                                        }
+
+                                        return invoke(
+                                                        "/api/v1/findings",
+                                                        "10.0.0.1")
+                                                        .getStatus();
+                                }));
+                        }
+
+                        assertTrue(
+                                        ready.await(10, TimeUnit.SECONDS),
+                                        "Todas las peticiones deben esperar en la barrera");
+
+                        start.countDown();
+
+                        int allowedRequests = 0;
+                        int rejectedRequests = 0;
+
+                        for (Future<Integer> response : responses) {
+                                int status = response.get(10, TimeUnit.SECONDS);
+
+                                if (status == 200) {
+                                        allowedRequests++;
+                                } else if (status == 429) {
+                                        rejectedRequests++;
+                                } else {
+                                        throw new AssertionError(
+                                                        "Estado HTTP inesperado: " + status);
+                                }
+                        }
+
+                        assertEquals(maxRequests, allowedRequests);
+                        assertEquals(
+                                        totalRequests - maxRequests,
+                                        rejectedRequests);
+
+                        verify(filterChain, times(maxRequests))
+                                        .doFilter(any(), any());
+                } finally {
+                        start.countDown();
+                        executor.shutdownNow();
+                        assertTrue(
+                                        executor.awaitTermination(10, TimeUnit.SECONDS),
+                                        "El executor debe finalizar");
+                }
         }
 
         @Test
