@@ -5,10 +5,12 @@ import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -39,6 +41,7 @@ public final class RateLimitFilter extends OncePerRequestFilter {
         private final RateLimitProperties properties;
         private final Clock clock;
         private final ConcurrentMap<String, TokenBucket> buckets = new ConcurrentHashMap<>();
+        private final AtomicInteger trackedBucketCount = new AtomicInteger();
         private final AtomicLong requestsSinceCleanup = new AtomicLong();
 
         public RateLimitFilter(
@@ -78,10 +81,7 @@ public final class RateLimitFilter extends OncePerRequestFilter {
                                 now);
 
                 if (!decision.allowed()) {
-                        writeTooManyRequests(
-                                        response,
-                                        now,
-                                        decision);
+                        writeTooManyRequests(response, now, decision);
                         return;
                 }
 
@@ -99,6 +99,20 @@ public final class RateLimitFilter extends OncePerRequestFilter {
                 double tokensPerSecond = capacity / windowSeconds;
 
                 buckets.compute(clientKey, (ignored, currentBucket) -> {
+                        if (currentBucket == null && !reserveBucket()) {
+                                Instant resetAt = instantAfterRefill(
+                                                now,
+                                                capacity,
+                                                tokensPerSecond);
+
+                                decisionReference.set(new RateLimitDecision(
+                                                false,
+                                                resetAt,
+                                                resetAt,
+                                                0));
+                                return null;
+                        }
+
                         Instant effectiveNow = currentBucket == null
                                         || now.isAfter(currentBucket.lastRefillAt())
                                                         ? now
@@ -112,9 +126,7 @@ public final class RateLimitFilter extends OncePerRequestFilter {
                                                                         effectiveNow))
                                                                         * tokensPerSecond;
 
-                        availableTokens = normalizeTokens(
-                                        availableTokens,
-                                        capacity);
+                        availableTokens = normalizeTokens(availableTokens, capacity);
 
                         boolean allowed = availableTokens >= 1.0 - TOKEN_EPSILON;
                         double remainingTokens = allowed
@@ -158,10 +170,7 @@ public final class RateLimitFilter extends OncePerRequestFilter {
                         double tokens,
                         int capacity) {
 
-                double boundedTokens = Math.max(
-                                0.0,
-                                Math.min(capacity, tokens));
-
+                double boundedTokens = Math.max(0.0, Math.min(capacity, tokens));
                 double nearestInteger = Math.rint(boundedTokens);
 
                 return Math.abs(boundedTokens - nearestInteger) <= TOKEN_EPSILON
@@ -207,23 +216,45 @@ public final class RateLimitFilter extends OncePerRequestFilter {
                         nanoseconds -= 1_000_000_000L;
                 }
 
-                return reference
-                                .plusSeconds(wholeSeconds)
-                                .plusNanos(nanoseconds);
+                return reference.plusSeconds(wholeSeconds).plusNanos(nanoseconds);
+        }
+
+        private boolean reserveBucket() {
+                while (true) {
+                        int trackedBuckets = trackedBucketCount.get();
+
+                        if (trackedBuckets >= properties.maxTrackedClients()) {
+                                return false;
+                        }
+
+                        if (trackedBucketCount.compareAndSet(
+                                        trackedBuckets,
+                                        trackedBuckets + 1)) {
+                                return true;
+                        }
+                }
         }
 
         private void cleanupExpiredBuckets(Instant now) {
                 long requests = requestsSinceCleanup.incrementAndGet();
 
-                if (requests < CLEANUP_INTERVAL
-                                || !requestsSinceCleanup.compareAndSet(
-                                                requests,
-                                                0)) {
+                long cleanupInterval = Math.max(
+                                CLEANUP_INTERVAL,
+                                trackedBucketCount.get() / 10L);
+
+                if (requests < cleanupInterval
+                                || !requestsSinceCleanup.compareAndSet(requests, 0)) {
                         return;
                 }
 
-                buckets.entrySet().removeIf(
-                                entry -> !now.isBefore(entry.getValue().resetAt()));
+                for (Map.Entry<String, TokenBucket> entry : buckets.entrySet()) {
+                        TokenBucket bucket = entry.getValue();
+
+                        if (!now.isBefore(bucket.resetAt())
+                                        && buckets.remove(entry.getKey(), bucket)) {
+                                trackedBucketCount.decrementAndGet();
+                        }
+                }
         }
 
         private String clientKey(HttpServletRequest request) {
@@ -231,26 +262,21 @@ public final class RateLimitFilter extends OncePerRequestFilter {
                                 .getContext()
                                 .getAuthentication();
 
-                if (authentication != null
-                                && authentication.isAuthenticated()) {
-
+                if (authentication != null && authentication.isAuthenticated()) {
                         String name = authentication.getName();
 
                         if (name != null
                                         && !name.isBlank()
                                         && !ANONYMOUS_USER.equals(name)) {
-                                return authenticatedClientKey(
-                                                authentication,
-                                                name);
+                                return authenticatedClientKey(authentication, name);
                         }
                 }
 
                 String remoteAddress = request.getRemoteAddr();
 
-                return "ip:" + (remoteAddress == null
-                                || remoteAddress.isBlank()
-                                                ? "unknown"
-                                                : remoteAddress);
+                return "ip:" + (remoteAddress == null || remoteAddress.isBlank()
+                                ? "unknown"
+                                : remoteAddress);
         }
 
         private String authenticatedClientKey(
@@ -271,9 +297,7 @@ public final class RateLimitFilter extends OncePerRequestFilter {
 
                 try {
                         UUID organizationId = UUID.fromString(organizationClaim);
-                        String principalKey = jwtPrincipalKey(
-                                        jwtAuthentication,
-                                        name);
+                        String principalKey = jwtPrincipalKey(jwtAuthentication, name);
 
                         return "organization:" + organizationId + ":" + principalKey;
                 } catch (IllegalArgumentException exception) {
@@ -285,18 +309,14 @@ public final class RateLimitFilter extends OncePerRequestFilter {
                         JwtAuthenticationToken jwtAuthentication,
                         String name) {
 
-                String subject = jwtAuthentication
-                                .getToken()
-                                .getSubject();
+                String subject = jwtAuthentication.getToken().getSubject();
 
                 Object issuerClaim = jwtAuthentication
                                 .getToken()
                                 .getClaims()
                                 .get("iss");
 
-                String issuer = issuerClaim == null
-                                ? null
-                                : issuerClaim.toString();
+                String issuer = issuerClaim == null ? null : issuerClaim.toString();
 
                 if (subject == null || subject.isBlank()
                                 || issuer == null || issuer.isBlank()) {
@@ -329,25 +349,16 @@ public final class RateLimitFilter extends OncePerRequestFilter {
                         RateLimitDecision decision)
                         throws IOException {
 
-                response.setStatus(
-                                HttpStatus.TOO_MANY_REQUESTS.value());
-
+                response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
                 writeRateLimitHeaders(response, decision);
-
-                response.setContentType(
-                                MediaType.APPLICATION_JSON_VALUE);
-
-                response.setCharacterEncoding(
-                                StandardCharsets.UTF_8.name());
+                response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                response.setCharacterEncoding(StandardCharsets.UTF_8.name());
 
                 response.setHeader(
                                 HttpHeaders.RETRY_AFTER,
-                                String.valueOf(
-                                                retryAfterSeconds(now, decision.retryAt())));
+                                String.valueOf(retryAfterSeconds(now, decision.retryAt())));
 
-                response.setHeader(
-                                HttpHeaders.CACHE_CONTROL,
-                                "no-store");
+                response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
 
                 response.getWriter().write("""
                                 {
@@ -362,10 +373,7 @@ public final class RateLimitFilter extends OncePerRequestFilter {
                         Instant now,
                         Instant retryAt) {
 
-                Duration remaining = Duration.between(
-                                now,
-                                retryAt);
-
+                Duration remaining = Duration.between(now, retryAt);
                 long seconds = remaining.getSeconds();
 
                 if (remaining.getNano() > 0) {

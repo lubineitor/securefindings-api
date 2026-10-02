@@ -37,7 +37,8 @@ class RateLimitFilterConcurrencyTest {
         RateLimitFilter filter = new RateLimitFilter(
                 new RateLimitProperties(
                         maxRequests,
-                        Duration.ofMinutes(1)),
+                        Duration.ofMinutes(1),
+                        100_000),
                 Clock.fixed(
                         START,
                         ZoneOffset.UTC));

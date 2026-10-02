@@ -1,6 +1,7 @@
 package com.securefindings.security;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -417,12 +418,20 @@ class RateLimitFilterTest {
         }
 
         private RateLimitFilter createFilter(int maxRequests) {
+                return createFilter(maxRequests, 100_000);
+        }
+
+        private RateLimitFilter createFilter(
+                        int maxRequests,
+                        int maxTrackedClients) {
+
                 clock = new MutableClock(START);
 
                 return new RateLimitFilter(
                                 new RateLimitProperties(
                                                 maxRequests,
-                                                Duration.ofMinutes(1)),
+                                                Duration.ofMinutes(1),
+                                                maxTrackedClients),
                                 clock);
         }
 
@@ -532,5 +541,64 @@ class RateLimitFilterTest {
                 public Instant instant() {
                         return currentInstant.get();
                 }
+        }
+
+        @Test
+        void deberiaRechazarUnMaximoDeClientesNoPositivo() {
+                assertThrows(
+                                IllegalArgumentException.class,
+                                () -> new RateLimitProperties(
+                                                1,
+                                                Duration.ofMinutes(1),
+                                                0));
+        }
+
+        @Test
+        void deberiaRechazarClientesNuevosAlAlcanzarElMaximoDeCuotas()
+                        throws Exception {
+
+                rateLimitFilter = createFilter(1, 1);
+
+                MockHttpServletResponse firstResponse = invoke(
+                                "/api/v1/findings",
+                                "10.0.0.1");
+                MockHttpServletResponse capacityResponse = invoke(
+                                "/api/v1/findings",
+                                "10.0.0.2");
+
+                assertEquals(200, firstResponse.getStatus());
+                assertEquals(429, capacityResponse.getStatus());
+                assertEquals("1", capacityResponse.getHeader("X-RateLimit-Limit"));
+                assertEquals("0", capacityResponse.getHeader("X-RateLimit-Remaining"));
+                assertEquals("60", capacityResponse.getHeader("Retry-After"));
+                assertTrue(capacityResponse.getContentAsString()
+                                .contains("RATE_LIMIT_EXCEEDED"));
+
+                verify(filterChain, times(1)).doFilter(any(), any());
+        }
+
+        @Test
+        void deberiaLiberarCuotasVencidasAlLimpiarElMapa()
+                        throws Exception {
+
+                rateLimitFilter = createFilter(1, 1);
+
+                assertEquals(
+                                200,
+                                invoke("/api/v1/findings", "10.0.0.1").getStatus());
+
+                clock.advance(Duration.ofMinutes(1));
+
+                for (int attempt = 0; attempt < 999; attempt++) {
+                        assertEquals(
+                                        429,
+                                        invoke("/api/v1/findings", "10.0.0.2").getStatus());
+                }
+
+                assertEquals(
+                                200,
+                                invoke("/api/v1/findings", "10.0.0.3").getStatus());
+
+                verify(filterChain, times(2)).doFilter(any(), any());
         }
 }
