@@ -17,6 +17,7 @@ import com.securefindings.api.error.GlobalExceptionHandler.ApiErrorResponse;
 import com.securefindings.comment.application.FindingCommentService;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -35,16 +36,19 @@ public class FindingCommentController {
 
         private final FindingCommentService commentService;
 
-        public FindingCommentController(
-                        FindingCommentService commentService) {
+        public FindingCommentController(FindingCommentService commentService) {
                 this.commentService = commentService;
         }
 
         @PostMapping
         @ResponseStatus(HttpStatus.CREATED)
         @Operation(summary = "Crear un comentario", description = "Añade un comentario al hallazgo indicado")
-        @ApiResponse(responseCode = "429", description = "Se ha superado el límite de peticiones", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
-        @ApiResponse(responseCode = "429", description = "Se ha superado el límite de peticiones", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
+        @ApiResponse(responseCode = "429", description = "Se ha superado el límite de peticiones", headers = {
+                        @Header(name = "Retry-After", description = "Segundos que deben transcurrir antes de reintentar", schema = @Schema(type = "integer", format = "int64")),
+                        @Header(name = "X-RateLimit-Limit", description = "Capacidad máxima del cubo de tokens", schema = @Schema(type = "integer", format = "int32")),
+                        @Header(name = "X-RateLimit-Remaining", description = "Tokens enteros disponibles", schema = @Schema(type = "integer", format = "int32")),
+                        @Header(name = "X-RateLimit-Reset", description = "Instante Unix en que el cubo volverá a estar lleno", schema = @Schema(type = "integer", format = "int64"))
+        }, content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
         public FindingCommentResponse create(
                         @PathVariable("findingId") UUID findingId,
                         @Valid @RequestBody CreateFindingCommentRequest request) {
@@ -56,10 +60,13 @@ public class FindingCommentController {
         }
 
         @GetMapping
-        @Operation(summary = "Consultar comentarios", description = "Devuelve los comentarios paginados y ordenados "
-                        + "cronológicamente")
-        @ApiResponse(responseCode = "429", description = "Se ha superado el límite de peticiones", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
-        @ApiResponse(responseCode = "429", description = "Se ha superado el límite de peticiones", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
+        @Operation(summary = "Consultar comentarios", description = "Devuelve los comentarios paginados y ordenados cronológicamente")
+        @ApiResponse(responseCode = "429", description = "Se ha superado el límite de peticiones", headers = {
+                        @Header(name = "Retry-After", description = "Segundos que deben transcurrir antes de reintentar", schema = @Schema(type = "integer", format = "int64")),
+                        @Header(name = "X-RateLimit-Limit", description = "Capacidad máxima del cubo de tokens", schema = @Schema(type = "integer", format = "int32")),
+                        @Header(name = "X-RateLimit-Remaining", description = "Tokens enteros disponibles", schema = @Schema(type = "integer", format = "int32")),
+                        @Header(name = "X-RateLimit-Reset", description = "Instante Unix en que el cubo volverá a estar lleno", schema = @Schema(type = "integer", format = "int64"))
+        }, content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
         public FindingCommentPageResponse findPage(
                         @PathVariable("findingId") UUID findingId,
                         @RequestParam(name = "page", defaultValue = "0") @Min(0) int page,
