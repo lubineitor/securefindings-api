@@ -2,9 +2,12 @@ package com.securefindings.security;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HexFormat;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -37,6 +40,7 @@ public final class RateLimitFilter extends OncePerRequestFilter {
         private static final String RATE_LIMIT_RESET_HEADER = "X-RateLimit-Reset";
         private static final int CLEANUP_INTERVAL = 1_000;
         private static final double TOKEN_EPSILON = 1.0e-9;
+        private static final HexFormat FINGERPRINT_FORMAT = HexFormat.of();
 
         private final RateLimitProperties properties;
         private final Clock clock;
@@ -268,15 +272,17 @@ public final class RateLimitFilter extends OncePerRequestFilter {
                         if (name != null
                                         && !name.isBlank()
                                         && !ANONYMOUS_USER.equals(name)) {
-                                return authenticatedClientKey(authentication, name);
+                                return fingerprintClientKey(
+                                                authenticatedClientKey(authentication, name));
                         }
                 }
 
                 String remoteAddress = request.getRemoteAddr();
-
-                return "ip:" + (remoteAddress == null || remoteAddress.isBlank()
+                String ipKey = "ip:" + (remoteAddress == null || remoteAddress.isBlank()
                                 ? "unknown"
                                 : remoteAddress);
+
+                return fingerprintClientKey(ipKey);
         }
 
         private String authenticatedClientKey(
@@ -324,6 +330,22 @@ public final class RateLimitFilter extends OncePerRequestFilter {
                 }
 
                 return "issuer:" + issuer + ":subject:" + subject;
+        }
+
+        static String fingerprintClientKey(String clientKey) {
+                Objects.requireNonNull(clientKey, "La clave del cliente no puede ser nula");
+
+                try {
+                        byte[] digest = MessageDigest
+                                        .getInstance("SHA-256")
+                                        .digest(clientKey.getBytes(StandardCharsets.UTF_8));
+
+                        return FINGERPRINT_FORMAT.formatHex(digest);
+                } catch (NoSuchAlgorithmException exception) {
+                        throw new IllegalStateException(
+                                        "SHA-256 no está disponible para el rate limiter",
+                                        exception);
+                }
         }
 
         private void writeRateLimitHeaders(
