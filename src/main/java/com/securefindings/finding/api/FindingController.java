@@ -56,6 +56,7 @@ public class FindingController {
                         @ApiResponse(responseCode = "400", description = "Los parámetros enviados no son válidos"),
                         @ApiResponse(responseCode = "401", description = "Token ausente o inválido"),
                         @ApiResponse(responseCode = "403", description = "El usuario no tiene permisos"),
+                        @ApiResponse(responseCode = "429", description = "Se ha superado el límite de peticiones", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class))),
                         @ApiResponse(responseCode = "429", description = "Se ha superado el límite de peticiones", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
         })
         public FindingPageResponse findAll(
@@ -92,6 +93,7 @@ public class FindingController {
                         @ApiResponse(responseCode = "401", description = "Token ausente o inválido"),
                         @ApiResponse(responseCode = "403", description = "El usuario no tiene permisos"),
                         @ApiResponse(responseCode = "404", description = "El hallazgo no existe"),
+                        @ApiResponse(responseCode = "429", description = "Se ha superado el límite de peticiones", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class))),
                         @ApiResponse(responseCode = "429", description = "Se ha superado el límite de peticiones", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
         })
         public Finding findById(
@@ -108,6 +110,7 @@ public class FindingController {
                         @ApiResponse(responseCode = "400", description = "Los datos enviados no son válidos"),
                         @ApiResponse(responseCode = "401", description = "Token ausente o inválido"),
                         @ApiResponse(responseCode = "403", description = "El usuario no tiene permisos"),
+                        @ApiResponse(responseCode = "429", description = "Se ha superado el límite de peticiones", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class))),
                         @ApiResponse(responseCode = "429", description = "Se ha superado el límite de peticiones", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
         })
         public Finding create(
@@ -129,8 +132,8 @@ public class FindingController {
                         @ApiResponse(responseCode = "403", description = "El usuario no tiene permisos"),
                         @ApiResponse(responseCode = "404", description = "El hallazgo no existe"),
                         @ApiResponse(responseCode = "409", description = "La transición de estado no está permitida"),
+                        @ApiResponse(responseCode = "429", description = "Se ha superado el límite de peticiones", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class))),
                         @ApiResponse(responseCode = "429", description = "Se ha superado el límite de peticiones", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
-
         })
         public Finding updateStatus(
                         @Parameter(description = "Identificador del hallazgo", required = true) @PathVariable UUID id,
@@ -151,6 +154,7 @@ public class FindingController {
                         @ApiResponse(responseCode = "401", description = "Token ausente o inválido"),
                         @ApiResponse(responseCode = "403", description = "El usuario no tiene permisos"),
                         @ApiResponse(responseCode = "404", description = "El hallazgo no existe"),
+                        @ApiResponse(responseCode = "429", description = "Se ha superado el límite de peticiones", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class))),
                         @ApiResponse(responseCode = "429", description = "Se ha superado el límite de peticiones", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
         })
         public Finding update(
@@ -174,7 +178,9 @@ public class FindingController {
                         @ApiResponse(responseCode = "401", description = "Token ausente o inválido"),
                         @ApiResponse(responseCode = "403", description = "Solo un usuario ADMIN puede eliminar"),
                         @ApiResponse(responseCode = "404", description = "El hallazgo no existe"),
+                        @ApiResponse(responseCode = "429", description = "Se ha superado el límite de peticiones", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class))),
                         @ApiResponse(responseCode = "429", description = "Se ha superado el límite de peticiones", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
+
         })
         public void delete(
                         @Parameter(description = "Identificador del hallazgo", required = true) @PathVariable UUID id) {

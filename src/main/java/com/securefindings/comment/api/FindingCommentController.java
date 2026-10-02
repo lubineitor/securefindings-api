@@ -44,6 +44,7 @@ public class FindingCommentController {
         @ResponseStatus(HttpStatus.CREATED)
         @Operation(summary = "Crear un comentario", description = "Añade un comentario al hallazgo indicado")
         @ApiResponse(responseCode = "429", description = "Se ha superado el límite de peticiones", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
+        @ApiResponse(responseCode = "429", description = "Se ha superado el límite de peticiones", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
         public FindingCommentResponse create(
                         @PathVariable("findingId") UUID findingId,
                         @Valid @RequestBody CreateFindingCommentRequest request) {
@@ -57,6 +58,7 @@ public class FindingCommentController {
         @GetMapping
         @Operation(summary = "Consultar comentarios", description = "Devuelve los comentarios paginados y ordenados "
                         + "cronológicamente")
+        @ApiResponse(responseCode = "429", description = "Se ha superado el límite de peticiones", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
         @ApiResponse(responseCode = "429", description = "Se ha superado el límite de peticiones", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
         public FindingCommentPageResponse findPage(
                         @PathVariable("findingId") UUID findingId,
