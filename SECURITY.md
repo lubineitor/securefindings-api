@@ -258,6 +258,7 @@ El filtro utiliza un cubo de tokens por cliente:
 - Cada petición aceptada consume un token.
 - Los tokens se reponen continuamente. `window` es el tiempo necesario para reponer un cubo vacío hasta su capacidad completa.
 - Con `max-requests=60` y `window=60s`, la tasa de reposición es de un token por segundo.
+- `max-tracked-clients` limita el número de cuotas que se guardan en memoria a la vez; su valor predeterminado es `100000`.
 - El cliente puede consumir la capacidad disponible en una ráfaga. Después, las peticiones se aceptan conforme regresan tokens; no se reinicia toda la cuota en un instante fijo.
 
 ### Configuración
@@ -267,6 +268,7 @@ Los valores predeterminados son:
 ```properties
 securefindings.rate-limit.max-requests=60
 securefindings.rate-limit.window=60s
+securefindings.rate-limit.max-tracked-clients=100000
 ```
 
 También pueden configurarse mediante:
@@ -274,12 +276,15 @@ También pueden configurarse mediante:
 ```text
 SECUREFINDINGS_RATE_LIMIT_MAX_REQUESTS
 SECUREFINDINGS_RATE_LIMIT_WINDOW
+SECUREFINDINGS_RATE_LIMIT_MAX_TRACKED_CLIENTS
 ```
 
 Los valores deben validarse al iniciar la aplicación:
 
 - El número máximo de peticiones debe ser positivo.
 - La duración de la ventana debe ser positiva.
+- El máximo de clientes registrados debe ser positivo.
+- El máximo de clientes registrados limita las cuotas en memoria; cuando se alcanza, las identidades nuevas reciben `429` hasta que se limpien entradas vencidas.
 - No deben utilizarse valores excesivamente bajos para endpoints necesarios por monitores o clientes legítimos.
 - No deben utilizarse valores excesivamente altos como sustituto de una protección perimetral.
 

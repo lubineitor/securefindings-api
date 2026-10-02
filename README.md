@@ -275,6 +275,7 @@ La configuración predeterminada es:
 ```properties
 securefindings.rate-limit.max-requests=60
 securefindings.rate-limit.window=60s
+securefindings.rate-limit.max-tracked-clients=100000
 ```
 
 También puede configurarse mediante variables de entorno:
@@ -282,9 +283,12 @@ También puede configurarse mediante variables de entorno:
 ```text
 SECUREFINDINGS_RATE_LIMIT_MAX_REQUESTS=60
 SECUREFINDINGS_RATE_LIMIT_WINDOW=60s
+SECUREFINDINGS_RATE_LIMIT_MAX_TRACKED_CLIENTS=100000
 ```
 
 `max-requests` define la capacidad del cubo de tokens. `window` indica cuánto tarda en reponerse por completo un cubo vacío. Los tokens se recuperan de forma continua: con los valores predeterminados se repone un token por segundo. Cada petición aceptada consume un token; el cliente puede realizar una ráfaga inicial hasta agotar la capacidad y después recibe tokens gradualmente, sin un reinicio brusco en el límite de un intervalo.
+
+`max-tracked-clients` establece el máximo de identidades cuyas cuotas se mantienen a la vez; su valor predeterminado es `100000`. Al alcanzar ese máximo, las identidades nuevas reciben `429` hasta que se limpien cuotas vencidas. Este límite acota la memoria que puede consumir el rate limiter.
 
 Cuando se supera el límite, la API devuelve:
 
@@ -656,6 +660,7 @@ Los valores predeterminados son:
 ```properties
 securefindings.rate-limit.max-requests=${SECUREFINDINGS_RATE_LIMIT_MAX_REQUESTS:60}
 securefindings.rate-limit.window=${SECUREFINDINGS_RATE_LIMIT_WINDOW:60s}
+securefindings.rate-limit.max-tracked-clients=${SECUREFINDINGS_RATE_LIMIT_MAX_TRACKED_CLIENTS:100000}
 ```
 
 Para modificar el límite localmente:
@@ -663,6 +668,7 @@ Para modificar el límite localmente:
 ```properties
 SECUREFINDINGS_RATE_LIMIT_MAX_REQUESTS=60
 SECUREFINDINGS_RATE_LIMIT_WINDOW=60s
+SECUREFINDINGS_RATE_LIMIT_MAX_TRACKED_CLIENTS=100000
 ```
 
 En producción, los valores deben gestionarse mediante la configuración segura del entorno.
