@@ -85,6 +85,11 @@ public class SecurityConfig {
 
                                                 .requestMatchers(
                                                                 HttpMethod.GET,
+                                                                "/api/v1/organizations/current")
+                                                .hasAnyRole("ANALYST", "ADMIN")
+
+                                                .requestMatchers(
+                                                                HttpMethod.GET,
                                                                 "/api/v1/findings",
                                                                 "/api/v1/findings/**")
                                                 .hasAnyRole("ANALYST", "ADMIN")
