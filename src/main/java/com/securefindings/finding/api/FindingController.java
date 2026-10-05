@@ -25,6 +25,7 @@ import com.securefindings.finding.domain.FindingStatus;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
+import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -49,14 +50,18 @@ public class FindingController {
         }
 
         @GetMapping
-        @Operation(summary = "Listar hallazgos", description = "Devuelve una página de hallazgos con filtros "
-                        + "opcionales, búsqueda textual y ordenación")
+        @Operation(summary = "Listar hallazgos", description = "Devuelve una página de hallazgos con filtros opcionales, búsqueda textual y ordenación")
         @ApiResponses({
                         @ApiResponse(responseCode = "200", description = "Hallazgos recuperados correctamente", content = @Content(mediaType = "application/json", schema = @Schema(implementation = FindingPageResponse.class))),
                         @ApiResponse(responseCode = "400", description = "Los parámetros enviados no son válidos"),
                         @ApiResponse(responseCode = "401", description = "Token ausente o inválido"),
                         @ApiResponse(responseCode = "403", description = "El usuario no tiene permisos"),
-                        @ApiResponse(responseCode = "429", description = "Se ha superado el límite de peticiones", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
+                        @ApiResponse(responseCode = "429", description = "Se ha superado el límite de peticiones", headers = {
+                                        @Header(name = "Retry-After", description = "Segundos que deben transcurrir antes de reintentar", schema = @Schema(type = "integer", format = "int64")),
+                                        @Header(name = "X-RateLimit-Limit", description = "Capacidad máxima del cubo de tokens", schema = @Schema(type = "integer", format = "int32")),
+                                        @Header(name = "X-RateLimit-Remaining", description = "Tokens enteros disponibles", schema = @Schema(type = "integer", format = "int32")),
+                                        @Header(name = "X-RateLimit-Reset", description = "Instante Unix en que el cubo volverá a estar lleno", schema = @Schema(type = "integer", format = "int64"))
+                        }, content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
         })
         public FindingPageResponse findAll(
                         @Parameter(description = "Número de página. Empieza en 0", example = "0", in = ParameterIn.QUERY) @RequestParam(name = "page", defaultValue = "0") @Min(0) int page,
@@ -92,7 +97,12 @@ public class FindingController {
                         @ApiResponse(responseCode = "401", description = "Token ausente o inválido"),
                         @ApiResponse(responseCode = "403", description = "El usuario no tiene permisos"),
                         @ApiResponse(responseCode = "404", description = "El hallazgo no existe"),
-                        @ApiResponse(responseCode = "429", description = "Se ha superado el límite de peticiones", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
+                        @ApiResponse(responseCode = "429", description = "Se ha superado el límite de peticiones", headers = {
+                                        @Header(name = "Retry-After", description = "Segundos que deben transcurrir antes de reintentar", schema = @Schema(type = "integer", format = "int64")),
+                                        @Header(name = "X-RateLimit-Limit", description = "Capacidad máxima del cubo de tokens", schema = @Schema(type = "integer", format = "int32")),
+                                        @Header(name = "X-RateLimit-Remaining", description = "Tokens enteros disponibles", schema = @Schema(type = "integer", format = "int32")),
+                                        @Header(name = "X-RateLimit-Reset", description = "Instante Unix en que el cubo volverá a estar lleno", schema = @Schema(type = "integer", format = "int64"))
+                        }, content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
         })
         public Finding findById(
                         @Parameter(description = "Identificador del hallazgo", example = "3bfa1ad2-eee1-4ea5-ba7c-16b47d1da147", required = true) @PathVariable UUID id) {
@@ -108,7 +118,12 @@ public class FindingController {
                         @ApiResponse(responseCode = "400", description = "Los datos enviados no son válidos"),
                         @ApiResponse(responseCode = "401", description = "Token ausente o inválido"),
                         @ApiResponse(responseCode = "403", description = "El usuario no tiene permisos"),
-                        @ApiResponse(responseCode = "429", description = "Se ha superado el límite de peticiones", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
+                        @ApiResponse(responseCode = "429", description = "Se ha superado el límite de peticiones", headers = {
+                                        @Header(name = "Retry-After", description = "Segundos que deben transcurrir antes de reintentar", schema = @Schema(type = "integer", format = "int64")),
+                                        @Header(name = "X-RateLimit-Limit", description = "Capacidad máxima del cubo de tokens", schema = @Schema(type = "integer", format = "int32")),
+                                        @Header(name = "X-RateLimit-Remaining", description = "Tokens enteros disponibles", schema = @Schema(type = "integer", format = "int32")),
+                                        @Header(name = "X-RateLimit-Reset", description = "Instante Unix en que el cubo volverá a estar lleno", schema = @Schema(type = "integer", format = "int64"))
+                        }, content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
         })
         public Finding create(
                         @Valid @RequestBody CreateFindingRequest request) {
@@ -120,8 +135,7 @@ public class FindingController {
         }
 
         @PatchMapping("/{id}/status")
-        @Operation(summary = "Actualizar el estado", description = "Cambia el estado de un hallazgo y registra "
-                        + "la operación en auditoría")
+        @Operation(summary = "Actualizar el estado", description = "Cambia el estado de un hallazgo y registra la operación en auditoría")
         @ApiResponses({
                         @ApiResponse(responseCode = "200", description = "Estado actualizado correctamente", content = @Content(mediaType = "application/json", schema = @Schema(implementation = Finding.class))),
                         @ApiResponse(responseCode = "400", description = "El estado enviado no es válido"),
@@ -129,8 +143,12 @@ public class FindingController {
                         @ApiResponse(responseCode = "403", description = "El usuario no tiene permisos"),
                         @ApiResponse(responseCode = "404", description = "El hallazgo no existe"),
                         @ApiResponse(responseCode = "409", description = "La transición de estado no está permitida"),
-                        @ApiResponse(responseCode = "429", description = "Se ha superado el límite de peticiones", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
-
+                        @ApiResponse(responseCode = "429", description = "Se ha superado el límite de peticiones", headers = {
+                                        @Header(name = "Retry-After", description = "Segundos que deben transcurrir antes de reintentar", schema = @Schema(type = "integer", format = "int64")),
+                                        @Header(name = "X-RateLimit-Limit", description = "Capacidad máxima del cubo de tokens", schema = @Schema(type = "integer", format = "int32")),
+                                        @Header(name = "X-RateLimit-Remaining", description = "Tokens enteros disponibles", schema = @Schema(type = "integer", format = "int32")),
+                                        @Header(name = "X-RateLimit-Reset", description = "Instante Unix en que el cubo volverá a estar lleno", schema = @Schema(type = "integer", format = "int64"))
+                        }, content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
         })
         public Finding updateStatus(
                         @Parameter(description = "Identificador del hallazgo", required = true) @PathVariable UUID id,
@@ -143,15 +161,19 @@ public class FindingController {
         }
 
         @PutMapping("/{id}")
-        @Operation(summary = "Actualizar un hallazgo", description = "Actualiza los datos de un hallazgo y registra "
-                        + "la operación en auditoría")
+        @Operation(summary = "Actualizar un hallazgo", description = "Actualiza los datos de un hallazgo y registra la operación en auditoría")
         @ApiResponses({
                         @ApiResponse(responseCode = "200", description = "Hallazgo actualizado correctamente", content = @Content(mediaType = "application/json", schema = @Schema(implementation = Finding.class))),
                         @ApiResponse(responseCode = "400", description = "Los datos enviados no son válidos"),
                         @ApiResponse(responseCode = "401", description = "Token ausente o inválido"),
                         @ApiResponse(responseCode = "403", description = "El usuario no tiene permisos"),
                         @ApiResponse(responseCode = "404", description = "El hallazgo no existe"),
-                        @ApiResponse(responseCode = "429", description = "Se ha superado el límite de peticiones", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
+                        @ApiResponse(responseCode = "429", description = "Se ha superado el límite de peticiones", headers = {
+                                        @Header(name = "Retry-After", description = "Segundos que deben transcurrir antes de reintentar", schema = @Schema(type = "integer", format = "int64")),
+                                        @Header(name = "X-RateLimit-Limit", description = "Capacidad máxima del cubo de tokens", schema = @Schema(type = "integer", format = "int32")),
+                                        @Header(name = "X-RateLimit-Remaining", description = "Tokens enteros disponibles", schema = @Schema(type = "integer", format = "int32")),
+                                        @Header(name = "X-RateLimit-Reset", description = "Instante Unix en que el cubo volverá a estar lleno", schema = @Schema(type = "integer", format = "int64"))
+                        }, content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
         })
         public Finding update(
                         @Parameter(description = "Identificador del hallazgo", required = true) @PathVariable UUID id,
@@ -167,14 +189,18 @@ public class FindingController {
 
         @DeleteMapping("/{id}")
         @ResponseStatus(HttpStatus.NO_CONTENT)
-        @Operation(summary = "Eliminar un hallazgo", description = "Elimina un hallazgo y conserva su evento "
-                        + "de auditoría")
+        @Operation(summary = "Eliminar un hallazgo", description = "Elimina un hallazgo y conserva su evento de auditoría")
         @ApiResponses({
                         @ApiResponse(responseCode = "204", description = "Hallazgo eliminado correctamente"),
                         @ApiResponse(responseCode = "401", description = "Token ausente o inválido"),
                         @ApiResponse(responseCode = "403", description = "Solo un usuario ADMIN puede eliminar"),
                         @ApiResponse(responseCode = "404", description = "El hallazgo no existe"),
-                        @ApiResponse(responseCode = "429", description = "Se ha superado el límite de peticiones", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
+                        @ApiResponse(responseCode = "429", description = "Se ha superado el límite de peticiones", headers = {
+                                        @Header(name = "Retry-After", description = "Segundos que deben transcurrir antes de reintentar", schema = @Schema(type = "integer", format = "int64")),
+                                        @Header(name = "X-RateLimit-Limit", description = "Capacidad máxima del cubo de tokens", schema = @Schema(type = "integer", format = "int32")),
+                                        @Header(name = "X-RateLimit-Remaining", description = "Tokens enteros disponibles", schema = @Schema(type = "integer", format = "int32")),
+                                        @Header(name = "X-RateLimit-Reset", description = "Instante Unix en que el cubo volverá a estar lleno", schema = @Schema(type = "integer", format = "int64"))
+                        }, content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
         })
         public void delete(
                         @Parameter(description = "Identificador del hallazgo", required = true) @PathVariable UUID id) {

@@ -1,5 +1,6 @@
 package com.securefindings.security;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -14,6 +15,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
@@ -44,6 +46,9 @@ class RateLimitSecurityIntegrationTest {
         @Autowired
         private WebApplicationContext context;
 
+        @Autowired
+        private FilterRegistrationBean<RateLimitFilter> rateLimitFilterServletRegistration;
+
         private MockMvc mockMvc;
 
         @BeforeEach
@@ -52,6 +57,11 @@ class RateLimitSecurityIntegrationTest {
                                 .webAppContextSetup(context)
                                 .apply(springSecurity())
                                 .build();
+        }
+
+        @Test
+        void elRateLimitFilterSoloDebeRegistrarseEnSpringSecurity() {
+                assertFalse(rateLimitFilterServletRegistration.isEnabled());
         }
 
         @Test

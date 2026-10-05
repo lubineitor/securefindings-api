@@ -183,6 +183,8 @@ La petición debe rechazarse.
 
 La organización nunca debe aceptarse desde un parámetro enviado por el cliente como mecanismo de autorización.
 
+Los endpoints `GET /api/v1/organizations/current` y `PATCH /api/v1/organizations/current` usan exclusivamente la organización del token. El PATCH solo permite modificar el nombre visible y requiere el rol `ADMIN`; el identificador, el slug y la fecha de creación se mantienen estables.
+
 ## Autorización
 
 Los permisos se aplican por endpoint:
@@ -197,6 +199,8 @@ Los permisos se aplican por endpoint:
 | Consultar comentarios | Sí | Sí |
 | Crear comentarios | Sí | Sí |
 | Eliminar hallazgos | No | Sí |
+| Consultar la organización actual | Sí | Sí |
+| Actualizar el nombre de la organización actual | No | Sí |
 
 La aplicación responde:
 
@@ -250,6 +254,17 @@ X-Forwarded-For
 
 Estas cabeceras solo deberían interpretarse cuando existe un proxy de confianza y la infraestructura elimina o sobrescribe los valores enviados externamente.
 
+### Algoritmo de reposición
+
+El filtro utiliza un cubo de tokens por cliente:
+
+- La capacidad inicial es `max-requests`.
+- Cada petición aceptada consume un token.
+- Los tokens se reponen continuamente. `window` es el tiempo necesario para reponer un cubo vacío hasta su capacidad completa.
+- Con `max-requests=60` y `window=60s`, la tasa de reposición es de un token por segundo.
+- `max-tracked-clients` limita el número de cuotas que se guardan en memoria a la vez; su valor predeterminado es `100000`.
+- El cliente puede consumir la capacidad disponible en una ráfaga. Después, las peticiones se aceptan conforme regresan tokens; no se reinicia toda la cuota en un instante fijo.
+
 ### Configuración
 
 Los valores predeterminados son:
@@ -257,6 +272,7 @@ Los valores predeterminados son:
 ```properties
 securefindings.rate-limit.max-requests=60
 securefindings.rate-limit.window=60s
+securefindings.rate-limit.max-tracked-clients=100000
 ```
 
 También pueden configurarse mediante:
@@ -264,12 +280,15 @@ También pueden configurarse mediante:
 ```text
 SECUREFINDINGS_RATE_LIMIT_MAX_REQUESTS
 SECUREFINDINGS_RATE_LIMIT_WINDOW
+SECUREFINDINGS_RATE_LIMIT_MAX_TRACKED_CLIENTS
 ```
 
 Los valores deben validarse al iniciar la aplicación:
 
 - El número máximo de peticiones debe ser positivo.
 - La duración de la ventana debe ser positiva.
+- El máximo de clientes registrados debe ser positivo.
+- El máximo de clientes registrados limita las cuotas en memoria; cuando se alcanza, las identidades nuevas reciben `429` hasta que se limpien entradas vencidas.
 - No deben utilizarse valores excesivamente bajos para endpoints necesarios por monitores o clientes legítimos.
 - No deben utilizarse valores excesivamente altos como sustituto de una protección perimetral.
 
@@ -286,6 +305,14 @@ La respuesta incluye:
 ```http
 Retry-After: <segundos>
 ```
+
+La respuesta incluye además estas cabeceras:
+
+- `X-RateLimit-Limit`: capacidad total del cubo.
+- `X-RateLimit-Remaining`: tokens enteros disponibles tras la petición.
+- `X-RateLimit-Reset`: instante Unix, en segundos, en que el cubo volverá a estar lleno.
+
+En respuestas `429`, `Retry-After` calcula el tiempo hasta el siguiente token disponible, mientras que `X-RateLimit-Reset` indica cuándo se recuperará toda la capacidad.
 
 También incluye un identificador de correlación:
 

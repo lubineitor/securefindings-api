@@ -1,6 +1,7 @@
 package com.securefindings.security;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -10,9 +11,17 @@ import static org.mockito.Mockito.verify;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,6 +41,7 @@ class RateLimitFilterTest {
 
         private FilterChain filterChain;
         private RateLimitFilter rateLimitFilter;
+        private MutableClock clock;
 
         @BeforeEach
         void configurarFiltro() {
@@ -61,7 +71,7 @@ class RateLimitFilterTest {
                                 "1",
                                 response.getHeader("X-RateLimit-Remaining"));
                 assertEquals(
-                                String.valueOf(START.plusSeconds(60).getEpochSecond()),
+                                String.valueOf(START.plusSeconds(30).getEpochSecond()),
                                 response.getHeader("X-RateLimit-Reset"));
         }
 
@@ -78,7 +88,7 @@ class RateLimitFilterTest {
 
                 assertEquals(429, limitedResponse.getStatus());
                 assertEquals(
-                                "60",
+                                "30",
                                 limitedResponse.getHeader("Retry-After"));
                 assertEquals(
                                 "2",
@@ -95,6 +105,113 @@ class RateLimitFilterTest {
 
                 verify(filterChain, times(2))
                                 .doFilter(any(), any());
+        }
+
+        @Test
+        void deberiaReponerGradualmenteLosTokens()
+                        throws Exception {
+
+                rateLimitFilter = createFilter(2);
+
+                invoke("/api/v1/findings", "10.0.0.1");
+                invoke("/api/v1/findings", "10.0.0.1");
+
+                clock.advance(Duration.ofSeconds(30));
+
+                MockHttpServletResponse refilledResponse = invoke(
+                                "/api/v1/findings",
+                                "10.0.0.1");
+
+                assertEquals(200, refilledResponse.getStatus());
+                assertEquals(
+                                "0",
+                                refilledResponse.getHeader("X-RateLimit-Remaining"));
+                assertEquals(
+                                String.valueOf(START.plusSeconds(90).getEpochSecond()),
+                                refilledResponse.getHeader("X-RateLimit-Reset"));
+
+                MockHttpServletResponse limitedResponse = invoke(
+                                "/api/v1/findings",
+                                "10.0.0.1");
+
+                assertEquals(429, limitedResponse.getStatus());
+                assertEquals(
+                                "30",
+                                limitedResponse.getHeader("Retry-After"));
+                assertEquals(
+                                String.valueOf(START.plusSeconds(90).getEpochSecond()),
+                                limitedResponse.getHeader("X-RateLimit-Reset"));
+
+                verify(filterChain, times(3))
+                                .doFilter(any(), any());
+        }
+
+        @Test
+        void noDebeSuperarLaCuotaConPeticionesConcurrentes()
+                        throws Exception {
+
+                int maxRequests = 5;
+                int totalRequests = 20;
+                rateLimitFilter = createFilter(maxRequests);
+
+                ExecutorService executor = Executors.newFixedThreadPool(totalRequests);
+                CountDownLatch ready = new CountDownLatch(totalRequests);
+                CountDownLatch start = new CountDownLatch(1);
+                List<Future<Integer>> responses = new ArrayList<>(totalRequests);
+
+                try {
+                        for (int i = 0; i < totalRequests; i++) {
+                                responses.add(executor.submit(() -> {
+                                        ready.countDown();
+
+                                        if (!start.await(10, TimeUnit.SECONDS)) {
+                                                throw new IllegalStateException(
+                                                                "No se inició la ráfaga concurrente");
+                                        }
+
+                                        return invoke(
+                                                        "/api/v1/findings",
+                                                        "10.0.0.1")
+                                                        .getStatus();
+                                }));
+                        }
+
+                        assertTrue(
+                                        ready.await(10, TimeUnit.SECONDS),
+                                        "Todas las peticiones deben esperar en la barrera");
+
+                        start.countDown();
+
+                        int allowedRequests = 0;
+                        int rejectedRequests = 0;
+
+                        for (Future<Integer> response : responses) {
+                                int status = response.get(10, TimeUnit.SECONDS);
+
+                                if (status == 200) {
+                                        allowedRequests++;
+                                } else if (status == 429) {
+                                        rejectedRequests++;
+                                } else {
+                                        throw new AssertionError(
+                                                        "Estado HTTP inesperado: " + status);
+                                }
+                        }
+
+                        assertEquals(maxRequests, allowedRequests);
+                        assertEquals(
+                                        totalRequests - maxRequests,
+                                        rejectedRequests);
+
+                        verify(filterChain, times(maxRequests))
+                                        .doFilter(any(), any());
+                } finally {
+                        start.countDown();
+                        executor.shutdownNow();
+                        assertTrue(
+                                        executor.awaitTermination(10, TimeUnit.SECONDS),
+                                        "El executor debe finalizar");
+                }
         }
 
         @Test
@@ -301,13 +418,21 @@ class RateLimitFilterTest {
         }
 
         private RateLimitFilter createFilter(int maxRequests) {
+                return createFilter(maxRequests, 100_000);
+        }
+
+        private RateLimitFilter createFilter(
+                        int maxRequests,
+                        int maxTrackedClients) {
+
+                clock = new MutableClock(START);
+
                 return new RateLimitFilter(
                                 new RateLimitProperties(
                                                 maxRequests,
-                                                Duration.ofMinutes(1)),
-                                Clock.fixed(
-                                                START,
-                                                ZoneOffset.UTC));
+                                                Duration.ofMinutes(1),
+                                                maxTrackedClients),
+                                clock);
         }
 
         private MockHttpServletResponse invoke(
@@ -379,5 +504,101 @@ class RateLimitFilterTest {
                                                                 username,
                                                                 "credentials",
                                                                 "ROLE_ANALYST"));
+        }
+
+        private static final class MutableClock extends Clock {
+
+                private final AtomicReference<Instant> currentInstant;
+                private final ZoneId zone;
+
+                private MutableClock(Instant initialInstant) {
+                        this(new AtomicReference<>(initialInstant), ZoneOffset.UTC);
+                }
+
+                private MutableClock(
+                                AtomicReference<Instant> currentInstant,
+                                ZoneId zone) {
+
+                        this.currentInstant = currentInstant;
+                        this.zone = zone;
+                }
+
+                private void advance(Duration duration) {
+                        currentInstant.updateAndGet(instant -> instant.plus(duration));
+                }
+
+                @Override
+                public ZoneId getZone() {
+                        return zone;
+                }
+
+                @Override
+                public Clock withZone(ZoneId zone) {
+                        return new MutableClock(currentInstant, zone);
+                }
+
+                @Override
+                public Instant instant() {
+                        return currentInstant.get();
+                }
+        }
+
+        @Test
+        void deberiaRechazarUnMaximoDeClientesNoPositivo() {
+                assertThrows(
+                                IllegalArgumentException.class,
+                                () -> new RateLimitProperties(
+                                                1,
+                                                Duration.ofMinutes(1),
+                                                0));
+        }
+
+        @Test
+        void deberiaRechazarClientesNuevosAlAlcanzarElMaximoDeCuotas()
+                        throws Exception {
+
+                rateLimitFilter = createFilter(1, 1);
+
+                MockHttpServletResponse firstResponse = invoke(
+                                "/api/v1/findings",
+                                "10.0.0.1");
+                MockHttpServletResponse capacityResponse = invoke(
+                                "/api/v1/findings",
+                                "10.0.0.2");
+
+                assertEquals(200, firstResponse.getStatus());
+                assertEquals(429, capacityResponse.getStatus());
+                assertEquals("1", capacityResponse.getHeader("X-RateLimit-Limit"));
+                assertEquals("0", capacityResponse.getHeader("X-RateLimit-Remaining"));
+                assertEquals("60", capacityResponse.getHeader("Retry-After"));
+                assertTrue(capacityResponse.getContentAsString()
+                                .contains("RATE_LIMIT_EXCEEDED"));
+
+                verify(filterChain, times(1)).doFilter(any(), any());
+        }
+
+        @Test
+        void deberiaLiberarCuotasVencidasAlLimpiarElMapa()
+                        throws Exception {
+
+                rateLimitFilter = createFilter(1, 1);
+
+                assertEquals(
+                                200,
+                                invoke("/api/v1/findings", "10.0.0.1").getStatus());
+
+                clock.advance(Duration.ofMinutes(1));
+
+                for (int attempt = 0; attempt < 999; attempt++) {
+                        assertEquals(
+                                        429,
+                                        invoke("/api/v1/findings", "10.0.0.2").getStatus());
+                }
+
+                assertEquals(
+                                200,
+                                invoke("/api/v1/findings", "10.0.0.3").getStatus());
+
+                verify(filterChain, times(2)).doFilter(any(), any());
         }
 }

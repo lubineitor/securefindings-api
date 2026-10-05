@@ -275,6 +275,7 @@ La configuración predeterminada es:
 ```properties
 securefindings.rate-limit.max-requests=60
 securefindings.rate-limit.window=60s
+securefindings.rate-limit.max-tracked-clients=100000
 ```
 
 También puede configurarse mediante variables de entorno:
@@ -282,7 +283,12 @@ También puede configurarse mediante variables de entorno:
 ```text
 SECUREFINDINGS_RATE_LIMIT_MAX_REQUESTS=60
 SECUREFINDINGS_RATE_LIMIT_WINDOW=60s
+SECUREFINDINGS_RATE_LIMIT_MAX_TRACKED_CLIENTS=100000
 ```
+
+`max-requests` define la capacidad del cubo de tokens. `window` indica cuánto tarda en reponerse por completo un cubo vacío. Los tokens se recuperan de forma continua: con los valores predeterminados se repone un token por segundo. Cada petición aceptada consume un token; el cliente puede realizar una ráfaga inicial hasta agotar la capacidad y después recibe tokens gradualmente, sin un reinicio brusco en el límite de un intervalo.
+
+`max-tracked-clients` establece el máximo de identidades cuyas cuotas se mantienen a la vez; su valor predeterminado es `100000`. Al alcanzar ese máximo, las identidades nuevas reciben `429` hasta que se limpien cuotas vencidas. Este límite acota la memoria que puede consumir el rate limiter.
 
 Cuando se supera el límite, la API devuelve:
 
@@ -295,6 +301,14 @@ Incluyendo la cabecera:
 ```http
 Retry-After: <segundos>
 ```
+
+Las respuestas también incluyen:
+
+- `X-RateLimit-Limit`: capacidad total del cubo.
+- `X-RateLimit-Remaining`: tokens enteros disponibles tras la petición.
+- `X-RateLimit-Reset`: instante Unix, en segundos, en que el cubo volverá a estar lleno.
+
+En una respuesta `429`, `Retry-After` indica el tiempo hasta que se reponga el siguiente token; `X-RateLimit-Reset` señala cuándo se recuperará la capacidad completa.
 
 Ejemplo de respuesta:
 
@@ -367,6 +381,20 @@ Este endpoint está disponible sin autenticación y no consume cuota del límite
 | `PUT` | `/api/v1/findings/{id}` | Actualiza los datos | `ANALYST`, `ADMIN` |
 | `PATCH` | `/api/v1/findings/{id}/status` | Actualiza el estado | `ANALYST`, `ADMIN` |
 | `DELETE` | `/api/v1/findings/{id}` | Elimina un hallazgo | `ADMIN` |
+
+### Organización actual
+
+| Método | Endpoint | Descripción | Rol |
+|---|---|---|---|
+| `GET` | `/api/v1/organizations/current` | Consulta la organización asociada al token | `ANALYST`, `ADMIN` |
+| `PATCH` | `/api/v1/organizations/current` | Actualiza el nombre visible de la organización | `ADMIN` |
+
+El cuerpo de la petición PATCH contiene el nombre, con un máximo de 150 caracteres:
+
+```json
+{
+  "name": "Secure Findings Europe"
+}
 
 ### Parámetros del listado
 
@@ -646,6 +674,7 @@ Los valores predeterminados son:
 ```properties
 securefindings.rate-limit.max-requests=${SECUREFINDINGS_RATE_LIMIT_MAX_REQUESTS:60}
 securefindings.rate-limit.window=${SECUREFINDINGS_RATE_LIMIT_WINDOW:60s}
+securefindings.rate-limit.max-tracked-clients=${SECUREFINDINGS_RATE_LIMIT_MAX_TRACKED_CLIENTS:100000}
 ```
 
 Para modificar el límite localmente:
@@ -653,6 +682,7 @@ Para modificar el límite localmente:
 ```properties
 SECUREFINDINGS_RATE_LIMIT_MAX_REQUESTS=60
 SECUREFINDINGS_RATE_LIMIT_WINDOW=60s
+SECUREFINDINGS_RATE_LIMIT_MAX_TRACKED_CLIENTS=100000
 ```
 
 En producción, los valores deben gestionarse mediante la configuración segura del entorno.

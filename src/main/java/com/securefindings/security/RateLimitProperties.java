@@ -8,7 +8,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "securefindings.rate-limit")
 public record RateLimitProperties(
         int maxRequests,
-        Duration window) {
+        Duration window,
+        int maxTrackedClients) {
 
     public RateLimitProperties {
         if (maxRequests < 1) {
@@ -23,6 +24,11 @@ public record RateLimitProperties(
         if (window.isZero() || window.isNegative()) {
             throw new IllegalArgumentException(
                     "La ventana de limitación debe ser positiva");
+        }
+
+        if (maxTrackedClients < 1) {
+            throw new IllegalArgumentException(
+                    "El máximo de clientes registrados debe ser mayor que cero");
         }
     }
 }
