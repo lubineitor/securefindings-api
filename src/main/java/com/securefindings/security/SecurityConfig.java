@@ -89,6 +89,11 @@ public class SecurityConfig {
                                                 .hasAnyRole("ANALYST", "ADMIN")
 
                                                 .requestMatchers(
+                                                                HttpMethod.PATCH,
+                                                                "/api/v1/organizations/current")
+                                                .hasRole("ADMIN")
+
+                                                .requestMatchers(
                                                                 HttpMethod.GET,
                                                                 "/api/v1/findings",
                                                                 "/api/v1/findings/**")
