@@ -382,6 +382,20 @@ Este endpoint está disponible sin autenticación y no consume cuota del límite
 | `PATCH` | `/api/v1/findings/{id}/status` | Actualiza el estado | `ANALYST`, `ADMIN` |
 | `DELETE` | `/api/v1/findings/{id}` | Elimina un hallazgo | `ADMIN` |
 
+### Organización actual
+
+| Método | Endpoint | Descripción | Rol |
+|---|---|---|---|
+| `GET` | `/api/v1/organizations/current` | Consulta la organización asociada al token | `ANALYST`, `ADMIN` |
+| `PATCH` | `/api/v1/organizations/current` | Actualiza el nombre visible de la organización | `ADMIN` |
+
+El cuerpo de la petición PATCH contiene el nombre, con un máximo de 150 caracteres:
+
+```json
+{
+  "name": "Secure Findings Europe"
+}
+
 ### Parámetros del listado
 
 Endpoint:

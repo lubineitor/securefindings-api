@@ -183,6 +183,8 @@ La petición debe rechazarse.
 
 La organización nunca debe aceptarse desde un parámetro enviado por el cliente como mecanismo de autorización.
 
+Los endpoints `GET /api/v1/organizations/current` y `PATCH /api/v1/organizations/current` usan exclusivamente la organización del token. El PATCH solo permite modificar el nombre visible y requiere el rol `ADMIN`; el identificador, el slug y la fecha de creación se mantienen estables.
+
 ## Autorización
 
 Los permisos se aplican por endpoint:
@@ -197,6 +199,8 @@ Los permisos se aplican por endpoint:
 | Consultar comentarios | Sí | Sí |
 | Crear comentarios | Sí | Sí |
 | Eliminar hallazgos | No | Sí |
+| Consultar la organización actual | Sí | Sí |
+| Actualizar el nombre de la organización actual | No | Sí |
 
 La aplicación responde:
 
