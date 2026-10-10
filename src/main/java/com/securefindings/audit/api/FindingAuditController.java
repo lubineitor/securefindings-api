@@ -28,6 +28,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 
 @Validated
 @RestController
@@ -66,22 +67,32 @@ public class FindingAuditController {
 
                         @Parameter(description = "Filtrar por acción de auditoría", example = "UPDATED", in = ParameterIn.QUERY) @RequestParam(name = "action", required = false) AuditAction action,
 
-                        @Parameter(description = "Filtrar por identificador de petición", example = "audit-request-123", in = ParameterIn.QUERY) @RequestParam(name = "requestId", required = false) @Pattern(regexp = "[A-Za-z0-9][A-Za-z0-9._-]{0,63}", message = "El identificador de petición no tiene un formato válido") String requestId) {
+                        @Parameter(description = "Filtrar por identificador de petición", example = "audit-request-123", in = ParameterIn.QUERY) @RequestParam(name = "requestId", required = false) @Pattern(regexp = "[A-Za-z0-9][A-Za-z0-9._-]{0,63}", message = "El identificador de petición no tiene un formato válido") String requestId,
+
+                        @RequestParam(name = "actor", required = false) @Size(max = 255, message = "El actor no puede superar los 255 caracteres") String actor) {
 
                 Page<FindingAuditEntity> auditPage;
 
-                if (action == null && requestId == null) {
+                if (action == null && requestId == null && actor == null) {
                         auditPage = auditService.findPageByFindingId(
                                         findingId,
                                         page,
                                         size);
-                } else {
+                } else if (actor == null) {
                         auditPage = auditService.findPageByFindingId(
                                         findingId,
                                         page,
                                         size,
                                         action,
                                         requestId);
+                } else {
+                        auditPage = auditService.findPageByFindingId(
+                                        findingId,
+                                        page,
+                                        size,
+                                        action,
+                                        requestId,
+                                        actor);
                 }
 
                 return FindingAuditPageResponse.from(auditPage);

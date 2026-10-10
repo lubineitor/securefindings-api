@@ -43,4 +43,32 @@ public interface FindingAuditRepository
                         AuditAction action,
                         String requestId,
                         Pageable pageable);
+
+        Page<FindingAuditEntity> findByFindingIdAndOrganizationIdAndActorOrderByOccurredAtAsc(
+                        UUID findingId,
+                        UUID organizationId,
+                        String actor,
+                        Pageable pageable);
+
+        Page<FindingAuditEntity> findByFindingIdAndOrganizationIdAndActionAndActorOrderByOccurredAtAsc(
+                        UUID findingId,
+                        UUID organizationId,
+                        AuditAction action,
+                        String actor,
+                        Pageable pageable);
+
+        Page<FindingAuditEntity> findByFindingIdAndOrganizationIdAndRequestIdAndActorOrderByOccurredAtAsc(
+                        UUID findingId,
+                        UUID organizationId,
+                        String requestId,
+                        String actor,
+                        Pageable pageable);
+
+        Page<FindingAuditEntity> findByFindingIdAndOrganizationIdAndActionAndRequestIdAndActorOrderByOccurredAtAsc(
+                        UUID findingId,
+                        UUID organizationId,
+                        AuditAction action,
+                        String requestId,
+                        String actor,
+                        Pageable pageable);
 }
