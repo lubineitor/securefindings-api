@@ -179,12 +179,13 @@ El historial puede filtrarse por:
 
 - Acción de auditoría.
 - Identificador de petición.
-- Ambos filtros simultáneamente.
+- Actor.
+- Combinaciones de estos filtros.
 
 Ejemplo:
 
 ```text
-GET /api/v1/findings/{findingId}/audit?action=UPDATED&requestId=audit-request-123
+GET /api/v1/findings/{findingId}/audit?action=UPDATED&requestId=audit-request-123&actor=analista
 ```
 
 Los valores permitidos para `action` son:
@@ -454,6 +455,7 @@ Parámetros:
 | `size` | No | `20` | Elementos por página. Valores entre `1` y `100`. |
 | `action` | No | — | `CREATED`, `UPDATED`, `DELETED` o `COMMENTED`. |
 | `requestId` | No | — | Identificador de petición válido, máximo `64` caracteres. |
+| `actor` | No | — | Filtra por actor responsable mediante coincidencia exacta. Máximo `255` caracteres. |
 
 Ejemplo sin filtros:
 
@@ -755,7 +757,8 @@ Las pruebas cubren:
 - Filtros.
 - Filtros de auditoría por acción.
 - Filtros de auditoría por `requestId`.
-- Filtros combinados de auditoría.
+- Filtros del historial de auditoría por actor.
+- Filtros combinados de auditoría por acción, identificador de petición y actor.
 - Ordenación.
 - Rechazo de parámetros de ordenación no permitidos.
 - Limitación por dirección IP.

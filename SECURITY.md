@@ -617,6 +617,7 @@ El historial de auditoría permite filtrar por:
 ```text
 action
 requestId
+actor
 ```
 
 Las acciones válidas son:
@@ -637,6 +638,8 @@ El `requestId` debe cumplir el mismo formato que la cabecera `X-Request-ID`:
 - Guiones.
 - Guiones bajos.
 
+El filtro por actor sirve para localizar eventos. No concede permisos adicionales ni reemplaza la autorización de la petición.
+
 Los filtros de auditoría:
 
 - Se aplican junto al `organization_id` obtenido del token.
@@ -650,10 +653,10 @@ Los filtros de auditoría:
 Ejemplo:
 
 ```text
-GET /api/v1/findings/{findingId}/audit?action=UPDATED&requestId=audit-request-123
+GET /api/v1/findings/{findingId}/audit?action=UPDATED&requestId=audit-request-123&actor=analista
 ```
 
-Una acción inválida o un `requestId` con formato incorrecto producen:
+Una acción inválida, un `requestId` con formato incorrecto o un `actor` que supere la longitud máxima producen:
 
 ```http
 400 Bad Request
@@ -674,6 +677,7 @@ Las consultas no deben construirse concatenando directamente:
 - Valores de organización.
 - Campos de ordenación.
 - Direcciones de ordenación.
+- Filtros de auditoría por actor y combinaciones de filtros.
 
 La búsqueda y los filtros de auditoría se realizan mediante parámetros enlazados.
 
