@@ -17,6 +17,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
+import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -47,13 +48,22 @@ public final class RateLimitFilter extends OncePerRequestFilter {
         private final ConcurrentMap<String, TokenBucket> buckets = new ConcurrentHashMap<>();
         private final AtomicInteger trackedBucketCount = new AtomicInteger();
         private final AtomicLong requestsSinceCleanup = new AtomicLong();
+        private final RedisRateLimitStore redisRateLimitStore;
 
         public RateLimitFilter(
                         RateLimitProperties properties,
                         Clock clock) {
+                this(properties, clock, null);
+        }
+
+        RateLimitFilter(
+                        RateLimitProperties properties,
+                        Clock clock,
+                        RedisRateLimitStore redisRateLimitStore) {
 
                 this.properties = Objects.requireNonNull(properties);
                 this.clock = Objects.requireNonNull(clock);
+                this.redisRateLimitStore = redisRateLimitStore;
         }
 
         @Override
@@ -79,10 +89,20 @@ public final class RateLimitFilter extends OncePerRequestFilter {
                         throws ServletException, IOException {
 
                 Instant now = clock.instant();
+                String clientKey = clientKey(request);
 
-                RateLimitDecision decision = consume(
-                                clientKey(request),
-                                now);
+                RateLimitDecision decision;
+
+                try {
+                        decision = redisRateLimitStore == null
+                                        ? consume(clientKey, now)
+                                        : redisRateLimitStore.consume(
+                                                        fingerprintClientKey(clientKey),
+                                                        properties);
+                } catch (DataAccessException | IllegalStateException exception) {
+                        writeRateLimitUnavailable(response);
+                        return;
+                }
 
                 if (!decision.allowed()) {
                         writeTooManyRequests(response, now, decision);
@@ -91,6 +111,24 @@ public final class RateLimitFilter extends OncePerRequestFilter {
 
                 writeRateLimitHeaders(response, decision);
                 filterChain.doFilter(request, response);
+        }
+
+        private void writeRateLimitUnavailable(
+                        HttpServletResponse response) throws IOException {
+
+                response.setStatus(HttpStatus.SERVICE_UNAVAILABLE.value());
+                response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+                response.setHeader(HttpHeaders.RETRY_AFTER, "1");
+                response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
+
+                response.getWriter().write("""
+                                {
+                                    "code": "RATE_LIMIT_UNAVAILABLE",
+                                    "message": "El servicio de limitación de peticiones no está disponible",
+                                    "errors": {}
+                                }
+                                """);
         }
 
         private RateLimitDecision consume(
@@ -409,12 +447,5 @@ public final class RateLimitFilter extends OncePerRequestFilter {
                         double tokens,
                         Instant lastRefillAt,
                         Instant resetAt) {
-        }
-
-        private record RateLimitDecision(
-                        boolean allowed,
-                        Instant resetAt,
-                        Instant retryAt,
-                        int remaining) {
         }
 }
