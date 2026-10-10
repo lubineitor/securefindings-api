@@ -232,6 +232,14 @@ El endpoint público:
 
 queda excluido para que pueda utilizarse en comprobaciones de disponibilidad.
 
+### Limitación distribuida de peticiones
+
+Las rutas `/api/v1/**`, excepto `/api/v1/health`, aplican límites por cliente mediante Redis. La operación atómica evita que distintas instancias concedan cuotas independientes al mismo cliente.
+
+La clave guardada en Redis contiene una huella SHA-256 del identificador del cliente. El máximo de clientes rastreados se configura mediante `securefindings.rate-limit.max-tracked-clients`.
+
+Si Redis falla durante la comprobación, la petición se rechaza con `503 Service Unavailable`; no continúa hasta el endpoint. Las respuestas `429 Too Many Requests` incluyen `Retry-After`. En despliegues, Redis debe permanecer accesible únicamente desde la red privada de la aplicación y configurarse con una política que no expulse claves del rate limiter.
+
 ### Identificación del cliente
 
 Para peticiones autenticadas con JWT y un `organization_id` válido, la clave combina la organización con el emisor (`iss`) y el subject (`sub`). La pareja `iss` + `sub` identifica de forma estable la cuenta: un cambio de `preferred_username` no crea una cuota nueva, y dos cuentas distintas no comparten cuota aunque tengan el mismo nombre. Si falta `iss` o `sub`, el filtro usa el nombre del principal dentro de la organización.

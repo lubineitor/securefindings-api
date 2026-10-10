@@ -593,6 +593,14 @@ La protección CSRF se ignora únicamente en las rutas REST:
 
 Fuera de esas rutas, CSRF permanece activo.
 
+### Rate limiting
+
+La API limita las peticiones a `/api/v1/**` mediante un token bucket almacenado en Redis. El contador es compartido entre las instancias de la aplicación y se actualiza mediante una operación atómica.
+
+La cuota se configura con `securefindings.rate-limit.max-requests`, `securefindings.rate-limit.window` y `securefindings.rate-limit.max-tracked-clients`. Los clientes se identifican por organización y usuario autenticado, o por dirección IP cuando no hay autenticación. La clave que se guarda en Redis es una huella SHA-256.
+
+Cuando se supera la cuota, la API responde `429 Too Many Requests` e incluye `Retry-After` y las cabeceras `X-RateLimit-*`. Si Redis no está disponible para comprobar la cuota, responde `503 Service Unavailable` y no procesa la petición. El endpoint `/api/v1/health` queda excluido.
+
 ## Tecnologías
 
 - Java 21.
