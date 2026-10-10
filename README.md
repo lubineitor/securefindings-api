@@ -601,6 +601,8 @@ La cuota se configura con `securefindings.rate-limit.max-requests`, `securefindi
 
 Cuando se supera la cuota, la API responde `429 Too Many Requests` e incluye `Retry-After` y las cabeceras `X-RateLimit-*`. Si Redis no está disponible para comprobar la cuota, responde `503 Service Unavailable` y no procesa la petición. El endpoint `/api/v1/health` queda excluido.
 
+La ventana configurada debe ser de al menos un milisegundo; una duración menor o demasiado grande se rechaza durante el inicio de la aplicación.
+
 ## Tecnologías
 
 - Java 21.
