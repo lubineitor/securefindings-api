@@ -1,5 +1,6 @@
 package com.securefindings.security;
 
+import java.time.DateTimeException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -186,23 +187,53 @@ final class RedisRateLimitStore {
         return parseDecision(scriptResult);
     }
 
-    private RateLimitDecision parseDecision(String result) {
+    static RateLimitDecision parseDecision(String result) {
         if (result == null) {
-            throw new IllegalStateException(
-                    "Redis no devolvió el resultado del rate limiter");
+            throw invalidRedisResult();
         }
 
         String[] values = result.split(":", -1);
 
         if (values.length != 4) {
-            throw new IllegalStateException(
-                    "Redis devolvió un resultado inválido para el rate limiter");
+            throw invalidRedisResult();
         }
 
-        return new RateLimitDecision(
-                "1".equals(values[0]),
-                Instant.ofEpochMilli(Long.parseLong(values[2])),
-                Instant.ofEpochMilli(Long.parseLong(values[3])),
-                Integer.parseInt(values[1]));
+        boolean allowed;
+
+        if ("1".equals(values[0])) {
+            allowed = true;
+        } else if ("0".equals(values[0])) {
+            allowed = false;
+        } else {
+            throw invalidRedisResult();
+        }
+
+        try {
+            int remaining = Integer.parseInt(values[1]);
+            long resetAtMillis = Long.parseLong(values[2]);
+            long retryAtMillis = Long.parseLong(values[3]);
+
+            if (remaining < 0
+                    || resetAtMillis < 0
+                    || retryAtMillis < 0
+                    || resetAtMillis < retryAtMillis) {
+                throw invalidRedisResult();
+            }
+
+            return new RateLimitDecision(
+                    allowed,
+                    Instant.ofEpochMilli(resetAtMillis),
+                    Instant.ofEpochMilli(retryAtMillis),
+                    remaining);
+        } catch (NumberFormatException | DateTimeException exception) {
+            throw new IllegalStateException(
+                    "Redis devolvió un resultado inválido para el rate limiter",
+                    exception);
+        }
+    }
+
+    private static IllegalStateException invalidRedisResult() {
+        return new IllegalStateException(
+                "Redis devolvió un resultado inválido para el rate limiter");
     }
 }
