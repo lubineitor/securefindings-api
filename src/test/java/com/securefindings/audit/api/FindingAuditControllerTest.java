@@ -306,4 +306,63 @@ class FindingAuditControllerTest {
 
                 verifyNoInteractions(auditService);
         }
+
+        @Test
+        void deberiaFiltrarElHistorialPorActor() throws Exception {
+                UUID findingId = UUID.randomUUID();
+
+                FindingAuditEntity event = new FindingAuditEntity(
+                                UUID.randomUUID(),
+                                findingId,
+                                ORGANIZATION_ID,
+                                AuditAction.UPDATED,
+                                "analista",
+                                Instant.parse("2026-10-10T08:00:00Z"),
+                                "audit-request-123");
+
+                Page<FindingAuditEntity> auditPage = new PageImpl<>(
+                                List.of(event),
+                                PageRequest.of(0, 20),
+                                1);
+
+                when(auditService.findPageByFindingId(
+                                findingId,
+                                0,
+                                20,
+                                null,
+                                null,
+                                "analista"))
+                                .thenReturn(auditPage);
+
+                mockMvc.perform(get(
+                                "/api/v1/findings/{findingId}/audit",
+                                findingId)
+                                .param("actor", "analista"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.content.length()").value(1))
+                                .andExpect(jsonPath("$.content[0].actor").value("analista"));
+
+                verify(auditService).findPageByFindingId(
+                                findingId,
+                                0,
+                                20,
+                                null,
+                                null,
+                                "analista");
+        }
+
+        @Test
+        void deberiaRechazarUnActorSuperiorAlMaximo() throws Exception {
+                UUID findingId = UUID.randomUUID();
+
+                mockMvc.perform(get(
+                                "/api/v1/findings/{findingId}/audit",
+                                findingId)
+                                .param("actor", "a".repeat(256)))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                                .andExpect(jsonPath("$.errors.actor").exists());
+
+                verifyNoInteractions(auditService);
+        }
 }

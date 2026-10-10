@@ -400,4 +400,75 @@ class FindingPersistenceIntegrationTest {
                                 AuditAction.UPDATED,
                                 combinedEvents.getContent().get(0).getAction());
         }
+
+        @Test
+        void deberiaFiltrarLaAuditoriaPersistidaPorActorEnPostgreSQL() {
+                Finding finding = findingService.create(
+                                "Hallazgo para filtrar auditoría",
+                                "Prueba de búsqueda por actor",
+                                FindingSeverity.MEDIUM);
+
+                auditService.register(
+                                finding.id(),
+                                AuditAction.UPDATED,
+                                "analista",
+                                "actor-request-1");
+
+                auditService.register(
+                                finding.id(),
+                                AuditAction.UPDATED,
+                                "administrador",
+                                "actor-request-2");
+
+                Page<FindingAuditEntity> result = auditService.findPageByFindingId(
+                                finding.id(),
+                                0,
+                                20,
+                                AuditAction.UPDATED,
+                                "actor-request-1",
+                                "analista");
+
+                assertEquals(1, result.getTotalElements());
+                assertEquals("analista", result.getContent().get(0).getActor());
+                assertEquals(
+                                "actor-request-1",
+                                result.getContent().get(0).getRequestId());
+        }
+
+        @Test
+        void deberiaFiltrarLaAuditoriaPersistidaPorActor() {
+                Finding createdFinding = findingService.create(
+                                "Auditoría filtrada por actor",
+                                "Hallazgo para probar el filtro de auditoría",
+                                FindingSeverity.HIGH);
+
+                auditService.register(
+                                createdFinding.id(),
+                                AuditAction.UPDATED,
+                                "analista",
+                                "actor-filter-request-1");
+
+                auditService.register(
+                                createdFinding.id(),
+                                AuditAction.UPDATED,
+                                "administrador",
+                                "actor-filter-request-2");
+
+                Page<FindingAuditEntity> analystEvents = auditService
+                                .findPageByFindingId(
+                                                createdFinding.id(),
+                                                0,
+                                                20,
+                                                null,
+                                                null,
+                                                "analista");
+
+                assertEquals(1, analystEvents.getTotalElements());
+                assertEquals(
+                                "analista",
+                                analystEvents.getContent().get(0).getActor());
+                assertEquals(
+                                "actor-filter-request-1",
+                                analystEvents.getContent().get(0).getRequestId());
+        }
 }
