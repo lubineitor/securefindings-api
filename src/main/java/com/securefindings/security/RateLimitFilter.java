@@ -13,10 +13,14 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -47,13 +51,26 @@ public final class RateLimitFilter extends OncePerRequestFilter {
         private final ConcurrentMap<String, TokenBucket> buckets = new ConcurrentHashMap<>();
         private final AtomicInteger trackedBucketCount = new AtomicInteger();
         private final AtomicLong requestsSinceCleanup = new AtomicLong();
+        private final RedisRateLimitStore redisRateLimitStore;
+
+        private static final Logger LOGGER = LoggerFactory.getLogger(RateLimitFilter.class);
+        private static final long REDIS_FAILURE_LOG_INTERVAL_NANOS = TimeUnit.MINUTES.toNanos(1);
+        private final AtomicLong lastRedisFailureLogNanos = new AtomicLong(Long.MIN_VALUE);
 
         public RateLimitFilter(
                         RateLimitProperties properties,
                         Clock clock) {
+                this(properties, clock, null);
+        }
+
+        RateLimitFilter(
+                        RateLimitProperties properties,
+                        Clock clock,
+                        RedisRateLimitStore redisRateLimitStore) {
 
                 this.properties = Objects.requireNonNull(properties);
                 this.clock = Objects.requireNonNull(clock);
+                this.redisRateLimitStore = redisRateLimitStore;
         }
 
         @Override
@@ -79,10 +96,21 @@ public final class RateLimitFilter extends OncePerRequestFilter {
                         throws ServletException, IOException {
 
                 Instant now = clock.instant();
+                String clientKey = clientKey(request);
 
-                RateLimitDecision decision = consume(
-                                clientKey(request),
-                                now);
+                RateLimitDecision decision;
+
+                try {
+                        decision = redisRateLimitStore == null
+                                        ? consume(clientKey, now)
+                                        : redisRateLimitStore.consume(
+                                                        fingerprintClientKey(clientKey),
+                                                        properties);
+                } catch (DataAccessException | IllegalStateException exception) {
+                        logRedisFailure(exception);
+                        writeRateLimitUnavailable(response);
+                        return;
+                }
 
                 if (!decision.allowed()) {
                         writeTooManyRequests(response, now, decision);
@@ -91,6 +119,44 @@ public final class RateLimitFilter extends OncePerRequestFilter {
 
                 writeRateLimitHeaders(response, decision);
                 filterChain.doFilter(request, response);
+        }
+
+        private void logRedisFailure(RuntimeException exception) {
+                long now = System.nanoTime();
+
+                while (true) {
+                        long previous = lastRedisFailureLogNanos.get();
+
+                        if (previous != Long.MIN_VALUE
+                                        && now - previous < REDIS_FAILURE_LOG_INTERVAL_NANOS) {
+                                return;
+                        }
+
+                        if (lastRedisFailureLogNanos.compareAndSet(previous, now)) {
+                                LOGGER.warn(
+                                                "Rate limiter Redis no disponible; se rechaza la petición con 503. tipoError={}",
+                                                exception.getClass().getSimpleName());
+                                return;
+                        }
+                }
+        }
+
+        private void writeRateLimitUnavailable(
+                        HttpServletResponse response) throws IOException {
+
+                response.setStatus(HttpStatus.SERVICE_UNAVAILABLE.value());
+                response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+                response.setHeader(HttpHeaders.RETRY_AFTER, "1");
+                response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
+
+                response.getWriter().write("""
+                                {
+                                    "code": "RATE_LIMIT_UNAVAILABLE",
+                                    "message": "El servicio de limitación de peticiones no está disponible",
+                                    "errors": {}
+                                }
+                                """);
         }
 
         private RateLimitDecision consume(
@@ -409,12 +475,5 @@ public final class RateLimitFilter extends OncePerRequestFilter {
                         double tokens,
                         Instant lastRefillAt,
                         Instant resetAt) {
-        }
-
-        private record RateLimitDecision(
-                        boolean allowed,
-                        Instant resetAt,
-                        Instant retryAt,
-                        int remaining) {
         }
 }

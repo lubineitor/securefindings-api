@@ -2,6 +2,7 @@ package com.securefindings.security;
 
 import java.time.Clock;
 
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
@@ -39,11 +40,17 @@ public class SecurityConfig {
         @Bean
         RateLimitFilter rateLimitFilter(
                         RateLimitProperties properties,
-                        Clock rateLimitClock) {
+                        Clock rateLimitClock,
+                        ObjectProvider<RedisRateLimitStore> redisRateLimitStoreProvider) {
 
-                return new RateLimitFilter(
-                                properties,
-                                rateLimitClock);
+                RedisRateLimitStore redisRateLimitStore = redisRateLimitStoreProvider.getIfAvailable();
+
+                return redisRateLimitStore == null
+                                ? new RateLimitFilter(properties, rateLimitClock)
+                                : new RateLimitFilter(
+                                                properties,
+                                                rateLimitClock,
+                                                redisRateLimitStore);
         }
 
         @Bean

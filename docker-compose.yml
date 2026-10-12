@@ -7,6 +7,9 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_DATA_REDIS_CONNECT_TIMEOUT: ${SPRING_DATA_REDIS_CONNECT_TIMEOUT:-1s}
+      SPRING_DATA_REDIS_TIMEOUT: ${SPRING_DATA_REDIS_TIMEOUT:-2s}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-securefindings-api}
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
@@ -28,6 +31,23 @@ services:
       - "127.0.0.1:8081:8080"
     volumes:
       - securefindings-keycloak-data:/opt/keycloak/data
+  redis:
+    image: redis:7-alpine
+    container_name: securefindings-redis
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --maxmemory
+      - 256mb
+      - --maxmemory-policy
+      - noeviction
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   securefindings_postgres_data:

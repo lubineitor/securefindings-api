@@ -114,6 +114,8 @@ La aplicación funciona como un OAuth2 Resource Server y valida:
 - Claims necesarios.
 - Roles asociados.
 
+La API exige que el claim `aud` incluya `securefindings-api`. Los tokens sin esa audiencia se rechazan con `401 UNAUTHORIZED`.
+
 La aplicación no mantiene sesiones de usuario:
 
 ```text
@@ -134,6 +136,14 @@ La protección CSRF se ignora únicamente para las rutas REST:
 Fuera de estas rutas, la protección CSRF permanece activa.
 
 La exclusión limitada se utiliza porque la API REST emplea autenticación mediante token Bearer y no cookies de sesión como mecanismo principal de autenticación.
+
+Los clientes interactivos usan Authorization Code con PKCE `S256`. Direct Access
+Grants (`grant_type=password`) está desactivado para el cliente local. La API
+requiere que el claim `aud` del access token incluya `securefindings-api`.
+
+La verificación local de autenticación comprueba que las peticiones anónimas
+reciben `401` y que un access token válido recibe `200` en el endpoint de
+hallazgos.
 
 ## Claims utilizados
 
@@ -231,6 +241,18 @@ El endpoint público:
 ```
 
 queda excluido para que pueda utilizarse en comprobaciones de disponibilidad.
+
+### Limitación distribuida de peticiones
+
+Las rutas `/api/v1/**`, excepto `/api/v1/health`, aplican límites por cliente mediante Redis. La operación atómica evita que distintas instancias concedan cuotas independientes al mismo cliente.
+
+La clave guardada en Redis contiene una huella SHA-256 del identificador del cliente. El máximo de clientes rastreados se configura mediante `securefindings.rate-limit.max-tracked-clients`.
+
+Si Redis falla durante la comprobación, la petición se rechaza con `503 Service Unavailable`; no continúa hasta el endpoint. Las respuestas `429 Too Many Requests` incluyen `Retry-After`. En despliegues, Redis debe permanecer accesible únicamente desde la red privada de la aplicación y configurarse con una política que no expulse claves del rate limiter.
+
+La conexión con Redis tiene tiempos máximos de conexión y lectura configurables mediante `SPRING_DATA_REDIS_CONNECT_TIMEOUT` y `SPRING_DATA_REDIS_TIMEOUT`. Si Redis falla o no responde dentro de esos límites, el rate limiter rechaza la petición con una respuesta `503`.
+
+La configuración de la ventana se valida al iniciar la aplicación: debe representar al menos un milisegundo y poder convertirse a milisegundos sin desbordamiento.
 
 ### Identificación del cliente
 
@@ -617,6 +639,7 @@ El historial de auditoría permite filtrar por:
 ```text
 action
 requestId
+actor
 ```
 
 Las acciones válidas son:
@@ -637,6 +660,8 @@ El `requestId` debe cumplir el mismo formato que la cabecera `X-Request-ID`:
 - Guiones.
 - Guiones bajos.
 
+El filtro por actor sirve para localizar eventos. No concede permisos adicionales ni reemplaza la autorización de la petición.
+
 Los filtros de auditoría:
 
 - Se aplican junto al `organization_id` obtenido del token.
@@ -650,10 +675,10 @@ Los filtros de auditoría:
 Ejemplo:
 
 ```text
-GET /api/v1/findings/{findingId}/audit?action=UPDATED&requestId=audit-request-123
+GET /api/v1/findings/{findingId}/audit?action=UPDATED&requestId=audit-request-123&actor=analista
 ```
 
-Una acción inválida o un `requestId` con formato incorrecto producen:
+Una acción inválida, un `requestId` con formato incorrecto o un `actor` que supere la longitud máxima producen:
 
 ```http
 400 Bad Request
@@ -674,6 +699,7 @@ Las consultas no deben construirse concatenando directamente:
 - Valores de organización.
 - Campos de ordenación.
 - Direcciones de ordenación.
+- Filtros de auditoría por actor y combinaciones de filtros.
 
 La búsqueda y los filtros de auditoría se realizan mediante parámetros enlazados.
 

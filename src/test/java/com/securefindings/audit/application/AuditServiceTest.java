@@ -491,4 +491,110 @@ class AuditServiceTest {
                                 organizationId))
                                 .thenReturn(Optional.of(mock(FindingEntity.class)));
         }
+
+        @Test
+        void deberiaFiltrarLaAuditoriaSoloPorActor() {
+                UUID findingId = UUID.randomUUID();
+
+                FindingAuditEntity event = new FindingAuditEntity(
+                                UUID.randomUUID(),
+                                findingId,
+                                ORGANIZATION_ID,
+                                AuditAction.UPDATED,
+                                "analista",
+                                Instant.parse("2026-10-10T08:00:00Z"),
+                                "audit-request-123");
+
+                Page<FindingAuditEntity> auditPage = new PageImpl<>(
+                                List.of(event),
+                                PageRequest.of(0, 20),
+                                1);
+
+                when(organizationContext.currentOrganizationId())
+                                .thenReturn(ORGANIZATION_ID);
+
+                stubFindingExists(findingId, ORGANIZATION_ID);
+
+                when(auditRepository
+                                .findByFindingIdAndOrganizationIdAndActorOrderByOccurredAtAsc(
+                                                eq(findingId),
+                                                eq(ORGANIZATION_ID),
+                                                eq("analista"),
+                                                any(Pageable.class)))
+                                .thenReturn(auditPage);
+
+                Page<FindingAuditEntity> result = auditService.findPageByFindingId(
+                                findingId,
+                                0,
+                                20,
+                                null,
+                                null,
+                                "analista");
+
+                assertEquals(1, result.getTotalElements());
+                assertEquals("analista", result.getContent().get(0).getActor());
+
+                verify(auditRepository)
+                                .findByFindingIdAndOrganizationIdAndActorOrderByOccurredAtAsc(
+                                                eq(findingId),
+                                                eq(ORGANIZATION_ID),
+                                                eq("analista"),
+                                                any(Pageable.class));
+        }
+
+        @Test
+        void deberiaCombinarLosFiltrosDeAccionRequestIdYActor() {
+                UUID findingId = UUID.randomUUID();
+
+                FindingAuditEntity event = new FindingAuditEntity(
+                                UUID.randomUUID(),
+                                findingId,
+                                ORGANIZATION_ID,
+                                AuditAction.UPDATED,
+                                "analista",
+                                Instant.parse("2026-10-10T08:00:00Z"),
+                                "audit-request-123");
+
+                Page<FindingAuditEntity> auditPage = new PageImpl<>(
+                                List.of(event),
+                                PageRequest.of(0, 20),
+                                1);
+
+                when(organizationContext.currentOrganizationId())
+                                .thenReturn(ORGANIZATION_ID);
+
+                stubFindingExists(findingId, ORGANIZATION_ID);
+
+                when(auditRepository
+                                .findByFindingIdAndOrganizationIdAndActionAndRequestIdAndActorOrderByOccurredAtAsc(
+                                                eq(findingId),
+                                                eq(ORGANIZATION_ID),
+                                                eq(AuditAction.UPDATED),
+                                                eq("audit-request-123"),
+                                                eq("analista"),
+                                                any(Pageable.class)))
+                                .thenReturn(auditPage);
+
+                Page<FindingAuditEntity> result = auditService.findPageByFindingId(
+                                findingId,
+                                0,
+                                20,
+                                AuditAction.UPDATED,
+                                "audit-request-123",
+                                "analista");
+
+                assertEquals(1, result.getTotalElements());
+                assertEquals(AuditAction.UPDATED, result.getContent().get(0).getAction());
+                assertEquals("audit-request-123", result.getContent().get(0).getRequestId());
+                assertEquals("analista", result.getContent().get(0).getActor());
+
+                verify(auditRepository)
+                                .findByFindingIdAndOrganizationIdAndActionAndRequestIdAndActorOrderByOccurredAtAsc(
+                                                eq(findingId),
+                                                eq(ORGANIZATION_ID),
+                                                eq(AuditAction.UPDATED),
+                                                eq("audit-request-123"),
+                                                eq("analista"),
+                                                any(Pageable.class));
+        }
 }

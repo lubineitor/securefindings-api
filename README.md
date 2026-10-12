@@ -179,12 +179,13 @@ El historial puede filtrarse por:
 
 - Acción de auditoría.
 - Identificador de petición.
-- Ambos filtros simultáneamente.
+- Actor.
+- Combinaciones de estos filtros.
 
 Ejemplo:
 
 ```text
-GET /api/v1/findings/{findingId}/audit?action=UPDATED&requestId=audit-request-123
+GET /api/v1/findings/{findingId}/audit?action=UPDATED&requestId=audit-request-123&actor=analista
 ```
 
 Los valores permitidos para `action` son:
@@ -454,6 +455,7 @@ Parámetros:
 | `size` | No | `20` | Elementos por página. Valores entre `1` y `100`. |
 | `action` | No | — | `CREATED`, `UPDATED`, `DELETED` o `COMMENTED`. |
 | `requestId` | No | — | Identificador de petición válido, máximo `64` caracteres. |
+| `actor` | No | — | Filtra por actor responsable mediante coincidencia exacta. Máximo `255` caracteres. |
 
 Ejemplo sin filtros:
 
@@ -577,6 +579,8 @@ Los roles se obtienen desde Keycloak:
 - `ANALYST`: puede consultar, crear y modificar hallazgos.
 - `ADMIN`: puede realizar todas las operaciones, incluida la eliminación.
 
+La API valida también la audiencia del access token. El claim `aud` debe incluir `securefindings-api`, configurada mediante la variable `JWT_AUDIENCE`.
+
 La aplicación no utiliza sesiones ni autenticación mediante formulario:
 
 ```text
@@ -590,6 +594,35 @@ La protección CSRF se ignora únicamente en las rutas REST:
 ```
 
 Fuera de esas rutas, CSRF permanece activo.
+
+Para comprobar la autenticación local, ejecuta el smoke test con la API en marcha
+y un access token recién copiado al portapapeles:
+
+```powershell
+.\scripts\verificar-autenticacion.ps1
+
+### Obtener un token para pruebas locales
+
+El script `scripts/obtener-token.ps1` inicia sesión en Keycloak mediante
+Authorization Code con PKCE `S256`, comprueba la audiencia `securefindings-api`
+y copia el access token al portapapeles.
+
+El cliente `securefindings-cli` debe tener Standard Flow activado, Direct Access
+Grants desactivado y esta URI de redirección:
+`http://127.0.0.1:8765/callback/`.
+
+```powershell
+.\scripts\obtener-token.ps1
+
+### Rate limiting
+
+La API limita las peticiones a `/api/v1/**` mediante un token bucket almacenado en Redis. El contador es compartido entre las instancias de la aplicación y se actualiza mediante una operación atómica.
+
+La cuota se configura con `securefindings.rate-limit.max-requests`, `securefindings.rate-limit.window` y `securefindings.rate-limit.max-tracked-clients`. Los clientes se identifican por organización y usuario autenticado, o por dirección IP cuando no hay autenticación. La clave que se guarda en Redis es una huella SHA-256.
+
+Cuando se supera la cuota, la API responde `429 Too Many Requests` e incluye `Retry-After` y las cabeceras `X-RateLimit-*`. Si Redis no está disponible para comprobar la cuota, responde `503 Service Unavailable` y no procesa la petición. El endpoint `/api/v1/health` queda excluido.
+
+La ventana configurada debe ser de al menos un milisegundo; una duración menor o demasiado grande se rechaza durante el inicio de la aplicación.
 
 ## Tecnologías
 
@@ -655,6 +688,8 @@ Copy-Item .env.example .env
 
 El archivo `.env` puede contener credenciales de base de datos y Keycloak. Nunca debe subirse al repositorio.
 
+La variable `JWT_AUDIENCE` define la audiencia JWT que espera la API. Su valor local es `securefindings-api`.
+
 Iniciar los servicios de infraestructura:
 
 ```powershell
@@ -666,6 +701,19 @@ Comprobar los servicios:
 ```powershell
 docker compose ps
 ```
+
+### Configuración de Redis
+
+La aplicación utiliza Redis para aplicar el rate limiting distribuido. Estas variables permiten configurar la conexión y limitar cuánto espera la API a Redis:
+
+| Variable | Valor por defecto | Descripción |
+| --- | --- | --- |
+| `SPRING_DATA_REDIS_HOST` | `localhost` | Host de Redis. |
+| `SPRING_DATA_REDIS_PORT` | `6379` | Puerto de Redis. |
+| `SPRING_DATA_REDIS_CONNECT_TIMEOUT` | `1s` | Tiempo máximo para establecer la conexión. |
+| `SPRING_DATA_REDIS_TIMEOUT` | `2s` | Tiempo máximo de espera para leer la respuesta. |
+
+Si Redis no responde dentro de esos límites, el rate limiter rechaza la petición con una respuesta `503`.
 
 ### Configuración del límite de peticiones
 
@@ -755,7 +803,8 @@ Las pruebas cubren:
 - Filtros.
 - Filtros de auditoría por acción.
 - Filtros de auditoría por `requestId`.
-- Filtros combinados de auditoría.
+- Filtros del historial de auditoría por actor.
+- Filtros combinados de auditoría por acción, identificador de petición y actor.
 - Ordenación.
 - Rechazo de parámetros de ordenación no permitidos.
 - Limitación por dirección IP.

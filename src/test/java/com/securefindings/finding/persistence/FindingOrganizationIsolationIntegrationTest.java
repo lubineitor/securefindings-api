@@ -159,6 +159,34 @@ class FindingOrganizationIsolationIntegrationTest {
         }
 
         @Test
+        void unaOrganizacionNoDebeConsultarAuditoriaFiltradaPorActorDeOtra() {
+                autenticarEnOrganizacion(ORGANIZATION_A);
+
+                Finding createdFinding = findingService.create(
+                                "Auditoría aislada por actor",
+                                "El evento pertenece a la organización A",
+                                FindingSeverity.HIGH);
+
+                auditService.register(
+                                createdFinding.id(),
+                                AuditAction.UPDATED,
+                                "analista",
+                                "audit-actor-isolation-123");
+
+                autenticarEnOrganizacion(ORGANIZATION_B);
+
+                assertThrows(
+                                FindingNotFoundException.class,
+                                () -> auditService.findPageByFindingId(
+                                                createdFinding.id(),
+                                                0,
+                                                20,
+                                                null,
+                                                null,
+                                                "analista"));
+        }
+
+        @Test
         void unaOrganizacionNoDebeRegistrarAuditoriaDeHallazgoDeOtra() {
                 autenticarEnOrganizacion(ORGANIZATION_A);
 

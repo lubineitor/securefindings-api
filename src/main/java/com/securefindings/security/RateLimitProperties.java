@@ -26,6 +26,21 @@ public record RateLimitProperties(
                     "La ventana de limitación debe ser positiva");
         }
 
+        long windowMillis;
+
+        try {
+            windowMillis = window.toMillis();
+        } catch (ArithmeticException exception) {
+            throw new IllegalArgumentException(
+                    "La ventana de limitación es demasiado grande",
+                    exception);
+        }
+
+        if (windowMillis < 1) {
+            throw new IllegalArgumentException(
+                    "La ventana de limitación debe ser de al menos un milisegundo");
+        }
+
         if (maxTrackedClients < 1) {
             throw new IllegalArgumentException(
                     "El máximo de clientes registrados debe ser mayor que cero");

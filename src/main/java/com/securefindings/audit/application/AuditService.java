@@ -51,6 +51,36 @@ public class AuditService {
                                 RequestCorrelationFilter.currentRequestId());
         }
 
+        private void ensureFindingCanBeAudited(
+                        UUID findingId,
+                        UUID organizationId,
+                        AuditAction action) {
+
+                Objects.requireNonNull(
+                                action,
+                                "La acción de auditoría no puede ser nula");
+
+                boolean findingExists = findingRepository
+                                .findByIdAndOrganizationId(
+                                                findingId,
+                                                organizationId)
+                                .isPresent();
+
+                if (findingExists) {
+                        return;
+                }
+
+                boolean deletedFindingHasAudit = action == AuditAction.DELETED
+                                && auditRepository
+                                                .existsByFindingIdAndOrganizationId(
+                                                                findingId,
+                                                                organizationId);
+
+                if (!deletedFindingHasAudit) {
+                        throw new FindingNotFoundException(findingId);
+                }
+        }
+
         @Transactional
         public void register(
                         UUID findingId,
@@ -117,9 +147,37 @@ public class AuditService {
                         AuditAction action,
                         String requestId) {
 
-                UUID organizationId = ensureFindingBelongsToOrganization(findingId);
+                return findPageByFindingId(
+                                findingId,
+                                page,
+                                size,
+                                action,
+                                requestId,
+                                null);
+        }
 
+        @Transactional(readOnly = true)
+        public Page<FindingAuditEntity> findPageByFindingId(
+                        UUID findingId,
+                        int page,
+                        int size,
+                        AuditAction action,
+                        String requestId,
+                        String actor) {
+
+                UUID organizationId = ensureFindingBelongsToOrganization(findingId);
                 Pageable pageable = createPageable(page, size);
+
+                if (action != null && requestId != null && actor != null) {
+                        return auditRepository
+                                        .findByFindingIdAndOrganizationIdAndActionAndRequestIdAndActorOrderByOccurredAtAsc(
+                                                        findingId,
+                                                        organizationId,
+                                                        action,
+                                                        requestId,
+                                                        actor,
+                                                        pageable);
+                }
 
                 if (action != null && requestId != null) {
                         return auditRepository
@@ -128,6 +186,26 @@ public class AuditService {
                                                         organizationId,
                                                         action,
                                                         requestId,
+                                                        pageable);
+                }
+
+                if (action != null && actor != null) {
+                        return auditRepository
+                                        .findByFindingIdAndOrganizationIdAndActionAndActorOrderByOccurredAtAsc(
+                                                        findingId,
+                                                        organizationId,
+                                                        action,
+                                                        actor,
+                                                        pageable);
+                }
+
+                if (requestId != null && actor != null) {
+                        return auditRepository
+                                        .findByFindingIdAndOrganizationIdAndRequestIdAndActorOrderByOccurredAtAsc(
+                                                        findingId,
+                                                        organizationId,
+                                                        requestId,
+                                                        actor,
                                                         pageable);
                 }
 
@@ -149,41 +227,20 @@ public class AuditService {
                                                         pageable);
                 }
 
+                if (actor != null) {
+                        return auditRepository
+                                        .findByFindingIdAndOrganizationIdAndActorOrderByOccurredAtAsc(
+                                                        findingId,
+                                                        organizationId,
+                                                        actor,
+                                                        pageable);
+                }
+
                 return auditRepository
                                 .findByFindingIdAndOrganizationIdOrderByOccurredAtAsc(
                                                 findingId,
                                                 organizationId,
                                                 pageable);
-        }
-
-        private void ensureFindingCanBeAudited(
-                        UUID findingId,
-                        UUID organizationId,
-                        AuditAction action) {
-
-                Objects.requireNonNull(
-                                action,
-                                "La acción de auditoría no puede ser nula");
-
-                boolean findingExists = findingRepository
-                                .findByIdAndOrganizationId(
-                                                findingId,
-                                                organizationId)
-                                .isPresent();
-
-                if (findingExists) {
-                        return;
-                }
-
-                boolean deletedFindingHasAudit = action == AuditAction.DELETED
-                                && auditRepository
-                                                .existsByFindingIdAndOrganizationId(
-                                                                findingId,
-                                                                organizationId);
-
-                if (!deletedFindingHasAudit) {
-                        throw new FindingNotFoundException(findingId);
-                }
         }
 
         private UUID ensureFindingBelongsToOrganization(UUID findingId) {
