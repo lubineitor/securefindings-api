@@ -13,10 +13,13 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -49,6 +52,10 @@ public final class RateLimitFilter extends OncePerRequestFilter {
         private final AtomicInteger trackedBucketCount = new AtomicInteger();
         private final AtomicLong requestsSinceCleanup = new AtomicLong();
         private final RedisRateLimitStore redisRateLimitStore;
+
+        private static final Logger LOGGER = LoggerFactory.getLogger(RateLimitFilter.class);
+        private static final long REDIS_FAILURE_LOG_INTERVAL_NANOS = TimeUnit.MINUTES.toNanos(1);
+        private final AtomicLong lastRedisFailureLogNanos = new AtomicLong(Long.MIN_VALUE);
 
         public RateLimitFilter(
                         RateLimitProperties properties,
@@ -100,6 +107,7 @@ public final class RateLimitFilter extends OncePerRequestFilter {
                                                         fingerprintClientKey(clientKey),
                                                         properties);
                 } catch (DataAccessException | IllegalStateException exception) {
+                        logRedisFailure(exception);
                         writeRateLimitUnavailable(response);
                         return;
                 }
@@ -111,6 +119,26 @@ public final class RateLimitFilter extends OncePerRequestFilter {
 
                 writeRateLimitHeaders(response, decision);
                 filterChain.doFilter(request, response);
+        }
+
+        private void logRedisFailure(RuntimeException exception) {
+                long now = System.nanoTime();
+
+                while (true) {
+                        long previous = lastRedisFailureLogNanos.get();
+
+                        if (previous != Long.MIN_VALUE
+                                        && now - previous < REDIS_FAILURE_LOG_INTERVAL_NANOS) {
+                                return;
+                        }
+
+                        if (lastRedisFailureLogNanos.compareAndSet(previous, now)) {
+                                LOGGER.warn(
+                                                "Rate limiter Redis no disponible; se rechaza la petición con 503. tipoError={}",
+                                                exception.getClass().getSimpleName());
+                                return;
+                        }
+                }
         }
 
         private void writeRateLimitUnavailable(
