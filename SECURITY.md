@@ -240,6 +240,8 @@ La clave guardada en Redis contiene una huella SHA-256 del identificador del cli
 
 Si Redis falla durante la comprobación, la petición se rechaza con `503 Service Unavailable`; no continúa hasta el endpoint. Las respuestas `429 Too Many Requests` incluyen `Retry-After`. En despliegues, Redis debe permanecer accesible únicamente desde la red privada de la aplicación y configurarse con una política que no expulse claves del rate limiter.
 
+La conexión con Redis tiene tiempos máximos de conexión y lectura configurables mediante `SPRING_DATA_REDIS_CONNECT_TIMEOUT` y `SPRING_DATA_REDIS_TIMEOUT`. Si Redis falla o no responde dentro de esos límites, el rate limiter rechaza la petición con una respuesta `503`.
+
 La configuración de la ventana se valida al iniciar la aplicación: debe representar al menos un milisegundo y poder convertirse a milisegundos sin desbordamiento.
 
 ### Identificación del cliente

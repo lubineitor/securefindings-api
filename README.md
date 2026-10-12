@@ -679,6 +679,19 @@ Comprobar los servicios:
 docker compose ps
 ```
 
+### Configuración de Redis
+
+La aplicación utiliza Redis para aplicar el rate limiting distribuido. Estas variables permiten configurar la conexión y limitar cuánto espera la API a Redis:
+
+| Variable | Valor por defecto | Descripción |
+| --- | --- | --- |
+| `SPRING_DATA_REDIS_HOST` | `localhost` | Host de Redis. |
+| `SPRING_DATA_REDIS_PORT` | `6379` | Puerto de Redis. |
+| `SPRING_DATA_REDIS_CONNECT_TIMEOUT` | `1s` | Tiempo máximo para establecer la conexión. |
+| `SPRING_DATA_REDIS_TIMEOUT` | `2s` | Tiempo máximo de espera para leer la respuesta. |
+
+Si Redis no responde dentro de esos límites, el rate limiter rechaza la petición con una respuesta `503`.
+
 ### Configuración del límite de peticiones
 
 Los valores predeterminados son:
