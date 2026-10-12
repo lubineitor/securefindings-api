@@ -114,6 +114,8 @@ La aplicación funciona como un OAuth2 Resource Server y valida:
 - Claims necesarios.
 - Roles asociados.
 
+La API exige que el claim `aud` incluya `securefindings-api`. Los tokens sin esa audiencia se rechazan con `401 UNAUTHORIZED`.
+
 La aplicación no mantiene sesiones de usuario:
 
 ```text

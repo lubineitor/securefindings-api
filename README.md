@@ -579,6 +579,8 @@ Los roles se obtienen desde Keycloak:
 - `ANALYST`: puede consultar, crear y modificar hallazgos.
 - `ADMIN`: puede realizar todas las operaciones, incluida la eliminación.
 
+La API valida también la audiencia del access token. El claim `aud` debe incluir `securefindings-api`, configurada mediante la variable `JWT_AUDIENCE`.
+
 La aplicación no utiliza sesiones ni autenticación mediante formulario:
 
 ```text
@@ -666,6 +668,8 @@ Copy-Item .env.example .env
 ```
 
 El archivo `.env` puede contener credenciales de base de datos y Keycloak. Nunca debe subirse al repositorio.
+
+La variable `JWT_AUDIENCE` define la audiencia JWT que espera la API. Su valor local es `securefindings-api`.
 
 Iniciar los servicios de infraestructura:
 
