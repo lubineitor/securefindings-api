@@ -595,6 +595,12 @@ La protección CSRF se ignora únicamente en las rutas REST:
 
 Fuera de esas rutas, CSRF permanece activo.
 
+Para comprobar la autenticación local, ejecuta el smoke test con la API en marcha
+y un access token recién copiado al portapapeles:
+
+```powershell
+.\scripts\verificar-autenticacion.ps1
+
 ### Obtener un token para pruebas locales
 
 El script `scripts/obtener-token.ps1` inicia sesión en Keycloak mediante

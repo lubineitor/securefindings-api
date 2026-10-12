@@ -141,6 +141,10 @@ Los clientes interactivos usan Authorization Code con PKCE `S256`. Direct Access
 Grants (`grant_type=password`) está desactivado para el cliente local. La API
 requiere que el claim `aud` del access token incluya `securefindings-api`.
 
+La verificación local de autenticación comprueba que las peticiones anónimas
+reciben `401` y que un access token válido recibe `200` en el endpoint de
+hallazgos.
+
 ## Claims utilizados
 
 El contexto de seguridad utiliza principalmente:
