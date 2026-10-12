@@ -595,6 +595,19 @@ La protección CSRF se ignora únicamente en las rutas REST:
 
 Fuera de esas rutas, CSRF permanece activo.
 
+### Obtener un token para pruebas locales
+
+El script `scripts/obtener-token.ps1` inicia sesión en Keycloak mediante
+Authorization Code con PKCE `S256`, comprueba la audiencia `securefindings-api`
+y copia el access token al portapapeles.
+
+El cliente `securefindings-cli` debe tener Standard Flow activado, Direct Access
+Grants desactivado y esta URI de redirección:
+`http://127.0.0.1:8765/callback/`.
+
+```powershell
+.\scripts\obtener-token.ps1
+
 ### Rate limiting
 
 La API limita las peticiones a `/api/v1/**` mediante un token bucket almacenado en Redis. El contador es compartido entre las instancias de la aplicación y se actualiza mediante una operación atómica.

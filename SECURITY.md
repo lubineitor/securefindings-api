@@ -137,6 +137,10 @@ Fuera de estas rutas, la protección CSRF permanece activa.
 
 La exclusión limitada se utiliza porque la API REST emplea autenticación mediante token Bearer y no cookies de sesión como mecanismo principal de autenticación.
 
+Los clientes interactivos usan Authorization Code con PKCE `S256`. Direct Access
+Grants (`grant_type=password`) está desactivado para el cliente local. La API
+requiere que el claim `aud` del access token incluya `securefindings-api`.
+
 ## Claims utilizados
 
 El contexto de seguridad utiliza principalmente:
