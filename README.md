@@ -421,6 +421,7 @@ El cuerpo de la petición PATCH contiene el nombre, con un máximo de 150 caract
 {
   "name": "Secure Findings Europe"
 }
+```
 
 ### Parámetros del listado
 
@@ -625,6 +626,7 @@ y un access token recién copiado al portapapeles:
 
 ```powershell
 .\scripts\verificar-autenticacion.ps1
+```
 
 ### Obtener un token para pruebas locales
 
@@ -638,6 +640,7 @@ Grants desactivado y esta URI de redirección:
 
 ```powershell
 .\scripts\obtener-token.ps1
+```
 
 ### Rate limiting
 
