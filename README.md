@@ -21,6 +21,9 @@ El proyecto se encuentra en una fase activa de construcción. Su objetivo es ser
 - Protección frente al abuso de la API.
 - Trazabilidad de peticiones.
 
+El alcance del MVP, sus criterios de aceptación y las tareas pendientes están en
+[`docs/mvp.md`](docs/mvp.md).
+
 ## Objetivo
 
 SecureFindings proporciona una API para registrar, consultar y gestionar hallazgos de seguridad aplicando progresivamente principios de desarrollo seguro.
