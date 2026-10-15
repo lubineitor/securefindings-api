@@ -11,6 +11,10 @@
             {
                 "name": "ADMIN",
                 "description": "Administra la organización y todos sus hallazgos"
+            },
+            {
+                "name": "METRICS_READER",
+                "description": "Consulta las métricas de Actuator sin permisos de administración"
             }
         ]
     },
@@ -61,6 +65,38 @@
                         "id.token.claim": "false",
                         "access.token.claim": "true",
                         "userinfo.token.claim": "false"
+                    }
+                }
+            ]
+        },
+        {
+            "clientId": "securefindings-prometheus",
+            "name": "Prometheus metrics scraper",
+            "enabled": true,
+            "protocol": "openid-connect",
+            "publicClient": false,
+            "clientAuthenticatorType": "client-secret",
+            "standardFlowEnabled": false,
+            "implicitFlowEnabled": false,
+            "directAccessGrantsEnabled": false,
+            "serviceAccountsEnabled": true,
+            "fullScopeAllowed": true,
+            "redirectUris": [],
+            "webOrigins": [],
+            "defaultClientScopes": [
+                "roles"
+            ],
+            "protocolMappers": [
+                {
+                    "name": "securefindings-api audience",
+                    "protocol": "openid-connect",
+                    "protocolMapper": "oidc-audience-mapper",
+                    "consentRequired": false,
+                    "config": {
+                        "included.custom.audience": "securefindings-api",
+                        "id.token.claim": "false",
+                        "access.token.claim": "true",
+                        "lightweight.claim": "false"
                     }
                 }
             ]
