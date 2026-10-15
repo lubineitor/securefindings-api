@@ -919,8 +919,7 @@ El proyecto continúa en desarrollo. Algunas líneas futuras son:
 
 - Mejorar la administración de organizaciones.
 - Añadir más reglas de autorización.
-- Añadir métricas de aplicación y alertas.
-- Añadir métricas y observabilidad.
+- Configurar paneles y alertas para las métricas Prometheus.
 - Mejorar la configuración de producción.
 - Automatizar la configuración de Keycloak.
 - Ampliar las pruebas de seguridad.
