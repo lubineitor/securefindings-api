@@ -81,7 +81,12 @@ public class SecurityConfig {
                                                                 SessionCreationPolicy.STATELESS))
                                 .authorizeHttpRequests(authorize -> authorize
 
-                                                .requestMatchers("/api/v1/health")
+                                                .requestMatchers(
+                                                                "/api/v1/health",
+                                                                "/actuator/health/liveness",
+                                                                "/actuator/health/readiness",
+                                                                "/livez",
+                                                                "/readyz")
                                                 .permitAll()
 
                                                 .requestMatchers(
