@@ -1,4 +1,32 @@
 services:
+  mailpit:
+    image: axllent/mailpit:v1.31.5
+    container_name: securefindings-mailpit
+    profiles:
+      - observability
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8025:8025"
+
+  alertmanager:
+    image: quay.io/prometheus/alertmanager:v0.34.1
+    container_name: securefindings-alertmanager
+    profiles:
+      - observability
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+      - --web.external-url=http://localhost:9093
+    ports:
+      - "127.0.0.1:9093:9093"
+    volumes:
+      - ./observability/alertmanager:/etc/alertmanager:ro
+      - securefindings_alertmanager_data:/alertmanager
+    depends_on:
+      mailpit:
+        condition: service_started
+
   prometheus:
     image: prom/prometheus:v3.14.0
     container_name: securefindings-prometheus
@@ -9,6 +37,7 @@ services:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
       - --storage.tsdb.retention.time=15d
+      - --web.external-url=http://localhost:9090
     extra_hosts:
       - host.docker.internal:host-gateway
     ports:
@@ -20,6 +49,8 @@ services:
       - prometheus_client_secret
     depends_on:
       keycloak:
+        condition: service_started
+      alertmanager:
         condition: service_started
 
   grafana:
@@ -48,3 +79,4 @@ secrets:
 volumes:
   securefindings_prometheus_data:
   securefindings_grafana_data:
+  securefindings_alertmanager_data:

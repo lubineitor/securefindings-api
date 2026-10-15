@@ -1,0 +1,21 @@
+global:
+  smtp_smarthost: mailpit:1025
+  smtp_from: alertas@securefindings.test
+  smtp_require_tls: false
+
+route:
+  receiver: securefindings-local-email
+  group_by:
+    - alertname
+    - job
+    - severity
+  group_wait: 10s
+  group_interval: 1m
+  repeat_interval: 12h
+
+receivers:
+  - name: securefindings-local-email
+    email_configs:
+      - to: alertas@securefindings.test
+        send_resolved: true
+        require_tls: false
