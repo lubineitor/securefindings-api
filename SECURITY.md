@@ -256,6 +256,13 @@ Las respuestas de las pruebas no muestran componentes ni detalles. Liveness comp
 
 El endpoint global `/actuator/health` requiere autenticación. Las demás rutas de Actuator también quedan protegidas por las reglas generales de Spring Security.
 
+### Métricas de Actuator
+
+`/actuator/prometheus` requiere autenticación JWT y el rol `ADMIN`. Solo se exponen
+los endpoints `health` y `prometheus`. Las métricas del rate limiter utilizan
+etiquetas de valores limitados y no incorporan nombres de usuario, organizaciones
+ni huellas de clientes.
+
 ### Limitación distribuida de peticiones
 
 Las rutas `/api/v1/**`, excepto `/api/v1/health`, aplican límites por cliente mediante Redis. La operación atómica evita que distintas instancias concedan cuotas independientes al mismo cliente.

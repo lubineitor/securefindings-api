@@ -321,6 +321,20 @@ Ejemplo de respuesta:
 }
 ```
 
+#### Métricas Prometheus
+
+Las métricas se consultan en `GET /actuator/prometheus`. El endpoint requiere un JWT
+con el rol `ADMIN`.
+
+El rate limiter publica el contador `securefindings.rate_limit.requests`, con la
+etiqueta `outcome`:
+
+- `allowed`: petición permitida.
+- `rate_limited`: petición rechazada por superar el límite.
+- `unavailable`: petición rechazada porque el almacenamiento del rate limiter no estaba disponible.
+
+Las etiquetas no contienen usuarios, organizaciones ni direcciones IP.
+
 ### Trazabilidad de peticiones
 
 La API asigna a cada petición un identificador de correlación mediante la cabecera:
