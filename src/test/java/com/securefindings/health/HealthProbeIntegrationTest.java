@@ -1,9 +1,9 @@
 package com.securefindings.health;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -111,6 +111,26 @@ class HealthProbeIntegrationTest {
                                 .andExpect(status().isOk())
                                 .andExpect(content().string(containsString(
                                                 "securefindings_rate_limit_requests_total")));
+        }
+
+        @Test
+        void deberiaPermitirMetricasPrometheusAlRolDeSoloLectura()
+                        throws Exception {
+
+                mockMvc.perform(get("/actuator/prometheus")
+                                .with(jwtAutenticado("prometheus", "METRICS_READER")))
+                                .andExpect(status().isOk())
+                                .andExpect(content().string(containsString(
+                                                "securefindings_rate_limit_requests_total")));
+        }
+
+        @Test
+        void deberiaRestringirElRolDeMetricasALosEndpointsDeObservabilidad()
+                        throws Exception {
+
+                mockMvc.perform(get("/api/v1/organizations/current")
+                                .with(jwtAutenticado("prometheus", "METRICS_READER")))
+                                .andExpect(status().isForbidden());
         }
 
         private RequestPostProcessor jwtAutenticado(

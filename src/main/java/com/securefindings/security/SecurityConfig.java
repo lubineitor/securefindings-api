@@ -143,10 +143,10 @@ public class SecurityConfig {
                                                 .hasAnyRole("ANALYST", "ADMIN")
 
                                                 .requestMatchers("/actuator/prometheus")
-                                                .hasRole("ADMIN")
+                                                .hasAnyRole("ADMIN", "METRICS_READER")
 
                                                 .anyRequest()
-                                                .authenticated())
+                                                .hasAnyRole("ANALYST", "ADMIN"))
 
                                 .exceptionHandling(exceptionHandling -> exceptionHandling
                                                 .authenticationEntryPoint(securityErrorHandler)
