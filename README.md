@@ -634,8 +634,8 @@ El script `scripts/obtener-token.ps1` inicia sesión en Keycloak mediante
 Authorization Code con PKCE `S256`, comprueba la audiencia `securefindings-api`
 y copia el access token al portapapeles.
 
-El cliente `securefindings-cli` debe tener Standard Flow activado, Direct Access
-Grants desactivado y esta URI de redirección:
+El realm importado configura el cliente `securefindings-cli` con Standard Flow,
+PKCE `S256`, Direct Access Grants desactivado y esta URI de redirección:
 `http://127.0.0.1:8765/callback/`.
 
 ```powershell
@@ -729,6 +729,22 @@ Comprobar los servicios:
 ```powershell
 docker compose ps
 ```
+
+### Importación local de Keycloak
+
+En el primer arranque, Docker Compose importa el realm `securefindings` desde
+`keycloak/securefindings-realm.json`. La configuración crea los roles `ANALYST`
+y `ADMIN`, el cliente público `securefindings-cli` con PKCE `S256`, la audiencia
+`securefindings-api` y el mapper del atributo `organization_id`.
+
+Keycloak omite la importación si el realm ya existe. Por tanto, este mecanismo no
+actualiza ni reemplaza la configuración de una instalación existente. En ese
+caso, revisa o modifica el realm desde la consola de administración.
+
+Para cada usuario de pruebas, crea el usuario en el realm y asígnale el rol
+`ANALYST` o `ADMIN`. Añade el atributo de usuario `organization_id` con el UUID
+de la organización de desarrollo:
+`00000000-0000-0000-0000-000000000001`.
 
 ### Configuración de Redis
 
