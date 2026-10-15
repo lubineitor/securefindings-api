@@ -724,7 +724,7 @@ La variable `JWT_AUDIENCE` define la audiencia JWT que espera la API. Su valor l
 Iniciar los servicios de infraestructura:
 
 ```powershell
-docker compose up -d
+docker compose -f docker-compose.yml -f docker-compose.observability.yml --profile observability up -d prometheus grafana alertmanager mailpit
 ```
 
 Comprobar los servicios:
