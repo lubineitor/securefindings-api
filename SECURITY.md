@@ -242,6 +242,20 @@ El endpoint público:
 
 queda excluido para que pueda utilizarse en comprobaciones de disponibilidad.
 
+### Pruebas de salud y disponibilidad
+
+Actuator expone únicamente el endpoint `health`. Las rutas públicas son:
+
+- `/api/v1/health`
+- `/actuator/health/liveness`
+- `/actuator/health/readiness`
+- `/livez`
+- `/readyz`
+
+Las respuestas de las pruebas no muestran componentes ni detalles. Liveness comprueba el estado interno de la aplicación. Readiness comprueba también PostgreSQL y Redis, ya que ambos servicios son necesarios para procesar peticiones.
+
+El endpoint global `/actuator/health` requiere autenticación. Las demás rutas de Actuator también quedan protegidas por las reglas generales de Spring Security.
+
 ### Limitación distribuida de peticiones
 
 Las rutas `/api/v1/**`, excepto `/api/v1/health`, aplican límites por cliente mediante Redis. La operación atómica evita que distintas instancias concedan cuotas independientes al mismo cliente.

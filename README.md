@@ -321,8 +321,6 @@ Ejemplo de respuesta:
 }
 ```
 
-El límite actual se mantiene en memoria dentro de cada instancia de la aplicación. Para un despliegue con varias instancias se deberá utilizar un almacén compartido, un API Gateway o una solución distribuida equivalente.
-
 ### Trazabilidad de peticiones
 
 La API asigna a cada petición un identificador de correlación mediante la cabecera:
@@ -371,6 +369,19 @@ GET /api/v1/health
 ```
 
 Este endpoint está disponible sin autenticación y no consume cuota del límite de peticiones.
+
+### Probes de despliegue
+
+Además de `GET /api/v1/health`, la aplicación ofrece pruebas para comprobar su disponibilidad:
+
+| Método | Endpoint | Comprobación |
+|---|---|---|
+| `GET` | `/livez` | Estado interno de la aplicación. |
+| `GET` | `/readyz` | Estado de la aplicación, PostgreSQL y Redis. |
+| `GET` | `/actuator/health/liveness` | Equivalente a `/livez`. |
+| `GET` | `/actuator/health/readiness` | Equivalente a `/readyz`. |
+
+Las pruebas públicas devuelven únicamente el estado, sin mostrar componentes ni detalles. El endpoint global `/actuator/health` requiere autenticación.
 
 ### Hallazgos
 
@@ -894,7 +905,7 @@ El proyecto continúa en desarrollo. Algunas líneas futuras son:
 
 - Mejorar la administración de organizaciones.
 - Añadir más reglas de autorización.
-- Incorporar rate limiting distribuido.
+- Añadir métricas de aplicación y alertas.
 - Añadir métricas y observabilidad.
 - Mejorar la configuración de producción.
 - Automatizar la configuración de Keycloak.
