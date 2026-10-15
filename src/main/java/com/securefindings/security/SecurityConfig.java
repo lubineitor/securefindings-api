@@ -41,16 +41,22 @@ public class SecurityConfig {
         RateLimitFilter rateLimitFilter(
                         RateLimitProperties properties,
                         Clock rateLimitClock,
-                        ObjectProvider<RedisRateLimitStore> redisRateLimitStoreProvider) {
+                        ObjectProvider<RedisRateLimitStore> redisRateLimitStoreProvider,
+                        ObjectProvider<RateLimitMetrics> rateLimitMetricsProvider) {
 
                 RedisRateLimitStore redisRateLimitStore = redisRateLimitStoreProvider.getIfAvailable();
 
-                return redisRateLimitStore == null
-                                ? new RateLimitFilter(properties, rateLimitClock)
-                                : new RateLimitFilter(
-                                                properties,
-                                                rateLimitClock,
-                                                redisRateLimitStore);
+                RateLimitMetrics rateLimitMetrics = rateLimitMetricsProvider.getIfAvailable();
+
+                if (rateLimitMetrics == null) {
+                        rateLimitMetrics = RateLimitMetrics.NOOP;
+                }
+
+                return new RateLimitFilter(
+                                properties,
+                                rateLimitClock,
+                                redisRateLimitStore,
+                                rateLimitMetrics);
         }
 
         @Bean
@@ -135,6 +141,9 @@ public class SecurityConfig {
                                                                 HttpMethod.POST,
                                                                 "/api/v1/findings/*/comments")
                                                 .hasAnyRole("ANALYST", "ADMIN")
+
+                                                .requestMatchers("/actuator/prometheus")
+                                                .hasRole("ADMIN")
 
                                                 .anyRequest()
                                                 .authenticated())
