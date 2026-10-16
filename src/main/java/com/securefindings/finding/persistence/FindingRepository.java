@@ -22,19 +22,19 @@ public interface FindingRepository
         void deleteByIdAndOrganizationId(UUID id, UUID organizationId);
 
         @Query("""
-                        SELECT finding
-                        FROM FindingEntity finding
-                        WHERE finding.organizationId = :organizationId
-                          AND (
-                                COALESCE(:searchTerm, '') = ''
-                                OR LOWER(finding.title) LIKE LOWER(
-                                        CONCAT('%', COALESCE(:searchTerm, ''), '%'))
-                                OR LOWER(finding.description) LIKE LOWER(
-                                        CONCAT('%', COALESCE(:searchTerm, ''), '%'))
-                          )
-                          AND (:severity IS NULL OR finding.severity = :severity)
-                          AND (:status IS NULL OR finding.status = :status)
-                        """)
+                                                SELECT finding
+                                                FROM FindingEntity finding
+                                                WHERE finding.organizationId = :organizationId
+                                                  AND (
+                                                        COALESCE(:searchTerm, '') = ''
+                        OR LOWER(finding.title) LIKE LOWER(
+                                CONCAT('%', COALESCE(:searchTerm, ''), '%')) ESCAPE '!'
+                        OR LOWER(finding.description) LIKE LOWER(
+                                CONCAT('%', COALESCE(:searchTerm, ''), '%')) ESCAPE '!'
+                                                  )
+                                                  AND (:severity IS NULL OR finding.severity = :severity)
+                                                  AND (:status IS NULL OR finding.status = :status)
+                                                """)
         Page<FindingEntity> findPageByFilters(
                         @Param("organizationId") UUID organizationId,
                         @Param("searchTerm") String searchTerm,

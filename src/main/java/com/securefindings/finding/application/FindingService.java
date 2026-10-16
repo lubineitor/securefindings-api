@@ -277,9 +277,14 @@ public class FindingService {
 
                 String normalizedSearchTerm = searchTerm.trim();
 
-                return normalizedSearchTerm.isEmpty()
-                                ? null
-                                : normalizedSearchTerm;
+                if (normalizedSearchTerm.isEmpty()) {
+                        return null;
+                }
+
+                return normalizedSearchTerm
+                                .replace("!", "!!")
+                                .replace("%", "!%")
+                                .replace("_", "!_");
         }
 
         private Finding save(
