@@ -35,6 +35,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 @RestController
@@ -74,9 +75,9 @@ public class FindingController {
 
                         @Parameter(description = "Filtrar por estado", example = "OPEN", in = ParameterIn.QUERY) @RequestParam(name = "status", required = false) FindingStatus status,
 
-                        @Parameter(description = "Campo por el que ordenar", example = "createdAt", in = ParameterIn.QUERY) @RequestParam(name = "sortBy", defaultValue = "createdAt") String sortBy,
+                        @Parameter(description = "Campo por el que ordenar", example = "createdAt", in = ParameterIn.QUERY) @RequestParam(name = "sortBy", defaultValue = "createdAt") @Pattern(regexp = "createdAt|updatedAt|title|severity|status", flags = Pattern.Flag.CASE_INSENSITIVE, message = "El campo de ordenación no está permitido") String sortBy,
 
-                        @Parameter(description = "Dirección de ordenación", example = "DESC", in = ParameterIn.QUERY) @RequestParam(name = "direction", defaultValue = "DESC") String direction) {
+                        @Parameter(description = "Dirección de ordenación", example = "DESC", in = ParameterIn.QUERY) @RequestParam(name = "direction", defaultValue = "DESC") @Pattern(regexp = "ASC|DESC", flags = Pattern.Flag.CASE_INSENSITIVE, message = "La dirección de ordenación no está permitida") String direction) {
 
                 Page<Finding> findingPage = findingService.findPage(
                                 page,

@@ -618,7 +618,9 @@ class FindingControllerTest {
                                 .param("sortBy", "password"))
                                 .andExpect(status().isBadRequest())
                                 .andExpect(jsonPath("$.code")
-                                                .value("VALIDATION_ERROR"));
+                                                .value("VALIDATION_ERROR"))
+                                .andExpect(jsonPath("$.errors.sortBy")
+                                                .value("El campo de ordenación no está permitido"));
 
                 verifyNoInteractions(findingService);
         }
@@ -631,7 +633,9 @@ class FindingControllerTest {
                                 .param("direction", "RANDOM"))
                                 .andExpect(status().isBadRequest())
                                 .andExpect(jsonPath("$.code")
-                                                .value("VALIDATION_ERROR"));
+                                                .value("VALIDATION_ERROR"))
+                                .andExpect(jsonPath("$.errors.direction")
+                                                .value("La dirección de ordenación no está permitida"));
 
                 verifyNoInteractions(findingService);
         }
