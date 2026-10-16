@@ -123,7 +123,10 @@ class FindingPersistenceIntegrationTest {
                                 "Salida sin escapar",
                                 FindingSeverity.HIGH);
 
-                List<Finding> findings = findingService.findAll();
+                Page<Finding> findingPage = findingService.findPage(0, 20, null, null);
+                List<Finding> findings = findingPage.getContent();
+
+                assertEquals(2, findingPage.getTotalElements());
 
                 assertEquals(2, findings.size());
                 assertTrue(findings.stream()
@@ -162,7 +165,9 @@ class FindingPersistenceIntegrationTest {
                 List<FindingAuditEntity> auditEvents = findingAuditRepository
                                 .findByFindingIdAndOrganizationIdOrderByOccurredAtAsc(
                                                 createdFinding.id(),
-                                                ORGANIZATION_ID);
+                                                ORGANIZATION_ID,
+                                                PageRequest.of(0, 20))
+                                .getContent();
 
                 assertEquals(3, auditEvents.size());
 
@@ -328,7 +333,9 @@ class FindingPersistenceIntegrationTest {
                 List<FindingAuditEntity> auditEvents = findingAuditRepository
                                 .findByFindingIdAndOrganizationIdOrderByOccurredAtAsc(
                                                 createdFinding.id(),
-                                                ORGANIZATION_ID);
+                                                ORGANIZATION_ID,
+                                                PageRequest.of(0, 20))
+                                .getContent();
 
                 assertEquals(1, auditEvents.size());
                 assertEquals(

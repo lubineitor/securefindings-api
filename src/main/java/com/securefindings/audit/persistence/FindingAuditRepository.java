@@ -1,6 +1,5 @@
 package com.securefindings.audit.persistence;
 
-import java.util.List;
 import java.util.UUID;
 
 import org.springframework.data.domain.Page;
@@ -11,10 +10,6 @@ import com.securefindings.audit.domain.AuditAction;
 
 public interface FindingAuditRepository
                 extends JpaRepository<FindingAuditEntity, UUID> {
-
-        List<FindingAuditEntity> findByFindingIdAndOrganizationIdOrderByOccurredAtAsc(
-                        UUID findingId,
-                        UUID organizationId);
 
         Page<FindingAuditEntity> findByFindingIdAndOrganizationIdOrderByOccurredAtAsc(
                         UUID findingId,

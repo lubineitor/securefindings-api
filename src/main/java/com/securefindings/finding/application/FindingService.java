@@ -1,6 +1,5 @@
 package com.securefindings.finding.application;
 
-import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -74,19 +73,6 @@ public class FindingService {
                                 currentActor());
 
                 return savedFinding;
-        }
-
-        public List<Finding> findAll() {
-                UUID organizationId = organizationContext.currentOrganizationId();
-
-                return findingRepository
-                                .findAllByOrganizationId(organizationId)
-                                .stream()
-                                .map(entity -> Objects.requireNonNull(
-                                                entity,
-                                                "El repositorio devolvió una entidad nula")
-                                                .toDomain())
-                                .toList();
         }
 
         public Page<Finding> findPage(

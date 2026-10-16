@@ -1,7 +1,6 @@
 package com.securefindings.audit.application;
 
 import java.time.Instant;
-import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -108,18 +107,6 @@ public class AuditService {
                                 event);
 
                 auditRepository.save(entity);
-        }
-
-        @Transactional(readOnly = true)
-        public List<FindingAuditEntity> findByFindingId(
-                        UUID findingId) {
-
-                UUID organizationId = ensureFindingBelongsToOrganization(findingId);
-
-                return auditRepository
-                                .findByFindingIdAndOrganizationIdOrderByOccurredAtAsc(
-                                                findingId,
-                                                organizationId);
         }
 
         @Transactional(readOnly = true)

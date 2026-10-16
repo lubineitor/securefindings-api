@@ -78,7 +78,7 @@ class FindingServiceTest {
         }
 
         @Test
-        void deberiaListarLosHallazgosGuardados() {
+        void deberiaListarLosHallazgosGuardadosDeFormaPaginada() {
                 Finding firstFinding = Finding.create(
                                 "SQL Injection",
                                 "Entrada sin validar",
@@ -89,20 +89,30 @@ class FindingServiceTest {
                                 "Contenido sin escapar",
                                 FindingSeverity.MEDIUM);
 
-                when(findingRepository.findAllByOrganizationId(
-                                TEST_ORGANIZATION_ID))
-                                .thenReturn(List.of(
+                when(findingRepository.findPageByFilters(
+                                eq(TEST_ORGANIZATION_ID),
+                                isNull(String.class),
+                                isNull(FindingSeverity.class),
+                                isNull(FindingStatus.class),
+                                any(Pageable.class)))
+                                .thenReturn(new PageImpl<>(List.of(
                                                 new FindingEntity(firstFinding),
-                                                new FindingEntity(secondFinding)));
+                                                new FindingEntity(secondFinding))));
 
-                List<Finding> findings = findingService.findAll();
+                var findingPage = findingService.findPage(0, 20, null, null);
 
                 assertEquals(
                                 List.of(firstFinding, secondFinding),
-                                findings);
+                                findingPage.getContent());
+                assertEquals(2, findingPage.getTotalElements());
 
                 verify(findingRepository)
-                                .findAllByOrganizationId(TEST_ORGANIZATION_ID);
+                                .findPageByFilters(
+                                                eq(TEST_ORGANIZATION_ID),
+                                                isNull(String.class),
+                                                isNull(FindingSeverity.class),
+                                                isNull(FindingStatus.class),
+                                                any(Pageable.class));
         }
 
         @Test

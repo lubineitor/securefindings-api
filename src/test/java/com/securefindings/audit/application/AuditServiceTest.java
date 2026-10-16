@@ -87,39 +87,6 @@ class AuditServiceTest {
         }
 
         @Test
-        void deberiaConsultarLaAuditoriaFiltrandoPorOrganizacion() {
-                UUID findingId = UUID.randomUUID();
-
-                FindingAuditEntity event = new FindingAuditEntity(
-                                UUID.randomUUID(),
-                                findingId,
-                                ORGANIZATION_ID,
-                                AuditAction.CREATED,
-                                "analista",
-                                Instant.now());
-
-                when(organizationContext.currentOrganizationId())
-                                .thenReturn(ORGANIZATION_ID);
-
-                stubFindingExists(findingId, ORGANIZATION_ID);
-
-                when(auditRepository
-                                .findByFindingIdAndOrganizationIdOrderByOccurredAtAsc(
-                                                findingId,
-                                                ORGANIZATION_ID))
-                                .thenReturn(List.of(event));
-
-                List<FindingAuditEntity> events = auditService.findByFindingId(findingId);
-
-                assertEquals(List.of(event), events);
-
-                verify(auditRepository)
-                                .findByFindingIdAndOrganizationIdOrderByOccurredAtAsc(
-                                                findingId,
-                                                ORGANIZATION_ID);
-        }
-
-        @Test
         void deberiaPaginarLaAuditoriaFiltrandoPorOrganizacion() {
                 UUID findingId = UUID.randomUUID();
                 UUID organizationId = UUID.fromString(
