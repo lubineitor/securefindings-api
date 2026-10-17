@@ -1,5 +1,6 @@
 package com.securefindings.finding.application;
 
+import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -115,6 +116,29 @@ public class FindingService {
                         FindingSortField sortField,
                         FindingSortDirection sortDirection) {
 
+                return findPage(
+                                page,
+                                size,
+                                searchTerm,
+                                severity,
+                                status,
+                                sortField,
+                                sortDirection,
+                                null,
+                                null);
+        }
+
+        public Page<Finding> findPage(
+                        int page,
+                        int size,
+                        String searchTerm,
+                        FindingSeverity severity,
+                        FindingStatus status,
+                        FindingSortField sortField,
+                        FindingSortDirection sortDirection,
+                        Instant createdFrom,
+                        Instant createdTo) {
+
                 UUID organizationId = organizationContext.currentOrganizationId();
 
                 Pageable pageable = createPageable(
@@ -131,6 +155,8 @@ public class FindingService {
                                                 normalizedSearchTerm,
                                                 severity,
                                                 status,
+                                                createdFrom,
+                                                createdTo,
                                                 pageable);
 
                 return toDomainPage(entities);

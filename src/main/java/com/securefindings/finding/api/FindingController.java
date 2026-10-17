@@ -1,8 +1,11 @@
 package com.securefindings.finding.api;
 
+import java.time.Instant;
 import java.util.UUID;
 
 import org.springframework.data.domain.Page;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.format.annotation.DateTimeFormat.ISO;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -77,16 +80,42 @@ public class FindingController {
 
                         @Parameter(description = "Campo por el que ordenar", example = "createdAt", in = ParameterIn.QUERY) @RequestParam(name = "sortBy", defaultValue = "createdAt") @Pattern(regexp = "createdAt|updatedAt|title|severity|status", flags = Pattern.Flag.CASE_INSENSITIVE, message = "El campo de ordenación no está permitido") String sortBy,
 
-                        @Parameter(description = "Dirección de ordenación", example = "DESC", in = ParameterIn.QUERY) @RequestParam(name = "direction", defaultValue = "DESC") @Pattern(regexp = "ASC|DESC", flags = Pattern.Flag.CASE_INSENSITIVE, message = "La dirección de ordenación no está permitida") String direction) {
+                        @Parameter(description = "Dirección de ordenación", example = "DESC", in = ParameterIn.QUERY) @RequestParam(name = "direction", defaultValue = "DESC") @Pattern(regexp = "ASC|DESC", flags = Pattern.Flag.CASE_INSENSITIVE, message = "La dirección de ordenación no está permitida") String direction,
 
-                Page<Finding> findingPage = findingService.findPage(
-                                page,
-                                size,
-                                searchTerm,
-                                severity,
-                                status,
-                                FindingSortField.from(sortBy),
-                                FindingSortDirection.from(direction));
+                        @Parameter(description = "Fecha de creación inicial inclusiva, en formato ISO-8601", example = "2026-10-01T00:00:00Z", in = ParameterIn.QUERY) @RequestParam(name = "createdFrom", required = false) @DateTimeFormat(iso = ISO.DATE_TIME) Instant createdFrom,
+
+                        @Parameter(description = "Fecha de creación final inclusiva, en formato ISO-8601", example = "2026-10-17T23:59:59Z", in = ParameterIn.QUERY) @RequestParam(name = "createdTo", required = false) @DateTimeFormat(iso = ISO.DATE_TIME) Instant createdTo) {
+
+                if (createdFrom != null
+                                && createdTo != null
+                                && createdFrom.isAfter(createdTo)) {
+                        throw new IllegalArgumentException(
+                                        "createdFrom debe ser anterior o igual a createdTo");
+                }
+
+                Page<Finding> findingPage;
+
+                if (createdFrom == null && createdTo == null) {
+                        findingPage = findingService.findPage(
+                                        page,
+                                        size,
+                                        searchTerm,
+                                        severity,
+                                        status,
+                                        FindingSortField.from(sortBy),
+                                        FindingSortDirection.from(direction));
+                } else {
+                        findingPage = findingService.findPage(
+                                        page,
+                                        size,
+                                        searchTerm,
+                                        severity,
+                                        status,
+                                        FindingSortField.from(sortBy),
+                                        FindingSortDirection.from(direction),
+                                        createdFrom,
+                                        createdTo);
+                }
 
                 return FindingPageResponse.from(findingPage);
         }

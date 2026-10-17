@@ -1,5 +1,6 @@
 package com.securefindings.finding.persistence;
 
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -27,19 +28,23 @@ public interface FindingRepository
                                                 WHERE finding.organizationId = :organizationId
                                                   AND (
                                                         COALESCE(:searchTerm, '') = ''
-                        OR LOWER(finding.title) LIKE LOWER(
-                                CONCAT('%', COALESCE(:searchTerm, ''), '%')) ESCAPE '!'
-                        OR LOWER(finding.description) LIKE LOWER(
-                                CONCAT('%', COALESCE(:searchTerm, ''), '%')) ESCAPE '!'
+                                                        OR LOWER(finding.title) LIKE LOWER(
+                                                                CONCAT('%', COALESCE(:searchTerm, ''), '%')) ESCAPE '!'
+                                                        OR LOWER(finding.description) LIKE LOWER(
+                                                                CONCAT('%', COALESCE(:searchTerm, ''), '%')) ESCAPE '!'
                                                   )
                                                   AND (:severity IS NULL OR finding.severity = :severity)
                                                   AND (:status IS NULL OR finding.status = :status)
+                        AND finding.createdAt >= COALESCE(:createdFrom, finding.createdAt)
+                        AND finding.createdAt <= COALESCE(:createdTo, finding.createdAt)
                                                 """)
         Page<FindingEntity> findPageByFilters(
                         @Param("organizationId") UUID organizationId,
                         @Param("searchTerm") String searchTerm,
                         @Param("severity") FindingSeverity severity,
                         @Param("status") FindingStatus status,
+                        @Param("createdFrom") Instant createdFrom,
+                        @Param("createdTo") Instant createdTo,
                         Pageable pageable);
 
 }
