@@ -3,6 +3,7 @@ package com.securefindings.finding.persistence;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -25,6 +26,8 @@ import com.securefindings.audit.application.AuditService;
 import com.securefindings.audit.domain.AuditAction;
 import com.securefindings.audit.persistence.FindingAuditEntity;
 import com.securefindings.audit.persistence.FindingAuditRepository;
+import com.securefindings.finding.api.FindingSortDirection;
+import com.securefindings.finding.api.FindingSortField;
 import com.securefindings.finding.application.FindingService;
 import com.securefindings.finding.domain.Finding;
 import com.securefindings.finding.domain.FindingSeverity;
@@ -297,6 +300,8 @@ class FindingPersistenceIntegrationTest {
                                 null,
                                 null,
                                 null,
+                                null,
+                                null,
                                 PageRequest.of(
                                                 0,
                                                 20,
@@ -477,5 +482,62 @@ class FindingPersistenceIntegrationTest {
                 assertEquals(
                                 "actor-filter-request-1",
                                 analystEvents.getContent().get(0).getRequestId());
+        }
+
+        @Test
+        void deberiaFiltrarLosHallazgosPorUnRangoInclusivoDeFechaDeCreacion() {
+                Instant createdFrom = Instant.parse("2026-10-01T10:00:00Z");
+                Instant createdTo = Instant.parse("2026-10-03T10:00:00Z");
+
+                Finding beforeRange = saveFindingAt(
+                                "Antes del rango",
+                                Instant.parse("2026-10-01T09:59:59Z"));
+                Finding fromBoundary = saveFindingAt(
+                                "Inicio del rango",
+                                createdFrom);
+                Finding withinRange = saveFindingAt(
+                                "Dentro del rango",
+                                Instant.parse("2026-10-02T10:00:00Z"));
+                Finding toBoundary = saveFindingAt(
+                                "Fin del rango",
+                                createdTo);
+
+                Page<Finding> results = findingService.findPage(
+                                0,
+                                20,
+                                null,
+                                null,
+                                null,
+                                FindingSortField.CREATED_AT,
+                                FindingSortDirection.ASC,
+                                createdFrom,
+                                createdTo);
+
+                assertEquals(3, results.getTotalElements());
+                assertTrue(results.getContent().stream()
+                                .anyMatch(finding -> finding.id().equals(fromBoundary.id())));
+                assertTrue(results.getContent().stream()
+                                .anyMatch(finding -> finding.id().equals(withinRange.id())));
+                assertTrue(results.getContent().stream()
+                                .anyMatch(finding -> finding.id().equals(toBoundary.id())));
+                assertTrue(results.getContent().stream()
+                                .noneMatch(finding -> finding.id().equals(beforeRange.id())));
+        }
+
+        private Finding saveFindingAt(
+                        String title,
+                        Instant createdAt) {
+
+                Finding finding = new Finding(
+                                UUID.randomUUID(),
+                                title,
+                                "Prueba del filtro por fecha de creación",
+                                FindingSeverity.HIGH,
+                                FindingStatus.OPEN,
+                                createdAt,
+                                createdAt);
+
+                findingRepository.save(new FindingEntity(finding, ORGANIZATION_ID));
+                return finding;
         }
 }

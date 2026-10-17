@@ -11,6 +11,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -94,6 +95,8 @@ class FindingServiceTest {
                                 isNull(String.class),
                                 isNull(FindingSeverity.class),
                                 isNull(FindingStatus.class),
+                                isNull(Instant.class),
+                                isNull(Instant.class),
                                 any(Pageable.class)))
                                 .thenReturn(new PageImpl<>(List.of(
                                                 new FindingEntity(firstFinding),
@@ -106,13 +109,14 @@ class FindingServiceTest {
                                 findingPage.getContent());
                 assertEquals(2, findingPage.getTotalElements());
 
-                verify(findingRepository)
-                                .findPageByFilters(
-                                                eq(TEST_ORGANIZATION_ID),
-                                                isNull(String.class),
-                                                isNull(FindingSeverity.class),
-                                                isNull(FindingStatus.class),
-                                                any(Pageable.class));
+                verify(findingRepository).findPageByFilters(
+                                eq(TEST_ORGANIZATION_ID),
+                                isNull(String.class),
+                                isNull(FindingSeverity.class),
+                                isNull(FindingStatus.class),
+                                isNull(Instant.class),
+                                isNull(Instant.class),
+                                any(Pageable.class));
         }
 
         @Test
@@ -336,6 +340,8 @@ class FindingServiceTest {
                                 isNull(String.class),
                                 isNull(FindingSeverity.class),
                                 isNull(FindingStatus.class),
+                                isNull(Instant.class),
+                                isNull(Instant.class),
                                 any(Pageable.class)))
                                 .thenReturn(new PageImpl<>(List.of()));
 
@@ -353,6 +359,8 @@ class FindingServiceTest {
                                 isNull(String.class),
                                 isNull(FindingSeverity.class),
                                 isNull(FindingStatus.class),
+                                isNull(Instant.class),
+                                isNull(Instant.class),
                                 pageableCaptor.capture());
 
                 Pageable pageable = pageableCaptor.getValue();
@@ -382,6 +390,8 @@ class FindingServiceTest {
                                 isNull(String.class),
                                 isNull(FindingSeverity.class),
                                 isNull(FindingStatus.class),
+                                isNull(Instant.class),
+                                isNull(Instant.class),
                                 any(Pageable.class)))
                                 .thenReturn(new PageImpl<>(List.of()));
 
@@ -401,6 +411,8 @@ class FindingServiceTest {
                                 isNull(String.class),
                                 isNull(FindingSeverity.class),
                                 isNull(FindingStatus.class),
+                                isNull(Instant.class),
+                                isNull(Instant.class),
                                 pageableCaptor.capture());
 
                 Pageable pageable = pageableCaptor.getValue();
@@ -443,5 +455,41 @@ class FindingServiceTest {
                                 .save(any(FindingEntity.class));
 
                 verifyNoInteractions(auditService);
+        }
+
+        @Test
+        void deberiaAplicarElRangoDeFechaDeCreacionEnLaConsulta() {
+                Instant createdFrom = Instant.parse("2026-10-01T00:00:00Z");
+                Instant createdTo = Instant.parse("2026-10-17T23:59:59Z");
+
+                when(findingRepository.findPageByFilters(
+                                eq(TEST_ORGANIZATION_ID),
+                                isNull(String.class),
+                                isNull(FindingSeverity.class),
+                                isNull(FindingStatus.class),
+                                eq(createdFrom),
+                                eq(createdTo),
+                                any(Pageable.class)))
+                                .thenReturn(new PageImpl<>(List.of()));
+
+                findingService.findPage(
+                                0,
+                                20,
+                                null,
+                                null,
+                                null,
+                                FindingSortField.CREATED_AT,
+                                FindingSortDirection.DESC,
+                                createdFrom,
+                                createdTo);
+
+                verify(findingRepository).findPageByFilters(
+                                eq(TEST_ORGANIZATION_ID),
+                                isNull(String.class),
+                                isNull(FindingSeverity.class),
+                                isNull(FindingStatus.class),
+                                eq(createdFrom),
+                                eq(createdTo),
+                                any(Pageable.class));
         }
 }
