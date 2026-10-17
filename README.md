@@ -445,12 +445,20 @@ Parámetros disponibles:
 | `status` | No | — | Filtra por estado. |
 | `sortBy` | No | `createdAt` | Campo permitido para ordenar. |
 | `direction` | No | `DESC` | Dirección `ASC` o `DESC`. |
+| `createdFrom` | No | — | Fecha de creación inicial inclusiva, en formato ISO-8601. |
+| `createdTo` | No | — | Fecha de creación final inclusiva, en formato ISO-8601. |
 
 Ejemplo:
 
 ```text
 GET /api/v1/findings?page=0&size=20&q=SQL&severity=HIGH&status=OPEN&sortBy=title&direction=ASC
 ```
+
+Los filtros de fecha se pueden combinar con los demás parámetros. Se aceptan
+instantes ISO-8601, por ejemplo:
+
+```text
+GET /api/v1/findings?createdFrom=2026-10-01T00:00:00Z&createdTo=2026-10-17T23:59:59Z
 
 La respuesta paginada contiene:
 
