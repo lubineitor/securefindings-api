@@ -410,6 +410,15 @@ Las pruebas públicas devuelven únicamente el estado, sin mostrar componentes n
 | `PUT` | `/api/v1/findings/{id}` | Actualiza los datos | `ANALYST`, `ADMIN` |
 | `PATCH` | `/api/v1/findings/{id}/status` | Actualiza el estado | `ANALYST`, `ADMIN` |
 | `DELETE` | `/api/v1/findings/{id}` | Elimina un hallazgo | `ADMIN` |
+| `GET` | `/api/v1/findings/summary` | Resume hallazgos por estado y severidad | `ANALYST`, `ADMIN` |
+
+#### Resumen de hallazgos
+
+`GET /api/v1/findings/summary` devuelve los recuentos de hallazgos de la
+organización asociada al token, agrupados por estado y severidad. Las categorías
+sin hallazgos aparecen con valor `0`.
+
+La consulta requiere un token con rol `ANALYST` o `ADMIN`.
 
 ### Organización actual
 

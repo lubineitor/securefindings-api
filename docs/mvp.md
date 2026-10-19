@@ -26,6 +26,7 @@ en este documento y en `SECURITY.md`.
 - Probes de liveness y readiness, y métricas Prometheus protegidas para `ADMIN`.
 - Migraciones PostgreSQL con Flyway, documentación OpenAPI y ejecución local con
   Docker Compose.
+- Resumen de hallazgos agrupados por estado y severidad para la organización actual.
 
 ## Criterios de aceptación del MVP
 
