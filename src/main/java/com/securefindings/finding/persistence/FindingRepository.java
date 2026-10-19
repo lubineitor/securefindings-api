@@ -17,28 +17,34 @@ import com.securefindings.finding.domain.FindingStatus;
 public interface FindingRepository
                 extends JpaRepository<FindingEntity, UUID> {
 
-        Optional<FindingEntity> findByIdAndOrganizationId(UUID id, UUID organizationId);
+        Optional<FindingEntity> findByIdAndOrganizationId(
+                        UUID id,
+                        UUID organizationId);
 
-        boolean existsByIdAndOrganizationId(UUID id, UUID organizationId);
+        boolean existsByIdAndOrganizationId(
+                        UUID id,
+                        UUID organizationId);
 
-        void deleteByIdAndOrganizationId(UUID id, UUID organizationId);
+        void deleteByIdAndOrganizationId(
+                        UUID id,
+                        UUID organizationId);
 
         @Query("""
-                                                SELECT finding
-                                                FROM FindingEntity finding
-                                                WHERE finding.organizationId = :organizationId
-                                                  AND (
-                                                        COALESCE(:searchTerm, '') = ''
-                                                        OR LOWER(finding.title) LIKE LOWER(
-                                                                CONCAT('%', COALESCE(:searchTerm, ''), '%')) ESCAPE '!'
-                                                        OR LOWER(finding.description) LIKE LOWER(
-                                                                CONCAT('%', COALESCE(:searchTerm, ''), '%')) ESCAPE '!'
-                                                  )
-                                                  AND (:severity IS NULL OR finding.severity = :severity)
-                                                  AND (:status IS NULL OR finding.status = :status)
-                        AND finding.createdAt >= COALESCE(:createdFrom, finding.createdAt)
-                        AND finding.createdAt <= COALESCE(:createdTo, finding.createdAt)
-                                                """)
+                        SELECT finding
+                        FROM FindingEntity finding
+                        WHERE finding.organizationId = :organizationId
+                          AND (
+                                COALESCE(:searchTerm, '') = ''
+                                OR LOWER(finding.title) LIKE LOWER(
+                                        CONCAT('%', COALESCE(:searchTerm, ''), '%')) ESCAPE '!'
+                                OR LOWER(finding.description) LIKE LOWER(
+                                        CONCAT('%', COALESCE(:searchTerm, ''), '%')) ESCAPE '!'
+                          )
+                          AND (:severity IS NULL OR finding.severity = :severity)
+                          AND (:status IS NULL OR finding.status = :status)
+                          AND finding.createdAt >= COALESCE(:createdFrom, finding.createdAt)
+                          AND finding.createdAt <= COALESCE(:createdTo, finding.createdAt)
+                        """)
         Page<FindingEntity> findPageByFilters(
                         @Param("organizationId") UUID organizationId,
                         @Param("searchTerm") String searchTerm,
@@ -85,5 +91,4 @@ public interface FindingRepository
                         @Param("organizationId") UUID organizationId,
                         @Param("createdFrom") Instant createdFrom,
                         @Param("createdTo") Instant createdTo);
-
 }
