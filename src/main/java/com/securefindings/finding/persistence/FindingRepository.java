@@ -64,18 +64,26 @@ public interface FindingRepository
                         SELECT finding.status AS status, COUNT(finding.id) AS total
                         FROM FindingEntity finding
                         WHERE finding.organizationId = :organizationId
+                          AND finding.createdAt >= COALESCE(:createdFrom, finding.createdAt)
+                          AND finding.createdAt <= COALESCE(:createdTo, finding.createdAt)
                         GROUP BY finding.status
                         """)
         List<StatusCountProjection> countStatusesByOrganization(
-                        @Param("organizationId") UUID organizationId);
+                        @Param("organizationId") UUID organizationId,
+                        @Param("createdFrom") Instant createdFrom,
+                        @Param("createdTo") Instant createdTo);
 
         @Query("""
                         SELECT finding.severity AS severity, COUNT(finding.id) AS total
                         FROM FindingEntity finding
                         WHERE finding.organizationId = :organizationId
+                          AND finding.createdAt >= COALESCE(:createdFrom, finding.createdAt)
+                          AND finding.createdAt <= COALESCE(:createdTo, finding.createdAt)
                         GROUP BY finding.severity
                         """)
         List<SeverityCountProjection> countSeveritiesByOrganization(
-                        @Param("organizationId") UUID organizationId);
+                        @Param("organizationId") UUID organizationId,
+                        @Param("createdFrom") Instant createdFrom,
+                        @Param("createdTo") Instant createdTo);
 
 }

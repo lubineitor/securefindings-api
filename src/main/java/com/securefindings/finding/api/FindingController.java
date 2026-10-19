@@ -134,8 +134,12 @@ public class FindingController {
                                         @Header(name = "X-RateLimit-Reset", description = "Instante Unix en que el cubo volverá a estar lleno", schema = @Schema(type = "integer", format = "int64"))
                         }, content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
         })
-        public FindingSummary getSummary() {
-                return findingService.getSummary();
+        public FindingSummary getSummary(
+                        @Parameter(description = "Fecha inicial inclusiva en formato ISO-8601", example = "2026-10-01T00:00:00Z", in = ParameterIn.QUERY) @RequestParam(name = "createdFrom", required = false) @DateTimeFormat(iso = ISO.DATE_TIME) Instant createdFrom,
+
+                        @Parameter(description = "Fecha final inclusiva en formato ISO-8601", example = "2026-10-19T23:59:59Z", in = ParameterIn.QUERY) @RequestParam(name = "createdTo", required = false) @DateTimeFormat(iso = ISO.DATE_TIME) Instant createdTo) {
+
+                return findingService.getSummary(createdFrom, createdTo);
         }
 
         @GetMapping("/{id}")

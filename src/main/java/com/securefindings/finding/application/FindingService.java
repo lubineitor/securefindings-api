@@ -55,6 +55,20 @@ public class FindingService {
         }
 
         public FindingSummary getSummary() {
+                return getSummary(null, null);
+        }
+
+        public FindingSummary getSummary(
+                        Instant createdFrom,
+                        Instant createdTo) {
+
+                if (createdFrom != null
+                                && createdTo != null
+                                && createdFrom.isAfter(createdTo)) {
+                        throw new IllegalArgumentException(
+                                        "createdFrom no puede ser posterior a createdTo");
+                }
+
                 UUID organizationId = organizationContext.currentOrganizationId();
 
                 Map<FindingStatus, Long> byStatus = new EnumMap<>(FindingStatus.class);
@@ -64,7 +78,10 @@ public class FindingService {
                 }
 
                 findingRepository
-                                .countStatusesByOrganization(organizationId)
+                                .countStatusesByOrganization(
+                                                organizationId,
+                                                createdFrom,
+                                                createdTo)
                                 .forEach(result -> byStatus.put(
                                                 result.getStatus(),
                                                 result.getTotal()));
@@ -76,7 +93,10 @@ public class FindingService {
                 }
 
                 findingRepository
-                                .countSeveritiesByOrganization(organizationId)
+                                .countSeveritiesByOrganization(
+                                                organizationId,
+                                                createdFrom,
+                                                createdTo)
                                 .forEach(result -> bySeverity.put(
                                                 result.getSeverity(),
                                                 result.getTotal()));
