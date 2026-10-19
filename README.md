@@ -420,6 +420,15 @@ sin hallazgos aparecen con valor `0`.
 
 La consulta requiere un token con rol `ANALYST` o `ADMIN`.
 
+Parámetros opcionales:
+
+| Parámetro | Descripción |
+|---|---|
+| `createdFrom` | Fecha de creación inicial inclusiva, en formato ISO-8601. |
+| `createdTo` | Fecha de creación final inclusiva, en formato ISO-8601. |
+
+Si se envían ambos, `createdFrom` debe ser anterior o igual a `createdTo`.
+
 ### Organización actual
 
 | Método | Endpoint | Descripción | Rol |
