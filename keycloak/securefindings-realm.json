@@ -1,0 +1,105 @@
+{
+    "realm": "securefindings",
+    "enabled": true,
+    "displayName": "SecureFindings",
+    "roles": {
+        "realm": [
+            {
+                "name": "ANALYST",
+                "description": "Consulta y gestiona hallazgos"
+            },
+            {
+                "name": "ADMIN",
+                "description": "Administra la organización y todos sus hallazgos"
+            },
+            {
+                "name": "METRICS_READER",
+                "description": "Consulta las métricas de Actuator sin permisos de administración"
+            }
+        ]
+    },
+    "clients": [
+        {
+            "clientId": "securefindings-cli",
+            "name": "SecureFindings CLI",
+            "enabled": true,
+            "protocol": "openid-connect",
+            "publicClient": true,
+            "standardFlowEnabled": true,
+            "implicitFlowEnabled": false,
+            "directAccessGrantsEnabled": false,
+            "serviceAccountsEnabled": false,
+            "redirectUris": [
+                "http://127.0.0.1:8765/callback/"
+            ],
+            "webOrigins": [],
+            "attributes": {
+                "pkce.code.challenge.method": "S256"
+            },
+            "defaultClientScopes": [
+                "profile",
+                "roles"
+            ],
+            "protocolMappers": [
+                {
+                    "name": "securefindings-api audience",
+                    "protocol": "openid-connect",
+                    "protocolMapper": "oidc-audience-mapper",
+                    "consentRequired": false,
+                    "config": {
+                        "included.custom.audience": "securefindings-api",
+                        "id.token.claim": "false",
+                        "access.token.claim": "true",
+                        "lightweight.claim": "false"
+                    }
+                },
+                {
+                    "name": "organization_id",
+                    "protocol": "openid-connect",
+                    "protocolMapper": "oidc-usermodel-attribute-mapper",
+                    "consentRequired": false,
+                    "config": {
+                        "user.attribute": "organization_id",
+                        "claim.name": "organization_id",
+                        "jsonType.label": "String",
+                        "id.token.claim": "false",
+                        "access.token.claim": "true",
+                        "userinfo.token.claim": "false"
+                    }
+                }
+            ]
+        },
+        {
+            "clientId": "securefindings-prometheus",
+            "name": "Prometheus metrics scraper",
+            "enabled": true,
+            "protocol": "openid-connect",
+            "publicClient": false,
+            "clientAuthenticatorType": "client-secret",
+            "standardFlowEnabled": false,
+            "implicitFlowEnabled": false,
+            "directAccessGrantsEnabled": false,
+            "serviceAccountsEnabled": true,
+            "fullScopeAllowed": true,
+            "redirectUris": [],
+            "webOrigins": [],
+            "defaultClientScopes": [
+                "roles"
+            ],
+            "protocolMappers": [
+                {
+                    "name": "securefindings-api audience",
+                    "protocol": "openid-connect",
+                    "protocolMapper": "oidc-audience-mapper",
+                    "consentRequired": false,
+                    "config": {
+                        "included.custom.audience": "securefindings-api",
+                        "id.token.claim": "false",
+                        "access.token.claim": "true",
+                        "lightweight.claim": "false"
+                    }
+                }
+            ]
+        }
+    ]
+}

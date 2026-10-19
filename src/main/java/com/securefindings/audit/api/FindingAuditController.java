@@ -1,8 +1,11 @@
 package com.securefindings.audit.api;
 
+import java.time.Instant;
 import java.util.UUID;
 
 import org.springframework.data.domain.Page;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.format.annotation.DateTimeFormat.ISO;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -69,11 +72,32 @@ public class FindingAuditController {
 
                         @Parameter(description = "Filtrar por identificador de petición", example = "audit-request-123", in = ParameterIn.QUERY) @RequestParam(name = "requestId", required = false) @Pattern(regexp = "[A-Za-z0-9][A-Za-z0-9._-]{0,63}", message = "El identificador de petición no tiene un formato válido") String requestId,
 
-                        @RequestParam(name = "actor", required = false) @Size(max = 255, message = "El actor no puede superar los 255 caracteres") String actor) {
+                        @RequestParam(name = "actor", required = false) @Size(max = 255, message = "El actor no puede superar los 255 caracteres") String actor,
+
+                        @Parameter(description = "Filtrar desde esta fecha y hora, inclusive (ISO-8601)", example = "2026-10-01T00:00:00Z", in = ParameterIn.QUERY) @RequestParam(name = "occurredFrom", required = false) @DateTimeFormat(iso = ISO.DATE_TIME) Instant occurredFrom,
+
+                        @Parameter(description = "Filtrar hasta esta fecha y hora, inclusive (ISO-8601)", example = "2026-10-19T23:59:59Z", in = ParameterIn.QUERY) @RequestParam(name = "occurredTo", required = false) @DateTimeFormat(iso = ISO.DATE_TIME) Instant occurredTo) {
 
                 Page<FindingAuditEntity> auditPage;
 
-                if (action == null && requestId == null && actor == null) {
+                if (occurredFrom != null
+                                && occurredTo != null
+                                && occurredFrom.isAfter(occurredTo)) {
+                        throw new IllegalArgumentException(
+                                        "occurredFrom debe ser anterior o igual a occurredTo");
+                }
+
+                if (occurredFrom != null || occurredTo != null) {
+                        auditPage = auditService.findPageByFindingId(
+                                        findingId,
+                                        page,
+                                        size,
+                                        action,
+                                        requestId,
+                                        actor,
+                                        occurredFrom,
+                                        occurredTo);
+                } else if (action == null && requestId == null && actor == null) {
                         auditPage = auditService.findPageByFindingId(
                                         findingId,
                                         page,

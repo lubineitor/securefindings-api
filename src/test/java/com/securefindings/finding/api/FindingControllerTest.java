@@ -13,7 +13,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -37,6 +39,7 @@ import com.securefindings.finding.application.FindingStatusTransitionException;
 import com.securefindings.finding.domain.Finding;
 import com.securefindings.finding.domain.FindingSeverity;
 import com.securefindings.finding.domain.FindingStatus;
+import com.securefindings.finding.domain.FindingSummary;
 import com.securefindings.security.SecurityConfig;
 
 @WebMvcTest(controllers = FindingController.class)
@@ -618,7 +621,9 @@ class FindingControllerTest {
                                 .param("sortBy", "password"))
                                 .andExpect(status().isBadRequest())
                                 .andExpect(jsonPath("$.code")
-                                                .value("VALIDATION_ERROR"));
+                                                .value("VALIDATION_ERROR"))
+                                .andExpect(jsonPath("$.errors.sortBy")
+                                                .value("El campo de ordenación no está permitido"));
 
                 verifyNoInteractions(findingService);
         }
@@ -631,7 +636,9 @@ class FindingControllerTest {
                                 .param("direction", "RANDOM"))
                                 .andExpect(status().isBadRequest())
                                 .andExpect(jsonPath("$.code")
-                                                .value("VALIDATION_ERROR"));
+                                                .value("VALIDATION_ERROR"))
+                                .andExpect(jsonPath("$.errors.direction")
+                                                .value("La dirección de ordenación no está permitida"));
 
                 verifyNoInteractions(findingService);
         }
@@ -663,5 +670,119 @@ class FindingControllerTest {
                                 .andExpect(status().isConflict())
                                 .andExpect(jsonPath("$.code")
                                                 .value("INVALID_STATUS_TRANSITION"));
+        }
+
+        @Test
+        void deberiaFiltrarLosHallazgosPorRangoDeFechaDeCreacion()
+                        throws Exception {
+
+                Instant createdFrom = Instant.parse("2026-10-01T00:00:00Z");
+                Instant createdTo = Instant.parse("2026-10-17T23:59:59Z");
+
+                when(findingService.findPage(
+                                0,
+                                20,
+                                null,
+                                null,
+                                null,
+                                FindingSortField.CREATED_AT,
+                                FindingSortDirection.DESC,
+                                createdFrom,
+                                createdTo))
+                                .thenReturn(new PageImpl<>(
+                                                List.of(),
+                                                PageRequest.of(0, 20),
+                                                0));
+
+                mockMvc.perform(get("/api/v1/findings")
+                                .param("createdFrom", "2026-10-01T00:00:00Z")
+                                .param("createdTo", "2026-10-17T23:59:59Z"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.totalElements").value(0));
+
+                verify(findingService).findPage(
+                                0,
+                                20,
+                                null,
+                                null,
+                                null,
+                                FindingSortField.CREATED_AT,
+                                FindingSortDirection.DESC,
+                                createdFrom,
+                                createdTo);
+        }
+
+        @Test
+        void deberiaRechazarUnRangoDeFechasInvertido()
+                        throws Exception {
+
+                mockMvc.perform(get("/api/v1/findings")
+                                .param("createdFrom", "2026-10-18T00:00:00Z")
+                                .param("createdTo", "2026-10-17T00:00:00Z"))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                                .andExpect(jsonPath("$.errors.parameter")
+                                                .value("createdFrom debe ser anterior o igual a createdTo"));
+
+                verifyNoInteractions(findingService);
+        }
+
+        @Test
+        void deberiaRechazarUnaFechaDeCreacionConFormatoInvalido()
+                        throws Exception {
+
+                mockMvc.perform(get("/api/v1/findings")
+                                .param("createdFrom", "17-10-2026"))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                                .andExpect(jsonPath("$.errors.createdFrom").exists());
+
+                verifyNoInteractions(findingService);
+        }
+
+        @Test
+        void deberiaDevolverElResumenDeHallazgos() throws Exception {
+                FindingSummary summary = new FindingSummary(
+                                2L,
+                                Map.of(
+                                                FindingStatus.OPEN, 1L,
+                                                FindingStatus.IN_PROGRESS, 1L,
+                                                FindingStatus.RESOLVED, 0L,
+                                                FindingStatus.FALSE_POSITIVE, 0L),
+                                Map.of(
+                                                FindingSeverity.LOW, 0L,
+                                                FindingSeverity.MEDIUM, 1L,
+                                                FindingSeverity.HIGH, 1L,
+                                                FindingSeverity.CRITICAL, 0L));
+
+                when(findingService.getSummary(null, null)).thenReturn(summary);
+
+                mockMvc.perform(get("/api/v1/findings/summary"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.total").value(2))
+                                .andExpect(jsonPath("$.byStatus.OPEN").value(1))
+                                .andExpect(jsonPath("$.byStatus.IN_PROGRESS").value(1))
+                                .andExpect(jsonPath("$.bySeverity.MEDIUM").value(1))
+                                .andExpect(jsonPath("$.bySeverity.HIGH").value(1));
+
+                verify(findingService).getSummary(null, null);
+        }
+
+        @Test
+        void deberiaFiltrarElResumenPorIntervaloDeCreacion() throws Exception {
+                Instant createdFrom = Instant.parse("2026-10-01T00:00:00Z");
+                Instant createdTo = Instant.parse("2026-10-19T23:59:59Z");
+                FindingSummary summary = new FindingSummary(0L, Map.of(), Map.of());
+
+                when(findingService.getSummary(createdFrom, createdTo))
+                                .thenReturn(summary);
+
+                mockMvc.perform(get("/api/v1/findings/summary")
+                                .param("createdFrom", createdFrom.toString())
+                                .param("createdTo", createdTo.toString()))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.total").value(0));
+
+                verify(findingService).getSummary(createdFrom, createdTo);
         }
 }

@@ -6,6 +6,7 @@ target/
 .env
 .env.*
 !.env.example
+/.secrets/
 
 # IDE
 .idea/

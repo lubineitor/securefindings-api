@@ -21,6 +21,9 @@ El proyecto se encuentra en una fase activa de construcción. Su objetivo es ser
 - Protección frente al abuso de la API.
 - Trazabilidad de peticiones.
 
+El alcance del MVP, sus criterios de aceptación y las tareas pendientes están en
+[`docs/mvp.md`](docs/mvp.md).
+
 ## Objetivo
 
 SecureFindings proporciona una API para registrar, consultar y gestionar hallazgos de seguridad aplicando progresivamente principios de desarrollo seguro.
@@ -111,13 +114,17 @@ La validación se realiza antes de guardar el hallazgo y antes de registrar el e
 
 El listado permite combinar:
 
-- Búsqueda textual en título y descripción.
+- Búsqueda textual en título y descripción mediante `q`.
 - Filtro por severidad.
 - Filtro por estado.
+- Rango de fechas de creación mediante `createdFrom` y `createdTo`.
 - Paginación.
 - Ordenación ascendente o descendente.
 
-La búsqueda textual utiliza el parámetro `q` y no distingue entre mayúsculas y minúsculas.
+Los límites de fecha son inclusivos y aceptan instantes en formato ISO-8601.
+Si `createdFrom` es posterior a `createdTo`, la API responde `400 VALIDATION_ERROR`.
+
+La búsqueda textual no distingue entre mayúsculas y minúsculas.
 
 ### Ordenación segura
 
@@ -185,7 +192,7 @@ El historial puede filtrarse por:
 Ejemplo:
 
 ```text
-GET /api/v1/findings/{findingId}/audit?action=UPDATED&requestId=audit-request-123&actor=analista
+GET /api/v1/findings/{findingId}/audit?occurredFrom=2026-10-01T00:00:00Z&occurredTo=2026-10-19T23:59:59Z
 ```
 
 Los valores permitidos para `action` son:
@@ -321,7 +328,19 @@ Ejemplo de respuesta:
 }
 ```
 
-El límite actual se mantiene en memoria dentro de cada instancia de la aplicación. Para un despliegue con varias instancias se deberá utilizar un almacén compartido, un API Gateway o una solución distribuida equivalente.
+#### Métricas Prometheus
+
+Las métricas se consultan en `GET /actuator/prometheus`. El endpoint requiere un JWT
+con el rol `ADMIN`.
+
+El rate limiter publica el contador `securefindings.rate_limit.requests`, con la
+etiqueta `outcome`:
+
+- `allowed`: petición permitida.
+- `rate_limited`: petición rechazada por superar el límite.
+- `unavailable`: petición rechazada porque el almacenamiento del rate limiter no estaba disponible.
+
+Las etiquetas no contienen usuarios, organizaciones ni direcciones IP.
 
 ### Trazabilidad de peticiones
 
@@ -372,6 +391,19 @@ GET /api/v1/health
 
 Este endpoint está disponible sin autenticación y no consume cuota del límite de peticiones.
 
+### Probes de despliegue
+
+Además de `GET /api/v1/health`, la aplicación ofrece pruebas para comprobar su disponibilidad:
+
+| Método | Endpoint | Comprobación |
+|---|---|---|
+| `GET` | `/livez` | Estado interno de la aplicación. |
+| `GET` | `/readyz` | Estado de la aplicación, PostgreSQL y Redis. |
+| `GET` | `/actuator/health/liveness` | Equivalente a `/livez`. |
+| `GET` | `/actuator/health/readiness` | Equivalente a `/readyz`. |
+
+Las pruebas públicas devuelven únicamente el estado, sin mostrar componentes ni detalles. El endpoint global `/actuator/health` requiere autenticación.
+
 ### Hallazgos
 
 | Método | Endpoint | Descripción | Rol |
@@ -382,6 +414,24 @@ Este endpoint está disponible sin autenticación y no consume cuota del límite
 | `PUT` | `/api/v1/findings/{id}` | Actualiza los datos | `ANALYST`, `ADMIN` |
 | `PATCH` | `/api/v1/findings/{id}/status` | Actualiza el estado | `ANALYST`, `ADMIN` |
 | `DELETE` | `/api/v1/findings/{id}` | Elimina un hallazgo | `ADMIN` |
+| `GET` | `/api/v1/findings/summary` | Resume hallazgos por estado y severidad | `ANALYST`, `ADMIN` |
+
+#### Resumen de hallazgos
+
+`GET /api/v1/findings/summary` devuelve los recuentos de hallazgos de la
+organización asociada al token, agrupados por estado y severidad. Las categorías
+sin hallazgos aparecen con valor `0`.
+
+La consulta requiere un token con rol `ANALYST` o `ADMIN`.
+
+Parámetros opcionales:
+
+| Parámetro | Descripción |
+|---|---|
+| `createdFrom` | Fecha de creación inicial inclusiva, en formato ISO-8601. |
+| `createdTo` | Fecha de creación final inclusiva, en formato ISO-8601. |
+
+Si se envían ambos, `createdFrom` debe ser anterior o igual a `createdTo`.
 
 ### Organización actual
 
@@ -396,6 +446,7 @@ El cuerpo de la petición PATCH contiene el nombre, con un máximo de 150 caract
 {
   "name": "Secure Findings Europe"
 }
+```
 
 ### Parámetros del listado
 
@@ -416,12 +467,20 @@ Parámetros disponibles:
 | `status` | No | — | Filtra por estado. |
 | `sortBy` | No | `createdAt` | Campo permitido para ordenar. |
 | `direction` | No | `DESC` | Dirección `ASC` o `DESC`. |
+| `createdFrom` | No | — | Fecha de creación inicial inclusiva, en formato ISO-8601. |
+| `createdTo` | No | — | Fecha de creación final inclusiva, en formato ISO-8601. |
 
 Ejemplo:
 
 ```text
 GET /api/v1/findings?page=0&size=20&q=SQL&severity=HIGH&status=OPEN&sortBy=title&direction=ASC
 ```
+
+Los filtros de fecha se pueden combinar con los demás parámetros. Se aceptan
+instantes ISO-8601, por ejemplo:
+
+```text
+GET /api/v1/findings?createdFrom=2026-10-01T00:00:00Z&createdTo=2026-10-17T23:59:59Z
 
 La respuesta paginada contiene:
 
@@ -456,6 +515,8 @@ Parámetros:
 | `action` | No | — | `CREATED`, `UPDATED`, `DELETED` o `COMMENTED`. |
 | `requestId` | No | — | Identificador de petición válido, máximo `64` caracteres. |
 | `actor` | No | — | Filtra por actor responsable mediante coincidencia exacta. Máximo `255` caracteres. |
+| `occurredFrom` | No | — | Fecha y hora inicial inclusiva, en formato ISO-8601. |
+| `occurredTo` | No | — | Fecha y hora final inclusiva, en formato ISO-8601. |
 
 Ejemplo sin filtros:
 
@@ -534,7 +595,7 @@ Los errores de ordenación inválida se responden con `400`:
   "code": "VALIDATION_ERROR",
   "message": "La petición contiene datos no válidos",
   "errors": {
-    "parameter": "El campo de ordenación no está permitido: password"
+    "sortBy": "El campo de ordenación no está permitido"
   }
 }
 ```
@@ -567,12 +628,14 @@ El cliente debe enviar:
 Authorization: Bearer <token>
 ```
 
-El token debe incluir, como mínimo:
+Para las operaciones protegidas de hallazgos, comentarios, auditoría y organización,
+el token debe incluir `organization_id` con el UUID de una organización existente.
+El claim `preferred_username` se utiliza como actor en los eventos de auditoría.
 
-```text
-preferred_username
-organization_id
-```
+El token para `GET /actuator/prometheus` debe pertenecer al issuer configurado,
+incluir la audiencia `securefindings-api` y tener el rol `ADMIN` o
+`METRICS_READER`. Este endpoint no requiere `organization_id`; el rol
+`METRICS_READER` no concede acceso a las operaciones de negocio de la API.
 
 Los roles se obtienen desde Keycloak:
 
@@ -600,6 +663,7 @@ y un access token recién copiado al portapapeles:
 
 ```powershell
 .\scripts\verificar-autenticacion.ps1
+```
 
 ### Obtener un token para pruebas locales
 
@@ -607,22 +671,20 @@ El script `scripts/obtener-token.ps1` inicia sesión en Keycloak mediante
 Authorization Code con PKCE `S256`, comprueba la audiencia `securefindings-api`
 y copia el access token al portapapeles.
 
-El cliente `securefindings-cli` debe tener Standard Flow activado, Direct Access
-Grants desactivado y esta URI de redirección:
+El realm importado configura el cliente `securefindings-cli` con Standard Flow,
+PKCE `S256`, Direct Access Grants desactivado y esta URI de redirección:
 `http://127.0.0.1:8765/callback/`.
 
 ```powershell
 .\scripts\obtener-token.ps1
+```
 
 ### Rate limiting
 
-La API limita las peticiones a `/api/v1/**` mediante un token bucket almacenado en Redis. El contador es compartido entre las instancias de la aplicación y se actualiza mediante una operación atómica.
-
-La cuota se configura con `securefindings.rate-limit.max-requests`, `securefindings.rate-limit.window` y `securefindings.rate-limit.max-tracked-clients`. Los clientes se identifican por organización y usuario autenticado, o por dirección IP cuando no hay autenticación. La clave que se guarda en Redis es una huella SHA-256.
-
-Cuando se supera la cuota, la API responde `429 Too Many Requests` e incluye `Retry-After` y las cabeceras `X-RateLimit-*`. Si Redis no está disponible para comprobar la cuota, responde `503 Service Unavailable` y no procesa la petición. El endpoint `/api/v1/health` queda excluido.
-
-La ventana configurada debe ser de al menos un milisegundo; una duración menor o demasiado grande se rechaza durante el inicio de la aplicación.
+La API aplica un token bucket distribuido mediante Redis a las rutas
+`/api/v1/**`, excepto `/api/v1/health`. La sección **“Limitación de peticiones”**
+describe cómo se identifica cada cliente, cómo se configura el límite y qué
+respuestas devuelve la API cuando se alcanza la cuota o Redis no está disponible.
 
 ## Tecnologías
 
@@ -676,7 +738,8 @@ Se necesita:
 - Java 21.
 - Docker Desktop.
 - Git.
-- Acceso a un entorno Keycloak para obtener tokens JWT.
+- Docker Compose para iniciar el Keycloak local incluido en el proyecto. No hace
+  falta acceder a una instancia Keycloak externa para seguir esta guía.
 
 ## Configuración local
 
@@ -693,7 +756,7 @@ La variable `JWT_AUDIENCE` define la audiencia JWT que espera la API. Su valor l
 Iniciar los servicios de infraestructura:
 
 ```powershell
-docker compose up -d
+docker compose -f docker-compose.yml -f docker-compose.observability.yml --profile observability up -d prometheus grafana alertmanager mailpit
 ```
 
 Comprobar los servicios:
@@ -701,6 +764,22 @@ Comprobar los servicios:
 ```powershell
 docker compose ps
 ```
+
+### Importación local de Keycloak
+
+En el primer arranque, Docker Compose importa el realm `securefindings` desde
+`keycloak/securefindings-realm.json`. La configuración crea los roles `ANALYST`
+y `ADMIN`, el cliente público `securefindings-cli` con PKCE `S256`, la audiencia
+`securefindings-api` y el mapper del atributo `organization_id`.
+
+Keycloak omite la importación si el realm ya existe. Por tanto, este mecanismo no
+actualiza ni reemplaza la configuración de una instalación existente. En ese
+caso, revisa o modifica el realm desde la consola de administración.
+
+Para cada usuario de pruebas, crea el usuario en el realm y asígnale el rol
+`ANALYST` o `ADMIN`. Añade el atributo de usuario `organization_id` con el UUID
+de la organización de desarrollo:
+`00000000-0000-0000-0000-000000000001`.
 
 ### Configuración de Redis
 
@@ -894,8 +973,7 @@ El proyecto continúa en desarrollo. Algunas líneas futuras son:
 
 - Mejorar la administración de organizaciones.
 - Añadir más reglas de autorización.
-- Incorporar rate limiting distribuido.
-- Añadir métricas y observabilidad.
+- Configurar paneles y alertas para las métricas Prometheus.
 - Mejorar la configuración de producción.
 - Automatizar la configuración de Keycloak.
 - Ampliar las pruebas de seguridad.

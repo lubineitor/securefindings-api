@@ -6,11 +6,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -32,6 +35,7 @@ import com.securefindings.finding.api.FindingSortField;
 import com.securefindings.finding.domain.Finding;
 import com.securefindings.finding.domain.FindingSeverity;
 import com.securefindings.finding.domain.FindingStatus;
+import com.securefindings.finding.domain.FindingSummary;
 import com.securefindings.finding.persistence.FindingEntity;
 import com.securefindings.finding.persistence.FindingRepository;
 import com.securefindings.security.OrganizationContext;
@@ -56,7 +60,7 @@ class FindingServiceTest {
 
         @BeforeEach
         void configurarOrganizacion() {
-                when(organizationContext.currentOrganizationId())
+                lenient().when(organizationContext.currentOrganizationId())
                                 .thenReturn(TEST_ORGANIZATION_ID);
         }
 
@@ -78,7 +82,7 @@ class FindingServiceTest {
         }
 
         @Test
-        void deberiaListarLosHallazgosGuardados() {
+        void deberiaListarLosHallazgosGuardadosDeFormaPaginada() {
                 Finding firstFinding = Finding.create(
                                 "SQL Injection",
                                 "Entrada sin validar",
@@ -89,20 +93,33 @@ class FindingServiceTest {
                                 "Contenido sin escapar",
                                 FindingSeverity.MEDIUM);
 
-                when(findingRepository.findAllByOrganizationId(
-                                TEST_ORGANIZATION_ID))
-                                .thenReturn(List.of(
+                when(findingRepository.findPageByFilters(
+                                eq(TEST_ORGANIZATION_ID),
+                                isNull(String.class),
+                                isNull(FindingSeverity.class),
+                                isNull(FindingStatus.class),
+                                isNull(Instant.class),
+                                isNull(Instant.class),
+                                any(Pageable.class)))
+                                .thenReturn(new PageImpl<>(List.of(
                                                 new FindingEntity(firstFinding),
-                                                new FindingEntity(secondFinding)));
+                                                new FindingEntity(secondFinding))));
 
-                List<Finding> findings = findingService.findAll();
+                var findingPage = findingService.findPage(0, 20, null, null);
 
                 assertEquals(
                                 List.of(firstFinding, secondFinding),
-                                findings);
+                                findingPage.getContent());
+                assertEquals(2, findingPage.getTotalElements());
 
-                verify(findingRepository)
-                                .findAllByOrganizationId(TEST_ORGANIZATION_ID);
+                verify(findingRepository).findPageByFilters(
+                                eq(TEST_ORGANIZATION_ID),
+                                isNull(String.class),
+                                isNull(FindingSeverity.class),
+                                isNull(FindingStatus.class),
+                                isNull(Instant.class),
+                                isNull(Instant.class),
+                                any(Pageable.class));
         }
 
         @Test
@@ -326,6 +343,8 @@ class FindingServiceTest {
                                 isNull(String.class),
                                 isNull(FindingSeverity.class),
                                 isNull(FindingStatus.class),
+                                isNull(Instant.class),
+                                isNull(Instant.class),
                                 any(Pageable.class)))
                                 .thenReturn(new PageImpl<>(List.of()));
 
@@ -343,6 +362,8 @@ class FindingServiceTest {
                                 isNull(String.class),
                                 isNull(FindingSeverity.class),
                                 isNull(FindingStatus.class),
+                                isNull(Instant.class),
+                                isNull(Instant.class),
                                 pageableCaptor.capture());
 
                 Pageable pageable = pageableCaptor.getValue();
@@ -372,6 +393,8 @@ class FindingServiceTest {
                                 isNull(String.class),
                                 isNull(FindingSeverity.class),
                                 isNull(FindingStatus.class),
+                                isNull(Instant.class),
+                                isNull(Instant.class),
                                 any(Pageable.class)))
                                 .thenReturn(new PageImpl<>(List.of()));
 
@@ -391,6 +414,8 @@ class FindingServiceTest {
                                 isNull(String.class),
                                 isNull(FindingSeverity.class),
                                 isNull(FindingStatus.class),
+                                isNull(Instant.class),
+                                isNull(Instant.class),
                                 pageableCaptor.capture());
 
                 Pageable pageable = pageableCaptor.getValue();
@@ -433,5 +458,98 @@ class FindingServiceTest {
                                 .save(any(FindingEntity.class));
 
                 verifyNoInteractions(auditService);
+        }
+
+        @Test
+        void deberiaAplicarElRangoDeFechaDeCreacionEnLaConsulta() {
+                Instant createdFrom = Instant.parse("2026-10-01T00:00:00Z");
+                Instant createdTo = Instant.parse("2026-10-17T23:59:59Z");
+
+                when(findingRepository.findPageByFilters(
+                                eq(TEST_ORGANIZATION_ID),
+                                isNull(String.class),
+                                isNull(FindingSeverity.class),
+                                isNull(FindingStatus.class),
+                                eq(createdFrom),
+                                eq(createdTo),
+                                any(Pageable.class)))
+                                .thenReturn(new PageImpl<>(List.of()));
+
+                findingService.findPage(
+                                0,
+                                20,
+                                null,
+                                null,
+                                null,
+                                FindingSortField.CREATED_AT,
+                                FindingSortDirection.DESC,
+                                createdFrom,
+                                createdTo);
+
+                verify(findingRepository).findPageByFilters(
+                                eq(TEST_ORGANIZATION_ID),
+                                isNull(String.class),
+                                isNull(FindingSeverity.class),
+                                isNull(FindingStatus.class),
+                                eq(createdFrom),
+                                eq(createdTo),
+                                any(Pageable.class));
+        }
+
+        @Test
+        void deberiaResumirLosHallazgosDeLaOrganizacionActual() {
+                FindingRepository.StatusCountProjection openCount = mock(FindingRepository.StatusCountProjection.class);
+                when(openCount.getStatus()).thenReturn(FindingStatus.OPEN);
+                when(openCount.getTotal()).thenReturn(2L);
+
+                FindingRepository.SeverityCountProjection highCount = mock(
+                                FindingRepository.SeverityCountProjection.class);
+                when(highCount.getSeverity()).thenReturn(FindingSeverity.HIGH);
+                when(highCount.getTotal()).thenReturn(2L);
+
+                Instant createdFrom = Instant.parse("2026-10-01T00:00:00Z");
+                Instant createdTo = Instant.parse("2026-10-19T23:59:59Z");
+
+                when(findingRepository.countStatusesByOrganization(
+                                eq(TEST_ORGANIZATION_ID),
+                                eq(createdFrom),
+                                eq(createdTo)))
+                                .thenReturn(List.of(openCount));
+
+                when(findingRepository.countSeveritiesByOrganization(
+                                eq(TEST_ORGANIZATION_ID),
+                                eq(createdFrom),
+                                eq(createdTo)))
+                                .thenReturn(List.of(highCount));
+
+                FindingSummary summary = findingService.getSummary(createdFrom, createdTo);
+
+                assertEquals(2L, summary.total());
+                assertEquals(2L, summary.byStatus().get(FindingStatus.OPEN));
+                assertEquals(0L, summary.byStatus().get(FindingStatus.IN_PROGRESS));
+                assertEquals(2L, summary.bySeverity().get(FindingSeverity.HIGH));
+                assertEquals(0L, summary.bySeverity().get(FindingSeverity.LOW));
+
+                verify(findingRepository).countStatusesByOrganization(
+                                eq(TEST_ORGANIZATION_ID),
+                                eq(createdFrom),
+                                eq(createdTo));
+
+                verify(findingRepository).countSeveritiesByOrganization(
+                                eq(TEST_ORGANIZATION_ID),
+                                eq(createdFrom),
+                                eq(createdTo));
+        }
+
+        @Test
+        void deberiaRechazarUnIntervaloDeResumenInvertido() {
+                Instant createdFrom = Instant.parse("2026-10-10T00:00:00Z");
+                Instant createdTo = Instant.parse("2026-10-01T00:00:00Z");
+
+                assertThrows(
+                                IllegalArgumentException.class,
+                                () -> findingService.getSummary(createdFrom, createdTo));
+
+                verifyNoInteractions(organizationContext, findingRepository);
         }
 }

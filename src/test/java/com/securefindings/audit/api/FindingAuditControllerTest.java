@@ -365,4 +365,63 @@ class FindingAuditControllerTest {
 
                 verifyNoInteractions(auditService);
         }
+
+        @Test
+        void deberiaFiltrarElHistorialPorRangoDeFechas()
+                        throws Exception {
+
+                UUID findingId = UUID.randomUUID();
+                Instant occurredFrom = Instant.parse("2026-10-01T00:00:00Z");
+                Instant occurredTo = Instant.parse("2026-10-10T00:00:00Z");
+
+                Page<FindingAuditEntity> auditPage = new PageImpl<>(
+                                List.of(),
+                                PageRequest.of(0, 20),
+                                0);
+
+                when(auditService.findPageByFindingId(
+                                findingId,
+                                0,
+                                20,
+                                null,
+                                null,
+                                null,
+                                occurredFrom,
+                                occurredTo))
+                                .thenReturn(auditPage);
+
+                mockMvc.perform(get(
+                                "/api/v1/findings/{findingId}/audit",
+                                findingId)
+                                .param("occurredFrom", occurredFrom.toString())
+                                .param("occurredTo", occurredTo.toString()))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.content").isEmpty());
+
+                verify(auditService).findPageByFindingId(
+                                findingId,
+                                0,
+                                20,
+                                null,
+                                null,
+                                null,
+                                occurredFrom,
+                                occurredTo);
+        }
+
+        @Test
+        void deberiaRechazarUnIntervaloDeFechasInvertido()
+                        throws Exception {
+
+                UUID findingId = UUID.randomUUID();
+
+                mockMvc.perform(get(
+                                "/api/v1/findings/{findingId}/audit",
+                                findingId)
+                                .param("occurredFrom", "2026-10-10T00:00:00Z")
+                                .param("occurredTo", "2026-10-01T00:00:00Z"))
+                                .andExpect(status().isBadRequest());
+
+                verifyNoInteractions(auditService);
+        }
 }

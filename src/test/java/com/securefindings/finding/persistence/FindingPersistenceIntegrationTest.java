@@ -3,6 +3,7 @@ package com.securefindings.finding.persistence;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -25,10 +26,13 @@ import com.securefindings.audit.application.AuditService;
 import com.securefindings.audit.domain.AuditAction;
 import com.securefindings.audit.persistence.FindingAuditEntity;
 import com.securefindings.audit.persistence.FindingAuditRepository;
+import com.securefindings.finding.api.FindingSortDirection;
+import com.securefindings.finding.api.FindingSortField;
 import com.securefindings.finding.application.FindingService;
 import com.securefindings.finding.domain.Finding;
 import com.securefindings.finding.domain.FindingSeverity;
 import com.securefindings.finding.domain.FindingStatus;
+import com.securefindings.finding.domain.FindingSummary;
 import com.securefindings.security.RequestCorrelationFilter;
 
 @Testcontainers
@@ -123,7 +127,10 @@ class FindingPersistenceIntegrationTest {
                                 "Salida sin escapar",
                                 FindingSeverity.HIGH);
 
-                List<Finding> findings = findingService.findAll();
+                Page<Finding> findingPage = findingService.findPage(0, 20, null, null);
+                List<Finding> findings = findingPage.getContent();
+
+                assertEquals(2, findingPage.getTotalElements());
 
                 assertEquals(2, findings.size());
                 assertTrue(findings.stream()
@@ -162,7 +169,9 @@ class FindingPersistenceIntegrationTest {
                 List<FindingAuditEntity> auditEvents = findingAuditRepository
                                 .findByFindingIdAndOrganizationIdOrderByOccurredAtAsc(
                                                 createdFinding.id(),
-                                                ORGANIZATION_ID);
+                                                ORGANIZATION_ID,
+                                                PageRequest.of(0, 20))
+                                .getContent();
 
                 assertEquals(3, auditEvents.size());
 
@@ -292,6 +301,8 @@ class FindingPersistenceIntegrationTest {
                                 null,
                                 null,
                                 null,
+                                null,
+                                null,
                                 PageRequest.of(
                                                 0,
                                                 20,
@@ -328,7 +339,9 @@ class FindingPersistenceIntegrationTest {
                 List<FindingAuditEntity> auditEvents = findingAuditRepository
                                 .findByFindingIdAndOrganizationIdOrderByOccurredAtAsc(
                                                 createdFinding.id(),
-                                                ORGANIZATION_ID);
+                                                ORGANIZATION_ID,
+                                                PageRequest.of(0, 20))
+                                .getContent();
 
                 assertEquals(1, auditEvents.size());
                 assertEquals(
@@ -470,5 +483,197 @@ class FindingPersistenceIntegrationTest {
                 assertEquals(
                                 "actor-filter-request-1",
                                 analystEvents.getContent().get(0).getRequestId());
+        }
+
+        @Test
+        void deberiaFiltrarLosHallazgosPorUnRangoInclusivoDeFechaDeCreacion() {
+                Instant createdFrom = Instant.parse("2026-10-01T10:00:00Z");
+                Instant createdTo = Instant.parse("2026-10-03T10:00:00Z");
+
+                Finding beforeRange = saveFindingAt(
+                                "Antes del rango",
+                                Instant.parse("2026-10-01T09:59:59Z"));
+                Finding fromBoundary = saveFindingAt(
+                                "Inicio del rango",
+                                createdFrom);
+                Finding withinRange = saveFindingAt(
+                                "Dentro del rango",
+                                Instant.parse("2026-10-02T10:00:00Z"));
+                Finding toBoundary = saveFindingAt(
+                                "Fin del rango",
+                                createdTo);
+
+                Page<Finding> results = findingService.findPage(
+                                0,
+                                20,
+                                null,
+                                null,
+                                null,
+                                FindingSortField.CREATED_AT,
+                                FindingSortDirection.ASC,
+                                createdFrom,
+                                createdTo);
+
+                assertEquals(3, results.getTotalElements());
+                assertTrue(results.getContent().stream()
+                                .anyMatch(finding -> finding.id().equals(fromBoundary.id())));
+                assertTrue(results.getContent().stream()
+                                .anyMatch(finding -> finding.id().equals(withinRange.id())));
+                assertTrue(results.getContent().stream()
+                                .anyMatch(finding -> finding.id().equals(toBoundary.id())));
+                assertTrue(results.getContent().stream()
+                                .noneMatch(finding -> finding.id().equals(beforeRange.id())));
+        }
+
+        private Finding saveFindingAt(
+                        String title,
+                        Instant createdAt) {
+
+                Finding finding = new Finding(
+                                UUID.randomUUID(),
+                                title,
+                                "Prueba del filtro por fecha de creación",
+                                FindingSeverity.HIGH,
+                                FindingStatus.OPEN,
+                                createdAt,
+                                createdAt);
+
+                findingRepository.save(new FindingEntity(finding, ORGANIZATION_ID));
+                return finding;
+        }
+
+        @Test
+        void deberiaAgruparElResumenPersistidoPorEstadoYSeveridad() {
+                Finding inProgress = findingService.create(
+                                "Hallazgo en progreso",
+                                "Prueba de resumen",
+                                FindingSeverity.HIGH);
+                findingService.updateStatus(
+                                inProgress.id(),
+                                FindingStatus.IN_PROGRESS);
+
+                Finding resolved = findingService.create(
+                                "Hallazgo resuelto",
+                                "Prueba de resumen",
+                                FindingSeverity.MEDIUM);
+                findingService.updateStatus(
+                                resolved.id(),
+                                FindingStatus.RESOLVED);
+
+                findingService.create(
+                                "Hallazgo abierto",
+                                "Prueba de resumen",
+                                FindingSeverity.CRITICAL);
+
+                Finding falsePositive = findingService.create(
+                                "Falso positivo",
+                                "Prueba de resumen",
+                                FindingSeverity.LOW);
+                findingService.updateStatus(
+                                falsePositive.id(),
+                                FindingStatus.FALSE_POSITIVE);
+
+                FindingSummary summary = findingService.getSummary();
+
+                assertEquals(4L, summary.total());
+                assertEquals(1L, summary.byStatus().get(FindingStatus.OPEN));
+                assertEquals(1L, summary.byStatus().get(FindingStatus.IN_PROGRESS));
+                assertEquals(1L, summary.byStatus().get(FindingStatus.RESOLVED));
+                assertEquals(1L, summary.byStatus().get(FindingStatus.FALSE_POSITIVE));
+
+                assertEquals(1L, summary.bySeverity().get(FindingSeverity.LOW));
+                assertEquals(1L, summary.bySeverity().get(FindingSeverity.MEDIUM));
+                assertEquals(1L, summary.bySeverity().get(FindingSeverity.HIGH));
+                assertEquals(1L, summary.bySeverity().get(FindingSeverity.CRITICAL));
+        }
+
+        @Test
+        void deberiaFiltrarElResumenPorIntervaloInclusivoDeCreacion() {
+                Instant createdFrom = Instant.parse("2000-01-02T00:00:00Z");
+                Instant createdTo = Instant.parse("2000-01-04T00:00:00Z");
+
+                saveFindingAt(
+                                "Antes del intervalo",
+                                Instant.parse("2000-01-01T23:59:59Z"));
+                saveFindingAt("Inicio del intervalo", createdFrom);
+                saveFindingAt(
+                                "Dentro del intervalo",
+                                Instant.parse("2000-01-03T00:00:00Z"));
+                saveFindingAt("Fin del intervalo", createdTo);
+                saveFindingAt(
+                                "Después del intervalo",
+                                Instant.parse("2000-01-04T00:00:01Z"));
+
+                FindingSummary summary = findingService.getSummary(
+                                createdFrom,
+                                createdTo);
+
+                assertEquals(3L, summary.total());
+                assertEquals(3L, summary.byStatus().get(FindingStatus.OPEN));
+                assertEquals(3L, summary.bySeverity().get(FindingSeverity.HIGH));
+                assertEquals(0L, summary.bySeverity().get(FindingSeverity.LOW));
+        }
+
+        @Test
+        void deberiaFiltrarLaAuditoriaPersistidaPorRangoDeFechasInclusive() {
+                Finding finding = findingService.create(
+                                "Hallazgo con auditoría filtrada por fecha",
+                                "Prueba de límites temporales inclusivos",
+                                FindingSeverity.HIGH);
+
+                Instant diaAnterior = Instant.parse("2020-01-01T00:00:00Z");
+                Instant desde = Instant.parse("2020-01-02T00:00:00Z");
+                Instant hasta = Instant.parse("2020-01-03T00:00:00Z");
+                Instant diaPosterior = Instant.parse("2020-01-04T00:00:00Z");
+
+                findingAuditRepository.saveAll(List.of(
+                                new FindingAuditEntity(
+                                                UUID.randomUUID(),
+                                                finding.id(),
+                                                ORGANIZATION_ID,
+                                                AuditAction.UPDATED,
+                                                "analista",
+                                                diaAnterior),
+                                new FindingAuditEntity(
+                                                UUID.randomUUID(),
+                                                finding.id(),
+                                                ORGANIZATION_ID,
+                                                AuditAction.UPDATED,
+                                                "analista",
+                                                desde),
+                                new FindingAuditEntity(
+                                                UUID.randomUUID(),
+                                                finding.id(),
+                                                ORGANIZATION_ID,
+                                                AuditAction.UPDATED,
+                                                "analista",
+                                                hasta),
+                                new FindingAuditEntity(
+                                                UUID.randomUUID(),
+                                                finding.id(),
+                                                ORGANIZATION_ID,
+                                                AuditAction.UPDATED,
+                                                "analista",
+                                                diaPosterior)));
+
+                Page<FindingAuditEntity> result = auditService.findPageByFindingId(
+                                finding.id(),
+                                0,
+                                20,
+                                null,
+                                null,
+                                null,
+                                desde,
+                                hasta);
+
+                assertEquals(2, result.getTotalElements());
+                assertEquals(
+                                List.of(desde, hasta),
+                                result.getContent().stream()
+                                                .map(event -> Objects.requireNonNull(
+                                                                event,
+                                                                "El repositorio devolvió un evento nulo")
+                                                                .getOccurredAt())
+                                                .toList());
         }
 }

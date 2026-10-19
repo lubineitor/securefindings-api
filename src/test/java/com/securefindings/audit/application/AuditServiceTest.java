@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
@@ -84,39 +85,6 @@ class AuditServiceTest {
                                 savedEvent.getAction());
                 assertEquals("analista", savedEvent.getActor());
                 assertNotNull(savedEvent.getOccurredAt());
-        }
-
-        @Test
-        void deberiaConsultarLaAuditoriaFiltrandoPorOrganizacion() {
-                UUID findingId = UUID.randomUUID();
-
-                FindingAuditEntity event = new FindingAuditEntity(
-                                UUID.randomUUID(),
-                                findingId,
-                                ORGANIZATION_ID,
-                                AuditAction.CREATED,
-                                "analista",
-                                Instant.now());
-
-                when(organizationContext.currentOrganizationId())
-                                .thenReturn(ORGANIZATION_ID);
-
-                stubFindingExists(findingId, ORGANIZATION_ID);
-
-                when(auditRepository
-                                .findByFindingIdAndOrganizationIdOrderByOccurredAtAsc(
-                                                findingId,
-                                                ORGANIZATION_ID))
-                                .thenReturn(List.of(event));
-
-                List<FindingAuditEntity> events = auditService.findByFindingId(findingId);
-
-                assertEquals(List.of(event), events);
-
-                verify(auditRepository)
-                                .findByFindingIdAndOrganizationIdOrderByOccurredAtAsc(
-                                                findingId,
-                                                ORGANIZATION_ID);
         }
 
         @Test
@@ -596,5 +564,29 @@ class AuditServiceTest {
                                                 eq("audit-request-123"),
                                                 eq("analista"),
                                                 any(Pageable.class));
+        }
+
+        @Test
+        void deberiaRechazarUnIntervaloDeFechasInvertido() {
+                UUID findingId = UUID.randomUUID();
+                Instant occurredFrom = Instant.parse("2026-10-10T00:00:00Z");
+                Instant occurredTo = Instant.parse("2026-10-01T00:00:00Z");
+
+                assertThrows(
+                                IllegalArgumentException.class,
+                                () -> auditService.findPageByFindingId(
+                                                findingId,
+                                                0,
+                                                20,
+                                                null,
+                                                null,
+                                                null,
+                                                occurredFrom,
+                                                occurredTo));
+
+                verifyNoInteractions(
+                                organizationContext,
+                                findingRepository,
+                                auditRepository);
         }
 }

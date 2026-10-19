@@ -1,8 +1,11 @@
 package com.securefindings.finding.api;
 
+import java.time.Instant;
 import java.util.UUID;
 
 import org.springframework.data.domain.Page;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.format.annotation.DateTimeFormat.ISO;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -21,6 +24,7 @@ import com.securefindings.finding.application.FindingService;
 import com.securefindings.finding.domain.Finding;
 import com.securefindings.finding.domain.FindingSeverity;
 import com.securefindings.finding.domain.FindingStatus;
+import com.securefindings.finding.domain.FindingSummary;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -35,6 +39,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 @RestController
@@ -74,20 +79,67 @@ public class FindingController {
 
                         @Parameter(description = "Filtrar por estado", example = "OPEN", in = ParameterIn.QUERY) @RequestParam(name = "status", required = false) FindingStatus status,
 
-                        @Parameter(description = "Campo por el que ordenar", example = "createdAt", in = ParameterIn.QUERY) @RequestParam(name = "sortBy", defaultValue = "createdAt") String sortBy,
+                        @Parameter(description = "Campo por el que ordenar", example = "createdAt", in = ParameterIn.QUERY) @RequestParam(name = "sortBy", defaultValue = "createdAt") @Pattern(regexp = "createdAt|updatedAt|title|severity|status", flags = Pattern.Flag.CASE_INSENSITIVE, message = "El campo de ordenación no está permitido") String sortBy,
 
-                        @Parameter(description = "Dirección de ordenación", example = "DESC", in = ParameterIn.QUERY) @RequestParam(name = "direction", defaultValue = "DESC") String direction) {
+                        @Parameter(description = "Dirección de ordenación", example = "DESC", in = ParameterIn.QUERY) @RequestParam(name = "direction", defaultValue = "DESC") @Pattern(regexp = "ASC|DESC", flags = Pattern.Flag.CASE_INSENSITIVE, message = "La dirección de ordenación no está permitida") String direction,
 
-                Page<Finding> findingPage = findingService.findPage(
-                                page,
-                                size,
-                                searchTerm,
-                                severity,
-                                status,
-                                FindingSortField.from(sortBy),
-                                FindingSortDirection.from(direction));
+                        @Parameter(description = "Fecha de creación inicial inclusiva, en formato ISO-8601", example = "2026-10-01T00:00:00Z", in = ParameterIn.QUERY) @RequestParam(name = "createdFrom", required = false) @DateTimeFormat(iso = ISO.DATE_TIME) Instant createdFrom,
+
+                        @Parameter(description = "Fecha de creación final inclusiva, en formato ISO-8601", example = "2026-10-17T23:59:59Z", in = ParameterIn.QUERY) @RequestParam(name = "createdTo", required = false) @DateTimeFormat(iso = ISO.DATE_TIME) Instant createdTo) {
+
+                if (createdFrom != null
+                                && createdTo != null
+                                && createdFrom.isAfter(createdTo)) {
+                        throw new IllegalArgumentException(
+                                        "createdFrom debe ser anterior o igual a createdTo");
+                }
+
+                Page<Finding> findingPage;
+
+                if (createdFrom == null && createdTo == null) {
+                        findingPage = findingService.findPage(
+                                        page,
+                                        size,
+                                        searchTerm,
+                                        severity,
+                                        status,
+                                        FindingSortField.from(sortBy),
+                                        FindingSortDirection.from(direction));
+                } else {
+                        findingPage = findingService.findPage(
+                                        page,
+                                        size,
+                                        searchTerm,
+                                        severity,
+                                        status,
+                                        FindingSortField.from(sortBy),
+                                        FindingSortDirection.from(direction),
+                                        createdFrom,
+                                        createdTo);
+                }
 
                 return FindingPageResponse.from(findingPage);
+        }
+
+        @GetMapping("/summary")
+        @Operation(summary = "Consultar el resumen de hallazgos", description = "Devuelve el total de hallazgos de la organización actual agrupados por estado y severidad")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "200", description = "Resumen recuperado correctamente", content = @Content(mediaType = "application/json", schema = @Schema(implementation = FindingSummary.class))),
+                        @ApiResponse(responseCode = "401", description = "Token ausente o inválido"),
+                        @ApiResponse(responseCode = "403", description = "El usuario no tiene permisos"),
+                        @ApiResponse(responseCode = "429", description = "Se ha superado el límite de peticiones", headers = {
+                                        @Header(name = "Retry-After", description = "Segundos que deben transcurrir antes de reintentar", schema = @Schema(type = "integer", format = "int64")),
+                                        @Header(name = "X-RateLimit-Limit", description = "Capacidad máxima del cubo de tokens", schema = @Schema(type = "integer", format = "int32")),
+                                        @Header(name = "X-RateLimit-Remaining", description = "Tokens enteros disponibles", schema = @Schema(type = "integer", format = "int32")),
+                                        @Header(name = "X-RateLimit-Reset", description = "Instante Unix en que el cubo volverá a estar lleno", schema = @Schema(type = "integer", format = "int64"))
+                        }, content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
+        })
+        public FindingSummary getSummary(
+                        @Parameter(description = "Fecha inicial inclusiva en formato ISO-8601", example = "2026-10-01T00:00:00Z", in = ParameterIn.QUERY) @RequestParam(name = "createdFrom", required = false) @DateTimeFormat(iso = ISO.DATE_TIME) Instant createdFrom,
+
+                        @Parameter(description = "Fecha final inclusiva en formato ISO-8601", example = "2026-10-19T23:59:59Z", in = ParameterIn.QUERY) @RequestParam(name = "createdTo", required = false) @DateTimeFormat(iso = ISO.DATE_TIME) Instant createdTo) {
+
+                return findingService.getSummary(createdFrom, createdTo);
         }
 
         @GetMapping("/{id}")

@@ -33,6 +33,7 @@ class RateLimitOpenApiDocumentationTest {
                 assertDocumentaRespuesta429(FindingController.class, "updateStatus");
                 assertDocumentaRespuesta429(FindingController.class, "update");
                 assertDocumentaRespuesta429(FindingController.class, "delete");
+                assertDocumentaRespuesta429(FindingController.class, "getSummary");
         }
 
         @Test

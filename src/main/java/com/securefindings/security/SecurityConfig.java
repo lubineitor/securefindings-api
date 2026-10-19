@@ -41,16 +41,22 @@ public class SecurityConfig {
         RateLimitFilter rateLimitFilter(
                         RateLimitProperties properties,
                         Clock rateLimitClock,
-                        ObjectProvider<RedisRateLimitStore> redisRateLimitStoreProvider) {
+                        ObjectProvider<RedisRateLimitStore> redisRateLimitStoreProvider,
+                        ObjectProvider<RateLimitMetrics> rateLimitMetricsProvider) {
 
                 RedisRateLimitStore redisRateLimitStore = redisRateLimitStoreProvider.getIfAvailable();
 
-                return redisRateLimitStore == null
-                                ? new RateLimitFilter(properties, rateLimitClock)
-                                : new RateLimitFilter(
-                                                properties,
-                                                rateLimitClock,
-                                                redisRateLimitStore);
+                RateLimitMetrics rateLimitMetrics = rateLimitMetricsProvider.getIfAvailable();
+
+                if (rateLimitMetrics == null) {
+                        rateLimitMetrics = RateLimitMetrics.NOOP;
+                }
+
+                return new RateLimitFilter(
+                                properties,
+                                rateLimitClock,
+                                redisRateLimitStore,
+                                rateLimitMetrics);
         }
 
         @Bean
@@ -81,7 +87,12 @@ public class SecurityConfig {
                                                                 SessionCreationPolicy.STATELESS))
                                 .authorizeHttpRequests(authorize -> authorize
 
-                                                .requestMatchers("/api/v1/health")
+                                                .requestMatchers(
+                                                                "/api/v1/health",
+                                                                "/actuator/health/liveness",
+                                                                "/actuator/health/readiness",
+                                                                "/livez",
+                                                                "/readyz")
                                                 .permitAll()
 
                                                 .requestMatchers(
@@ -131,8 +142,11 @@ public class SecurityConfig {
                                                                 "/api/v1/findings/*/comments")
                                                 .hasAnyRole("ANALYST", "ADMIN")
 
+                                                .requestMatchers("/actuator/prometheus")
+                                                .hasAnyRole("ADMIN", "METRICS_READER")
+
                                                 .anyRequest()
-                                                .authenticated())
+                                                .hasAnyRole("ANALYST", "ADMIN"))
 
                                 .exceptionHandling(exceptionHandling -> exceptionHandling
                                                 .authenticationEntryPoint(securityErrorHandler)

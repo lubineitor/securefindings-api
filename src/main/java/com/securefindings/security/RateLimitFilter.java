@@ -52,6 +52,7 @@ public final class RateLimitFilter extends OncePerRequestFilter {
         private final AtomicInteger trackedBucketCount = new AtomicInteger();
         private final AtomicLong requestsSinceCleanup = new AtomicLong();
         private final RedisRateLimitStore redisRateLimitStore;
+        private final RateLimitMetrics rateLimitMetrics;
 
         private static final Logger LOGGER = LoggerFactory.getLogger(RateLimitFilter.class);
         private static final long REDIS_FAILURE_LOG_INTERVAL_NANOS = TimeUnit.MINUTES.toNanos(1);
@@ -60,7 +61,8 @@ public final class RateLimitFilter extends OncePerRequestFilter {
         public RateLimitFilter(
                         RateLimitProperties properties,
                         Clock clock) {
-                this(properties, clock, null);
+
+                this(properties, clock, null, RateLimitMetrics.NOOP);
         }
 
         RateLimitFilter(
@@ -68,9 +70,19 @@ public final class RateLimitFilter extends OncePerRequestFilter {
                         Clock clock,
                         RedisRateLimitStore redisRateLimitStore) {
 
+                this(properties, clock, redisRateLimitStore, RateLimitMetrics.NOOP);
+        }
+
+        RateLimitFilter(
+                        RateLimitProperties properties,
+                        Clock clock,
+                        RedisRateLimitStore redisRateLimitStore,
+                        RateLimitMetrics rateLimitMetrics) {
+
                 this.properties = Objects.requireNonNull(properties);
                 this.clock = Objects.requireNonNull(clock);
                 this.redisRateLimitStore = redisRateLimitStore;
+                this.rateLimitMetrics = Objects.requireNonNull(rateLimitMetrics);
         }
 
         @Override
@@ -108,15 +120,18 @@ public final class RateLimitFilter extends OncePerRequestFilter {
                                                         properties);
                 } catch (DataAccessException | IllegalStateException exception) {
                         logRedisFailure(exception);
+                        rateLimitMetrics.recordUnavailable();
                         writeRateLimitUnavailable(response);
                         return;
                 }
 
                 if (!decision.allowed()) {
+                        rateLimitMetrics.recordRateLimited();
                         writeTooManyRequests(response, now, decision);
                         return;
                 }
 
+                rateLimitMetrics.recordAllowed();
                 writeRateLimitHeaders(response, decision);
                 filterChain.doFilter(request, response);
         }

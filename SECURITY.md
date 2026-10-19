@@ -242,6 +242,27 @@ El endpoint público:
 
 queda excluido para que pueda utilizarse en comprobaciones de disponibilidad.
 
+### Pruebas de salud y disponibilidad
+
+Actuator expone únicamente el endpoint `health`. Las rutas públicas son:
+
+- `/api/v1/health`
+- `/actuator/health/liveness`
+- `/actuator/health/readiness`
+- `/livez`
+- `/readyz`
+
+Las respuestas de las pruebas no muestran componentes ni detalles. Liveness comprueba el estado interno de la aplicación. Readiness comprueba también PostgreSQL y Redis, ya que ambos servicios son necesarios para procesar peticiones.
+
+El endpoint global `/actuator/health` requiere autenticación. Las demás rutas de Actuator también quedan protegidas por las reglas generales de Spring Security.
+
+### Métricas de Actuator
+
+`/actuator/prometheus` requiere autenticación JWT y el rol `ADMIN`. Solo se exponen
+los endpoints `health` y `prometheus`. Las métricas del rate limiter utilizan
+etiquetas de valores limitados y no incorporan nombres de usuario, organizaciones
+ni huellas de clientes.
+
 ### Limitación distribuida de peticiones
 
 Las rutas `/api/v1/**`, excepto `/api/v1/health`, aplican límites por cliente mediante Redis. La operación atómica evita que distintas instancias concedan cuotas independientes al mismo cliente.
@@ -362,26 +383,20 @@ para evitar que un error temporal se almacene en cachés.
 
 ### Limitaciones de la implementación actual
 
-El contador se almacena en memoria dentro de cada instancia de la aplicación.
+El rate limiter utiliza Redis para compartir las cuotas entre instancias, pero depende de la disponibilidad y retención de datos de Redis:
 
-Por tanto:
+- Si Redis no está disponible, las peticiones protegidas se rechazan con `503 Service Unavailable`.
+- Si se pierde o expulsa una clave del rate limiter, se reinicia la cuota del cliente afectado.
+- El límite se aplica de forma global a las rutas `/api/v1/**`, salvo el health check; no hay cuotas diferenciadas por endpoint.
+- El rate limiter no sustituye a un firewall, WAF, API Gateway ni a una protección DDoS.
+- La configuración debe coordinarse con los balanceadores y proxies de confianza.
 
-- El límite se reinicia al reiniciar la aplicación.
-- Varias instancias tienen contadores independientes.
-- No existe sincronización entre nodos.
-- No protege por sí solo frente a ataques distribuidos.
-- No sustituye a un firewall, WAF, API Gateway o protección DDoS.
-- La configuración debe coordinarse con balanceadores y proxies.
+Para producción se recomienda:
 
-Para producción se recomienda utilizar:
-
-- Rate limiting en el API Gateway.
-- Un almacén compartido como Redis.
-- Límites por usuario, organización y dirección IP.
-- Límites diferenciados por endpoint.
-- Métricas de solicitudes rechazadas.
-- Alertas ante incrementos anómalos.
-- Protección adicional para endpoints costosos.
+- Mantener Redis en una red privada y definir una política de memoria que evite expulsar claves activas del rate limiter.
+- Añadir límites diferenciados para endpoints costosos o sensibles.
+- Complementar el límite de la aplicación con controles del API Gateway y protección DDoS.
+- Configurar paneles y alertas ante aumentos de respuestas `429` o fallos de Redis.
 
 ## Trazabilidad de peticiones
 
@@ -943,6 +958,7 @@ El proyecto incluye pruebas para comprobar:
 - Limpieza del contexto MDC.
 - Exclusión del endpoint de health check.
 - Integración del filtro con Spring Security.
+- Acceso a las métricas Prometheus sin autenticación, con rol `ANALYST` y con rol `ADMIN`.
 
 Las pruebas de integración utilizan PostgreSQL para verificar el comportamiento real de las consultas y restricciones de persistencia.
 
@@ -950,7 +966,6 @@ Las pruebas de integración utilizan PostgreSQL para verificar el comportamiento
 
 Antes de utilizar la aplicación en producción deberían revisarse, como mínimo:
 
-- Rate limiting distribuido.
 - Configuración CORS.
 - Gestión centralizada de secretos.
 - TLS y terminación HTTPS.
@@ -971,6 +986,7 @@ Antes de utilizar la aplicación en producción deberían revisarse, como mínim
 - Almacenamiento centralizado de logs.
 - Correlación entre logs de diferentes instancias.
 - Propagación del identificador a sistemas externos.
+- Paneles para las métricas Prometheus.
 
 ## Respuesta ante incidentes
 

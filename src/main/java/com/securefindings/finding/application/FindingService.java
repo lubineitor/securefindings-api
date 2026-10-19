@@ -1,6 +1,8 @@
 package com.securefindings.finding.application;
 
-import java.util.List;
+import java.time.Instant;
+import java.util.EnumMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -22,6 +24,7 @@ import com.securefindings.finding.api.FindingSortField;
 import com.securefindings.finding.domain.Finding;
 import com.securefindings.finding.domain.FindingSeverity;
 import com.securefindings.finding.domain.FindingStatus;
+import com.securefindings.finding.domain.FindingSummary;
 import com.securefindings.finding.persistence.FindingEntity;
 import com.securefindings.finding.persistence.FindingRepository;
 import com.securefindings.security.OrganizationContext;
@@ -51,6 +54,67 @@ public class FindingService {
                                 organizationContext);
         }
 
+        public FindingSummary getSummary() {
+                return getSummary(null, null);
+        }
+
+        public FindingSummary getSummary(
+                        Instant createdFrom,
+                        Instant createdTo) {
+
+                if (createdFrom != null
+                                && createdTo != null
+                                && createdFrom.isAfter(createdTo)) {
+                        throw new IllegalArgumentException(
+                                        "createdFrom no puede ser posterior a createdTo");
+                }
+
+                UUID organizationId = organizationContext.currentOrganizationId();
+
+                Map<FindingStatus, Long> byStatus = new EnumMap<>(FindingStatus.class);
+
+                for (FindingStatus status : FindingStatus.values()) {
+                        byStatus.put(status, 0L);
+                }
+
+                findingRepository
+                                .countStatusesByOrganization(
+                                                organizationId,
+                                                createdFrom,
+                                                createdTo)
+                                .forEach(result -> byStatus.put(
+                                                result.getStatus(),
+                                                result.getTotal()));
+
+                Map<FindingSeverity, Long> bySeverity = new EnumMap<>(FindingSeverity.class);
+
+                for (FindingSeverity severity : FindingSeverity.values()) {
+                        bySeverity.put(severity, 0L);
+                }
+
+                findingRepository
+                                .countSeveritiesByOrganization(
+                                                organizationId,
+                                                createdFrom,
+                                                createdTo)
+                                .forEach(result -> bySeverity.put(
+                                                result.getSeverity(),
+                                                result.getTotal()));
+
+                long total = 0L;
+
+                for (Long count : byStatus.values()) {
+                        if (count == null) {
+                                throw new IllegalStateException(
+                                                "El recuento de estados no puede ser nulo");
+                        }
+
+                        total += count;
+                }
+
+                return new FindingSummary(total, byStatus, bySeverity);
+        }
+
         @Transactional
         public Finding create(
                         String title,
@@ -74,19 +138,6 @@ public class FindingService {
                                 currentActor());
 
                 return savedFinding;
-        }
-
-        public List<Finding> findAll() {
-                UUID organizationId = organizationContext.currentOrganizationId();
-
-                return findingRepository
-                                .findAllByOrganizationId(organizationId)
-                                .stream()
-                                .map(entity -> Objects.requireNonNull(
-                                                entity,
-                                                "El repositorio devolvió una entidad nula")
-                                                .toDomain())
-                                .toList();
         }
 
         public Page<Finding> findPage(
@@ -129,6 +180,29 @@ public class FindingService {
                         FindingSortField sortField,
                         FindingSortDirection sortDirection) {
 
+                return findPage(
+                                page,
+                                size,
+                                searchTerm,
+                                severity,
+                                status,
+                                sortField,
+                                sortDirection,
+                                null,
+                                null);
+        }
+
+        public Page<Finding> findPage(
+                        int page,
+                        int size,
+                        String searchTerm,
+                        FindingSeverity severity,
+                        FindingStatus status,
+                        FindingSortField sortField,
+                        FindingSortDirection sortDirection,
+                        Instant createdFrom,
+                        Instant createdTo) {
+
                 UUID organizationId = organizationContext.currentOrganizationId();
 
                 Pageable pageable = createPageable(
@@ -145,6 +219,8 @@ public class FindingService {
                                                 normalizedSearchTerm,
                                                 severity,
                                                 status,
+                                                createdFrom,
+                                                createdTo,
                                                 pageable);
 
                 return toDomainPage(entities);
@@ -291,9 +367,14 @@ public class FindingService {
 
                 String normalizedSearchTerm = searchTerm.trim();
 
-                return normalizedSearchTerm.isEmpty()
-                                ? null
-                                : normalizedSearchTerm;
+                if (normalizedSearchTerm.isEmpty()) {
+                        return null;
+                }
+
+                return normalizedSearchTerm
+                                .replace("!", "!!")
+                                .replace("%", "!%")
+                                .replace("_", "!_");
         }
 
         private Finding save(
