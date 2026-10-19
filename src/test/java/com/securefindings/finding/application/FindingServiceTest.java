@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -33,6 +34,7 @@ import com.securefindings.finding.api.FindingSortField;
 import com.securefindings.finding.domain.Finding;
 import com.securefindings.finding.domain.FindingSeverity;
 import com.securefindings.finding.domain.FindingStatus;
+import com.securefindings.finding.domain.FindingSummary;
 import com.securefindings.finding.persistence.FindingEntity;
 import com.securefindings.finding.persistence.FindingRepository;
 import com.securefindings.security.OrganizationContext;
@@ -491,5 +493,38 @@ class FindingServiceTest {
                                 eq(createdFrom),
                                 eq(createdTo),
                                 any(Pageable.class));
+        }
+
+        @Test
+        void deberiaResumirLosHallazgosDeLaOrganizacionActual() {
+                FindingRepository.StatusCountProjection openCount = mock(FindingRepository.StatusCountProjection.class);
+                when(openCount.getStatus()).thenReturn(FindingStatus.OPEN);
+                when(openCount.getTotal()).thenReturn(2L);
+
+                FindingRepository.SeverityCountProjection highCount = mock(
+                                FindingRepository.SeverityCountProjection.class);
+                when(highCount.getSeverity()).thenReturn(FindingSeverity.HIGH);
+                when(highCount.getTotal()).thenReturn(2L);
+
+                when(findingRepository.countStatusesByOrganization(
+                                TEST_ORGANIZATION_ID))
+                                .thenReturn(List.of(openCount));
+
+                when(findingRepository.countSeveritiesByOrganization(
+                                TEST_ORGANIZATION_ID))
+                                .thenReturn(List.of(highCount));
+
+                FindingSummary summary = findingService.getSummary();
+
+                assertEquals(2L, summary.total());
+                assertEquals(2L, summary.byStatus().get(FindingStatus.OPEN));
+                assertEquals(0L, summary.byStatus().get(FindingStatus.IN_PROGRESS));
+                assertEquals(2L, summary.bySeverity().get(FindingSeverity.HIGH));
+                assertEquals(0L, summary.bySeverity().get(FindingSeverity.LOW));
+
+                verify(findingRepository).countStatusesByOrganization(
+                                TEST_ORGANIZATION_ID);
+                verify(findingRepository).countSeveritiesByOrganization(
+                                TEST_ORGANIZATION_ID);
         }
 }

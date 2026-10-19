@@ -15,6 +15,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -38,6 +39,7 @@ import com.securefindings.finding.application.FindingStatusTransitionException;
 import com.securefindings.finding.domain.Finding;
 import com.securefindings.finding.domain.FindingSeverity;
 import com.securefindings.finding.domain.FindingStatus;
+import com.securefindings.finding.domain.FindingSummary;
 import com.securefindings.security.SecurityConfig;
 
 @WebMvcTest(controllers = FindingController.class)
@@ -736,5 +738,33 @@ class FindingControllerTest {
                                 .andExpect(jsonPath("$.errors.createdFrom").exists());
 
                 verifyNoInteractions(findingService);
+        }
+
+        @Test
+        void deberiaDevolverElResumenDeHallazgos() throws Exception {
+                FindingSummary summary = new FindingSummary(
+                                2L,
+                                Map.of(
+                                                FindingStatus.OPEN, 1L,
+                                                FindingStatus.IN_PROGRESS, 1L,
+                                                FindingStatus.RESOLVED, 0L,
+                                                FindingStatus.FALSE_POSITIVE, 0L),
+                                Map.of(
+                                                FindingSeverity.LOW, 0L,
+                                                FindingSeverity.MEDIUM, 1L,
+                                                FindingSeverity.HIGH, 1L,
+                                                FindingSeverity.CRITICAL, 0L));
+
+                when(findingService.getSummary()).thenReturn(summary);
+
+                mockMvc.perform(get("/api/v1/findings/summary"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.total").value(2))
+                                .andExpect(jsonPath("$.byStatus.OPEN").value(1))
+                                .andExpect(jsonPath("$.byStatus.IN_PROGRESS").value(1))
+                                .andExpect(jsonPath("$.bySeverity.MEDIUM").value(1))
+                                .andExpect(jsonPath("$.bySeverity.HIGH").value(1));
+
+                verify(findingService).getSummary();
         }
 }

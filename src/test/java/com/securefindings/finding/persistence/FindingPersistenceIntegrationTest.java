@@ -32,6 +32,7 @@ import com.securefindings.finding.application.FindingService;
 import com.securefindings.finding.domain.Finding;
 import com.securefindings.finding.domain.FindingSeverity;
 import com.securefindings.finding.domain.FindingStatus;
+import com.securefindings.finding.domain.FindingSummary;
 import com.securefindings.security.RequestCorrelationFilter;
 
 @Testcontainers
@@ -539,5 +540,50 @@ class FindingPersistenceIntegrationTest {
 
                 findingRepository.save(new FindingEntity(finding, ORGANIZATION_ID));
                 return finding;
+        }
+
+        @Test
+        void deberiaAgruparElResumenPersistidoPorEstadoYSeveridad() {
+                Finding inProgress = findingService.create(
+                                "Hallazgo en progreso",
+                                "Prueba de resumen",
+                                FindingSeverity.HIGH);
+                findingService.updateStatus(
+                                inProgress.id(),
+                                FindingStatus.IN_PROGRESS);
+
+                Finding resolved = findingService.create(
+                                "Hallazgo resuelto",
+                                "Prueba de resumen",
+                                FindingSeverity.MEDIUM);
+                findingService.updateStatus(
+                                resolved.id(),
+                                FindingStatus.RESOLVED);
+
+                findingService.create(
+                                "Hallazgo abierto",
+                                "Prueba de resumen",
+                                FindingSeverity.CRITICAL);
+
+                Finding falsePositive = findingService.create(
+                                "Falso positivo",
+                                "Prueba de resumen",
+                                FindingSeverity.LOW);
+                findingService.updateStatus(
+                                falsePositive.id(),
+                                FindingStatus.FALSE_POSITIVE);
+
+                FindingSummary summary = findingService.getSummary();
+
+                assertEquals(4L, summary.total());
+                assertEquals(1L, summary.byStatus().get(FindingStatus.OPEN));
+                assertEquals(1L, summary.byStatus().get(FindingStatus.IN_PROGRESS));
+                assertEquals(1L, summary.byStatus().get(FindingStatus.RESOLVED));
+                assertEquals(1L, summary.byStatus().get(FindingStatus.FALSE_POSITIVE));
+
+                assertEquals(1L, summary.bySeverity().get(FindingSeverity.LOW));
+                assertEquals(1L, summary.bySeverity().get(FindingSeverity.MEDIUM));
+                assertEquals(1L, summary.bySeverity().get(FindingSeverity.HIGH));
+                assertEquals(1L, summary.bySeverity().get(FindingSeverity.CRITICAL));
         }
 }
