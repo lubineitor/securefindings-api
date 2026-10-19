@@ -24,6 +24,7 @@ import com.securefindings.finding.application.FindingService;
 import com.securefindings.finding.domain.Finding;
 import com.securefindings.finding.domain.FindingSeverity;
 import com.securefindings.finding.domain.FindingStatus;
+import com.securefindings.finding.domain.FindingSummary;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -118,6 +119,23 @@ public class FindingController {
                 }
 
                 return FindingPageResponse.from(findingPage);
+        }
+
+        @GetMapping("/summary")
+        @Operation(summary = "Consultar el resumen de hallazgos", description = "Devuelve el total de hallazgos de la organización actual agrupados por estado y severidad")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "200", description = "Resumen recuperado correctamente", content = @Content(mediaType = "application/json", schema = @Schema(implementation = FindingSummary.class))),
+                        @ApiResponse(responseCode = "401", description = "Token ausente o inválido"),
+                        @ApiResponse(responseCode = "403", description = "El usuario no tiene permisos"),
+                        @ApiResponse(responseCode = "429", description = "Se ha superado el límite de peticiones", headers = {
+                                        @Header(name = "Retry-After", description = "Segundos que deben transcurrir antes de reintentar", schema = @Schema(type = "integer", format = "int64")),
+                                        @Header(name = "X-RateLimit-Limit", description = "Capacidad máxima del cubo de tokens", schema = @Schema(type = "integer", format = "int32")),
+                                        @Header(name = "X-RateLimit-Remaining", description = "Tokens enteros disponibles", schema = @Schema(type = "integer", format = "int32")),
+                                        @Header(name = "X-RateLimit-Reset", description = "Instante Unix en que el cubo volverá a estar lleno", schema = @Schema(type = "integer", format = "int64"))
+                        }, content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
+        })
+        public FindingSummary getSummary() {
+                return findingService.getSummary();
         }
 
         @GetMapping("/{id}")

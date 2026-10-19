@@ -1,6 +1,8 @@
 package com.securefindings.finding.application;
 
 import java.time.Instant;
+import java.util.EnumMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -22,6 +24,7 @@ import com.securefindings.finding.api.FindingSortField;
 import com.securefindings.finding.domain.Finding;
 import com.securefindings.finding.domain.FindingSeverity;
 import com.securefindings.finding.domain.FindingStatus;
+import com.securefindings.finding.domain.FindingSummary;
 import com.securefindings.finding.persistence.FindingEntity;
 import com.securefindings.finding.persistence.FindingRepository;
 import com.securefindings.security.OrganizationContext;
@@ -49,6 +52,47 @@ public class FindingService {
 
                 this.organizationContext = Objects.requireNonNull(
                                 organizationContext);
+        }
+
+        public FindingSummary getSummary() {
+                UUID organizationId = organizationContext.currentOrganizationId();
+
+                Map<FindingStatus, Long> byStatus = new EnumMap<>(FindingStatus.class);
+
+                for (FindingStatus status : FindingStatus.values()) {
+                        byStatus.put(status, 0L);
+                }
+
+                findingRepository
+                                .countStatusesByOrganization(organizationId)
+                                .forEach(result -> byStatus.put(
+                                                result.getStatus(),
+                                                result.getTotal()));
+
+                Map<FindingSeverity, Long> bySeverity = new EnumMap<>(FindingSeverity.class);
+
+                for (FindingSeverity severity : FindingSeverity.values()) {
+                        bySeverity.put(severity, 0L);
+                }
+
+                findingRepository
+                                .countSeveritiesByOrganization(organizationId)
+                                .forEach(result -> bySeverity.put(
+                                                result.getSeverity(),
+                                                result.getTotal()));
+
+                long total = 0L;
+
+                for (Long count : byStatus.values()) {
+                        if (count == null) {
+                                throw new IllegalStateException(
+                                                "El recuento de estados no puede ser nulo");
+                        }
+
+                        total += count;
+                }
+
+                return new FindingSummary(total, byStatus, bySeverity);
         }
 
         @Transactional

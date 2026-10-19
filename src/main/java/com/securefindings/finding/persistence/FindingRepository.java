@@ -1,6 +1,7 @@
 package com.securefindings.finding.persistence;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -46,5 +47,35 @@ public interface FindingRepository
                         @Param("createdFrom") Instant createdFrom,
                         @Param("createdTo") Instant createdTo,
                         Pageable pageable);
+
+        interface StatusCountProjection {
+                FindingStatus getStatus();
+
+                Long getTotal();
+        }
+
+        interface SeverityCountProjection {
+                FindingSeverity getSeverity();
+
+                Long getTotal();
+        }
+
+        @Query("""
+                        SELECT finding.status AS status, COUNT(finding.id) AS total
+                        FROM FindingEntity finding
+                        WHERE finding.organizationId = :organizationId
+                        GROUP BY finding.status
+                        """)
+        List<StatusCountProjection> countStatusesByOrganization(
+                        @Param("organizationId") UUID organizationId);
+
+        @Query("""
+                        SELECT finding.severity AS severity, COUNT(finding.id) AS total
+                        FROM FindingEntity finding
+                        WHERE finding.organizationId = :organizationId
+                        GROUP BY finding.severity
+                        """)
+        List<SeverityCountProjection> countSeveritiesByOrganization(
+                        @Param("organizationId") UUID organizationId);
 
 }
