@@ -188,7 +188,7 @@ El historial puede filtrarse por:
 Ejemplo:
 
 ```text
-GET /api/v1/findings/{findingId}/audit?action=UPDATED&requestId=audit-request-123&actor=analista
+GET /api/v1/findings/{findingId}/audit?occurredFrom=2026-10-01T00:00:00Z&occurredTo=2026-10-19T23:59:59Z
 ```
 
 Los valores permitidos para `action` son:
