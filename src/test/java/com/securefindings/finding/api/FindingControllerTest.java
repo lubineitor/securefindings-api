@@ -755,7 +755,7 @@ class FindingControllerTest {
                                                 FindingSeverity.HIGH, 1L,
                                                 FindingSeverity.CRITICAL, 0L));
 
-                when(findingService.getSummary()).thenReturn(summary);
+                when(findingService.getSummary(null, null)).thenReturn(summary);
 
                 mockMvc.perform(get("/api/v1/findings/summary"))
                                 .andExpect(status().isOk())
@@ -765,6 +765,24 @@ class FindingControllerTest {
                                 .andExpect(jsonPath("$.bySeverity.MEDIUM").value(1))
                                 .andExpect(jsonPath("$.bySeverity.HIGH").value(1));
 
-                verify(findingService).getSummary();
+                verify(findingService).getSummary(null, null);
+        }
+
+        @Test
+        void deberiaFiltrarElResumenPorIntervaloDeCreacion() throws Exception {
+                Instant createdFrom = Instant.parse("2026-10-01T00:00:00Z");
+                Instant createdTo = Instant.parse("2026-10-19T23:59:59Z");
+                FindingSummary summary = new FindingSummary(0L, Map.of(), Map.of());
+
+                when(findingService.getSummary(createdFrom, createdTo))
+                                .thenReturn(summary);
+
+                mockMvc.perform(get("/api/v1/findings/summary")
+                                .param("createdFrom", createdFrom.toString())
+                                .param("createdTo", createdTo.toString()))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.total").value(0));
+
+                verify(findingService).getSummary(createdFrom, createdTo);
         }
 }

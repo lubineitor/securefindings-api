@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -59,7 +60,7 @@ class FindingServiceTest {
 
         @BeforeEach
         void configurarOrganizacion() {
-                when(organizationContext.currentOrganizationId())
+                lenient().when(organizationContext.currentOrganizationId())
                                 .thenReturn(TEST_ORGANIZATION_ID);
         }
 
@@ -506,15 +507,22 @@ class FindingServiceTest {
                 when(highCount.getSeverity()).thenReturn(FindingSeverity.HIGH);
                 when(highCount.getTotal()).thenReturn(2L);
 
+                Instant createdFrom = Instant.parse("2026-10-01T00:00:00Z");
+                Instant createdTo = Instant.parse("2026-10-19T23:59:59Z");
+
                 when(findingRepository.countStatusesByOrganization(
-                                TEST_ORGANIZATION_ID))
+                                eq(TEST_ORGANIZATION_ID),
+                                eq(createdFrom),
+                                eq(createdTo)))
                                 .thenReturn(List.of(openCount));
 
                 when(findingRepository.countSeveritiesByOrganization(
-                                TEST_ORGANIZATION_ID))
+                                eq(TEST_ORGANIZATION_ID),
+                                eq(createdFrom),
+                                eq(createdTo)))
                                 .thenReturn(List.of(highCount));
 
-                FindingSummary summary = findingService.getSummary();
+                FindingSummary summary = findingService.getSummary(createdFrom, createdTo);
 
                 assertEquals(2L, summary.total());
                 assertEquals(2L, summary.byStatus().get(FindingStatus.OPEN));
@@ -523,8 +531,25 @@ class FindingServiceTest {
                 assertEquals(0L, summary.bySeverity().get(FindingSeverity.LOW));
 
                 verify(findingRepository).countStatusesByOrganization(
-                                TEST_ORGANIZATION_ID);
+                                eq(TEST_ORGANIZATION_ID),
+                                eq(createdFrom),
+                                eq(createdTo));
+
                 verify(findingRepository).countSeveritiesByOrganization(
-                                TEST_ORGANIZATION_ID);
+                                eq(TEST_ORGANIZATION_ID),
+                                eq(createdFrom),
+                                eq(createdTo));
+        }
+
+        @Test
+        void deberiaRechazarUnIntervaloDeResumenInvertido() {
+                Instant createdFrom = Instant.parse("2026-10-10T00:00:00Z");
+                Instant createdTo = Instant.parse("2026-10-01T00:00:00Z");
+
+                assertThrows(
+                                IllegalArgumentException.class,
+                                () -> findingService.getSummary(createdFrom, createdTo));
+
+                verifyNoInteractions(organizationContext, findingRepository);
         }
 }

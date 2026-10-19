@@ -586,4 +586,31 @@ class FindingPersistenceIntegrationTest {
                 assertEquals(1L, summary.bySeverity().get(FindingSeverity.HIGH));
                 assertEquals(1L, summary.bySeverity().get(FindingSeverity.CRITICAL));
         }
+
+        @Test
+        void deberiaFiltrarElResumenPorIntervaloInclusivoDeCreacion() {
+                Instant createdFrom = Instant.parse("2000-01-02T00:00:00Z");
+                Instant createdTo = Instant.parse("2000-01-04T00:00:00Z");
+
+                saveFindingAt(
+                                "Antes del intervalo",
+                                Instant.parse("2000-01-01T23:59:59Z"));
+                saveFindingAt("Inicio del intervalo", createdFrom);
+                saveFindingAt(
+                                "Dentro del intervalo",
+                                Instant.parse("2000-01-03T00:00:00Z"));
+                saveFindingAt("Fin del intervalo", createdTo);
+                saveFindingAt(
+                                "Después del intervalo",
+                                Instant.parse("2000-01-04T00:00:01Z"));
+
+                FindingSummary summary = findingService.getSummary(
+                                createdFrom,
+                                createdTo);
+
+                assertEquals(3L, summary.total());
+                assertEquals(3L, summary.byStatus().get(FindingStatus.OPEN));
+                assertEquals(3L, summary.bySeverity().get(FindingSeverity.HIGH));
+                assertEquals(0L, summary.bySeverity().get(FindingSeverity.LOW));
+        }
 }
