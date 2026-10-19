@@ -114,13 +114,17 @@ La validación se realiza antes de guardar el hallazgo y antes de registrar el e
 
 El listado permite combinar:
 
-- Búsqueda textual en título y descripción.
+- Búsqueda textual en título y descripción mediante `q`.
 - Filtro por severidad.
 - Filtro por estado.
+- Rango de fechas de creación mediante `createdFrom` y `createdTo`.
 - Paginación.
 - Ordenación ascendente o descendente.
 
-La búsqueda textual utiliza el parámetro `q` y no distingue entre mayúsculas y minúsculas.
+Los límites de fecha son inclusivos y aceptan instantes en formato ISO-8601.
+Si `createdFrom` es posterior a `createdTo`, la API responde `400 VALIDATION_ERROR`.
+
+La búsqueda textual no distingue entre mayúsculas y minúsculas.
 
 ### Ordenación segura
 
@@ -511,6 +515,8 @@ Parámetros:
 | `action` | No | — | `CREATED`, `UPDATED`, `DELETED` o `COMMENTED`. |
 | `requestId` | No | — | Identificador de petición válido, máximo `64` caracteres. |
 | `actor` | No | — | Filtra por actor responsable mediante coincidencia exacta. Máximo `255` caracteres. |
+| `occurredFrom` | No | — | Fecha y hora inicial inclusiva, en formato ISO-8601. |
+| `occurredTo` | No | — | Fecha y hora final inclusiva, en formato ISO-8601. |
 
 Ejemplo sin filtros:
 
@@ -589,7 +595,7 @@ Los errores de ordenación inválida se responden con `400`:
   "code": "VALIDATION_ERROR",
   "message": "La petición contiene datos no válidos",
   "errors": {
-    "parameter": "El campo de ordenación no está permitido: password"
+    "sortBy": "El campo de ordenación no está permitido"
   }
 }
 ```
@@ -622,12 +628,14 @@ El cliente debe enviar:
 Authorization: Bearer <token>
 ```
 
-El token debe incluir, como mínimo:
+Para las operaciones protegidas de hallazgos, comentarios, auditoría y organización,
+el token debe incluir `organization_id` con el UUID de una organización existente.
+El claim `preferred_username` se utiliza como actor en los eventos de auditoría.
 
-```text
-preferred_username
-organization_id
-```
+El token para `GET /actuator/prometheus` debe pertenecer al issuer configurado,
+incluir la audiencia `securefindings-api` y tener el rol `ADMIN` o
+`METRICS_READER`. Este endpoint no requiere `organization_id`; el rol
+`METRICS_READER` no concede acceso a las operaciones de negocio de la API.
 
 Los roles se obtienen desde Keycloak:
 
@@ -673,13 +681,10 @@ PKCE `S256`, Direct Access Grants desactivado y esta URI de redirección:
 
 ### Rate limiting
 
-La API limita las peticiones a `/api/v1/**` mediante un token bucket almacenado en Redis. El contador es compartido entre las instancias de la aplicación y se actualiza mediante una operación atómica.
-
-La cuota se configura con `securefindings.rate-limit.max-requests`, `securefindings.rate-limit.window` y `securefindings.rate-limit.max-tracked-clients`. Los clientes se identifican por organización y usuario autenticado, o por dirección IP cuando no hay autenticación. La clave que se guarda en Redis es una huella SHA-256.
-
-Cuando se supera la cuota, la API responde `429 Too Many Requests` e incluye `Retry-After` y las cabeceras `X-RateLimit-*`. Si Redis no está disponible para comprobar la cuota, responde `503 Service Unavailable` y no procesa la petición. El endpoint `/api/v1/health` queda excluido.
-
-La ventana configurada debe ser de al menos un milisegundo; una duración menor o demasiado grande se rechaza durante el inicio de la aplicación.
+La API aplica un token bucket distribuido mediante Redis a las rutas
+`/api/v1/**`, excepto `/api/v1/health`. La sección **“Limitación de peticiones”**
+describe cómo se identifica cada cliente, cómo se configura el límite y qué
+respuestas devuelve la API cuando se alcanza la cuota o Redis no está disponible.
 
 ## Tecnologías
 
@@ -733,7 +738,8 @@ Se necesita:
 - Java 21.
 - Docker Desktop.
 - Git.
-- Acceso a un entorno Keycloak para obtener tokens JWT.
+- Docker Compose para iniciar el Keycloak local incluido en el proyecto. No hace
+  falta acceder a una instancia Keycloak externa para seguir esta guía.
 
 ## Configuración local
 
