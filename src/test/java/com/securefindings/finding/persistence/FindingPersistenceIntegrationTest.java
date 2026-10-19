@@ -613,4 +613,67 @@ class FindingPersistenceIntegrationTest {
                 assertEquals(3L, summary.bySeverity().get(FindingSeverity.HIGH));
                 assertEquals(0L, summary.bySeverity().get(FindingSeverity.LOW));
         }
+
+        @Test
+        void deberiaFiltrarLaAuditoriaPersistidaPorRangoDeFechasInclusive() {
+                Finding finding = findingService.create(
+                                "Hallazgo con auditoría filtrada por fecha",
+                                "Prueba de límites temporales inclusivos",
+                                FindingSeverity.HIGH);
+
+                Instant diaAnterior = Instant.parse("2020-01-01T00:00:00Z");
+                Instant desde = Instant.parse("2020-01-02T00:00:00Z");
+                Instant hasta = Instant.parse("2020-01-03T00:00:00Z");
+                Instant diaPosterior = Instant.parse("2020-01-04T00:00:00Z");
+
+                findingAuditRepository.saveAll(List.of(
+                                new FindingAuditEntity(
+                                                UUID.randomUUID(),
+                                                finding.id(),
+                                                ORGANIZATION_ID,
+                                                AuditAction.UPDATED,
+                                                "analista",
+                                                diaAnterior),
+                                new FindingAuditEntity(
+                                                UUID.randomUUID(),
+                                                finding.id(),
+                                                ORGANIZATION_ID,
+                                                AuditAction.UPDATED,
+                                                "analista",
+                                                desde),
+                                new FindingAuditEntity(
+                                                UUID.randomUUID(),
+                                                finding.id(),
+                                                ORGANIZATION_ID,
+                                                AuditAction.UPDATED,
+                                                "analista",
+                                                hasta),
+                                new FindingAuditEntity(
+                                                UUID.randomUUID(),
+                                                finding.id(),
+                                                ORGANIZATION_ID,
+                                                AuditAction.UPDATED,
+                                                "analista",
+                                                diaPosterior)));
+
+                Page<FindingAuditEntity> result = auditService.findPageByFindingId(
+                                finding.id(),
+                                0,
+                                20,
+                                null,
+                                null,
+                                null,
+                                desde,
+                                hasta);
+
+                assertEquals(2, result.getTotalElements());
+                assertEquals(
+                                List.of(desde, hasta),
+                                result.getContent().stream()
+                                                .map(event -> Objects.requireNonNull(
+                                                                event,
+                                                                "El repositorio devolvió un evento nulo")
+                                                                .getOccurredAt())
+                                                .toList());
+        }
 }
