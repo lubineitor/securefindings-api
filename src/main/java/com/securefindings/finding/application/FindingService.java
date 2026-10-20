@@ -2,6 +2,7 @@ package com.securefindings.finding.application;
 
 import java.time.Instant;
 import java.util.EnumMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -34,6 +35,7 @@ import com.securefindings.security.OrganizationContext;
 public class FindingService {
 
         private static final String SYSTEM_ACTOR = "system";
+        public static final int MAX_EXPORT_ROWS = 1_000;
 
         private final FindingRepository findingRepository;
         private final AuditService auditService;
@@ -224,6 +226,44 @@ public class FindingService {
                                                 pageable);
 
                 return toDomainPage(entities);
+        }
+
+        public List<Finding> findForExport(
+                        String searchTerm,
+                        FindingSeverity severity,
+                        FindingStatus status,
+                        Instant createdFrom,
+                        Instant createdTo) {
+
+                if (createdFrom != null
+                                && createdTo != null
+                                && createdFrom.isAfter(createdTo)) {
+                        throw new IllegalArgumentException(
+                                        "createdFrom no puede ser posterior a createdTo");
+                }
+
+                UUID organizationId = organizationContext.currentOrganizationId();
+                Pageable pageable = PageRequest.of(
+                                0,
+                                MAX_EXPORT_ROWS + 1,
+                                Sort.by(
+                                                Sort.Order.desc("createdAt"),
+                                                Sort.Order.asc("id")));
+
+                Page<FindingEntity> entities = findingRepository.findPageByFilters(
+                                organizationId,
+                                normalizeSearchTerm(searchTerm),
+                                severity,
+                                status,
+                                createdFrom,
+                                createdTo,
+                                pageable);
+
+                if (entities.getTotalElements() > MAX_EXPORT_ROWS) {
+                        throw new FindingExportLimitExceededException(MAX_EXPORT_ROWS);
+                }
+
+                return toDomainPage(entities).getContent();
         }
 
         public Optional<Finding> findById(UUID id) {

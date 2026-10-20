@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
+import com.securefindings.finding.application.FindingExportLimitExceededException;
 import com.securefindings.finding.application.FindingNotFoundException;
 import com.securefindings.finding.application.FindingStatusTransitionException;
 
@@ -228,5 +229,16 @@ public class GlobalExceptionHandler {
                                 "INVALID_STATUS_TRANSITION",
                                 exception.getMessage(),
                                 Map.of());
+        }
+
+        @ExceptionHandler(FindingExportLimitExceededException.class)
+        @ResponseStatus(HttpStatus.CONTENT_TOO_LARGE)
+        public ApiErrorResponse handleFindingExportLimitExceeded(
+                        FindingExportLimitExceededException exception) {
+
+                return new ApiErrorResponse(
+                                "EXPORT_LIMIT_EXCEEDED",
+                                exception.getMessage(),
+                                Map.of("limit", String.valueOf(exception.maximumRows())));
         }
 }
