@@ -22,6 +22,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
+import com.securefindings.finding.api.FindingCsvExporter;
 import com.securefindings.finding.api.FindingSortDirection;
 import com.securefindings.finding.api.FindingSortField;
 import com.securefindings.finding.application.FindingService;
@@ -40,6 +41,9 @@ class GlobalExceptionHandlerMvcTest {
 
         @MockitoBean
         private FindingService findingService;
+
+        @MockitoBean
+        private FindingCsvExporter findingCsvExporter;
 
         private MockMvc mockMvc;
 

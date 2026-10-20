@@ -12,6 +12,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 
 import java.time.Instant;
 import java.util.List;
@@ -33,6 +35,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
 import com.securefindings.api.error.GlobalExceptionHandler;
+import com.securefindings.finding.application.FindingExportLimitExceededException;
 import com.securefindings.finding.application.FindingNotFoundException;
 import com.securefindings.finding.application.FindingService;
 import com.securefindings.finding.application.FindingStatusTransitionException;
@@ -57,6 +60,9 @@ class FindingControllerTest {
         private FindingService findingService;
 
         private MockMvc mockMvc;
+
+        @MockitoBean
+        private FindingCsvExporter findingCsvExporter;
 
         @BeforeEach
         void configurarMockMvc() {
@@ -784,5 +790,65 @@ class FindingControllerTest {
                                 .andExpect(jsonPath("$.total").value(0));
 
                 verify(findingService).getSummary(createdFrom, createdTo);
+        }
+
+        @Test
+        void deberiaExportarHallazgosConLosFiltrosRecibidos() throws Exception {
+                Instant createdFrom = Instant.parse("2026-10-01T00:00:00Z");
+                Instant createdTo = Instant.parse("2026-10-19T23:59:59Z");
+                Finding finding = Finding.create(
+                                "SQL Injection",
+                                "Entrada sin validar",
+                                FindingSeverity.HIGH);
+                List<Finding> findings = List.of(finding);
+                String csv = "\"id\",\"title\"\r\n";
+
+                when(findingService.findForExport(
+                                "SQL",
+                                FindingSeverity.HIGH,
+                                FindingStatus.OPEN,
+                                createdFrom,
+                                createdTo))
+                                .thenReturn(findings);
+                when(findingCsvExporter.toCsv(findings)).thenReturn(csv);
+
+                mockMvc.perform(get("/api/v1/findings/export")
+                                .param("q", "SQL")
+                                .param("severity", "HIGH")
+                                .param("status", "OPEN")
+                                .param("createdFrom", createdFrom.toString())
+                                .param("createdTo", createdTo.toString()))
+                                .andExpect(status().isOk())
+                                .andExpect(content().contentTypeCompatibleWith("text/csv"))
+                                .andExpect(header().string(
+                                                "Content-Disposition",
+                                                "attachment; filename=\"securefindings.csv\""))
+                                .andExpect(header().string("Cache-Control", "no-store"))
+                                .andExpect(content().string(csv));
+
+                verify(findingService).findForExport(
+                                "SQL",
+                                FindingSeverity.HIGH,
+                                FindingStatus.OPEN,
+                                createdFrom,
+                                createdTo);
+        }
+
+        @Test
+        void deberiaDevolver413SiLaExportacionSuperaElLimite() throws Exception {
+                when(findingService.findForExport(
+                                null,
+                                null,
+                                null,
+                                null,
+                                null))
+                                .thenThrow(new FindingExportLimitExceededException(
+                                                FindingService.MAX_EXPORT_ROWS));
+
+                mockMvc.perform(get("/api/v1/findings/export"))
+                                .andExpect(status().is(413))
+                                .andExpect(jsonPath("$.code").value("EXPORT_LIMIT_EXCEEDED"))
+                                .andExpect(jsonPath("$.errors.limit")
+                                                .value(String.valueOf(FindingService.MAX_EXPORT_ROWS)));
         }
 }
