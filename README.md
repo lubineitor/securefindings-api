@@ -415,6 +415,7 @@ Las pruebas públicas devuelven únicamente el estado, sin mostrar componentes n
 | `PATCH` | `/api/v1/findings/{id}/status` | Actualiza el estado | `ANALYST`, `ADMIN` |
 | `DELETE` | `/api/v1/findings/{id}` | Elimina un hallazgo | `ADMIN` |
 | `GET` | `/api/v1/findings/summary` | Resume hallazgos por estado y severidad | `ANALYST`, `ADMIN` |
+| `GET` | `/api/v1/findings/export` | Exporta hallazgos filtrados a CSV | `ANALYST`, `ADMIN` |
 
 #### Resumen de hallazgos
 
@@ -432,6 +433,31 @@ Parámetros opcionales:
 | `createdTo` | Fecha de creación final inclusiva, en formato ISO-8601. |
 
 Si se envían ambos, `createdFrom` debe ser anterior o igual a `createdTo`.
+
+#### Exportación CSV
+
+`GET /api/v1/findings/export` descarga los hallazgos de la organización actual
+como `securefindings.csv`. Acepta los filtros `q`, `severity`, `status`,
+`createdFrom` y `createdTo`, con el mismo comportamiento que el listado. El orden
+es `createdAt DESC` e `id ASC`. Las fechas son inclusivas y `q` admite hasta 100
+caracteres.
+
+El archivo contiene las columnas `id`, `title`, `description`, `severity`,
+`status`, `createdAt` y `updatedAt`. Se descarga como `text/csv; charset=UTF-8`,
+con nombre `securefindings.csv` y la cabecera `Cache-Control: no-store`. La
+exportación admite hasta 1.000 filas; si los filtros coinciden con más resultados,
+la API devuelve `413` con el código
+`EXPORT_LIMIT_EXCEEDED` y el límite en `errors.limit`:
+
+```json
+{
+  "code": "EXPORT_LIMIT_EXCEEDED",
+  "message": "La exportación supera el máximo de 1000 hallazgos",
+  "errors": {
+    "limit": "1000"
+  }
+}
+```
 
 ### Organización actual
 

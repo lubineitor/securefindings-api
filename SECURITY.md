@@ -617,6 +617,19 @@ El parámetro `q`:
 
 Un valor vacío se trata como ausencia de filtro.
 
+## Exportación CSV
+
+La exportación reutiliza los filtros del listado y siempre consulta los hallazgos
+de la organización asociada al token. Se limita a 1.000 filas; si se supera ese
+límite, la API devuelve `413 EXPORT_LIMIT_EXCEEDED` antes de generar el CSV e
+incluye el máximo en `errors.limit`.
+
+El generador encierra cada campo entre comillas y duplica las comillas internas.
+También neutraliza los valores que comienzan con caracteres de fórmula de hoja
+de cálculo (`=`, `+`, `-` o `@`), incluso cuando están precedidos por espacios o
+caracteres de control. La descarga usa un nombre de archivo constante, codificación
+UTF-8 y la cabecera `Cache-Control: no-store`.
+
 ## Ordenación segura
 
 La API únicamente permite ordenar por campos previamente definidos:
@@ -926,6 +939,10 @@ El proyecto incluye pruebas para comprobar:
 - Validación de datos.
 - Parámetros de paginación.
 - Filtros y búsqueda.
+- Filtros de la exportación CSV dentro de la organización actual.
+- Escape de comas, comillas y saltos de línea en CSV.
+- Neutralización de fórmulas en celdas de CSV.
+- Respuesta `413` estructurada cuando la exportación supera 1.000 hallazgos.
 - Ordenación permitida.
 - Ordenación no permitida.
 - Filtros de auditoría por acción.

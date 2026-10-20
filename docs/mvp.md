@@ -27,6 +27,8 @@ en este documento y en `SECURITY.md`.
 - Migraciones PostgreSQL con Flyway, documentación OpenAPI y ejecución local con
   Docker Compose.
 - Resumen de hallazgos agrupados por estado y severidad para la organización actual.
+- Exportación CSV UTF-8 filtrada por organización, limitada a 1.000 hallazgos y
+  protegida frente a inyección de fórmulas en hojas de cálculo.
 
 ## Criterios de aceptación del MVP
 
