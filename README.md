@@ -499,6 +499,11 @@ el rol `ADMIN`.
 }
 ```
 
+El nombre es obligatorio y admite hasta 150 caracteres. El slug es obligatorio,
+único y admite hasta 100 caracteres; solo puede contener letras minúsculas,
+números y guiones simples entre segmentos. Si ya existe, la API devuelve
+`409 ORGANIZATION_SLUG_ALREADY_EXISTS`.
+
 #### Organización actual
 
 El cuerpo de la petición PATCH contiene el nombre, con un máximo de 150 caracteres:
@@ -702,7 +707,8 @@ incluir la audiencia `securefindings-api` y tener el rol `ADMIN` o
 Los roles se obtienen desde Keycloak:
 
 - `ANALYST`: puede consultar, crear y modificar hallazgos.
-- `ADMIN`: puede realizar todas las operaciones, incluida la eliminación.
+- `ADMIN`: puede realizar todas las operaciones sobre hallazgos, incluida la
+  eliminación, y administrar el directorio de organizaciones.
 
 La API valida también la audiencia del access token. El claim `aud` debe incluir `securefindings-api`, configurada mediante la variable `JWT_AUDIENCE`.
 
