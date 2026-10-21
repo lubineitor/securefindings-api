@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -17,6 +18,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -57,6 +60,63 @@ class OrganizationControllerTest {
                                 .webAppContextSetup(context)
                                 .apply(springSecurity())
                                 .build();
+        }
+
+        @Test
+        @WithMockUser(username = "administrador", roles = "ADMIN")
+        void deberiaListarOrganizacionesDeFormaPaginadaParaAdmin() throws Exception {
+                Organization first = new Organization(
+                                ORGANIZATION_ID,
+                                "Alpha Security",
+                                "alpha-security",
+                                CREATED_AT);
+                Organization second = new Organization(
+                                UUID.fromString("00000000-0000-0000-0000-000000000002"),
+                                "Secure Findings",
+                                "secure-findings",
+                                CREATED_AT);
+
+                when(organizationService.findOrganizations(0, 20))
+                                .thenReturn(new PageImpl<>(
+                                                List.of(first, second),
+                                                PageRequest.of(0, 20),
+                                                2));
+
+                mockMvc.perform(get("/api/v1/organizations"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.content").isArray())
+                                .andExpect(jsonPath("$.content[0].name")
+                                                .value("Alpha Security"))
+                                .andExpect(jsonPath("$.content[1].id")
+                                                .value(second.id().toString()))
+                                .andExpect(jsonPath("$.page").value(0))
+                                .andExpect(jsonPath("$.size").value(20))
+                                .andExpect(jsonPath("$.totalElements").value(2))
+                                .andExpect(jsonPath("$.totalPages").value(1))
+                                .andExpect(jsonPath("$.first").value(true))
+                                .andExpect(jsonPath("$.last").value(true));
+
+                verify(organizationService).findOrganizations(0, 20);
+        }
+
+        @Test
+        void deberiaRechazarAlAnalistaAlListarOrganizaciones() throws Exception {
+                mockMvc.perform(get("/api/v1/organizations"))
+                                .andExpect(status().isForbidden());
+
+                verifyNoInteractions(organizationService);
+        }
+
+        @Test
+        @WithMockUser(username = "administrador", roles = "ADMIN")
+        void deberiaRechazarUnTamanoDePaginaSuperiorAlMaximo() throws Exception {
+                mockMvc.perform(get("/api/v1/organizations")
+                                .param("size", "101"))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                                .andExpect(jsonPath("$.errors.size").exists());
+
+                verifyNoInteractions(organizationService);
         }
 
         @Test
