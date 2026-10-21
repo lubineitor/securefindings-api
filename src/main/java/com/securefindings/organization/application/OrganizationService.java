@@ -3,6 +3,9 @@ package com.securefindings.organization.application;
 import java.util.Objects;
 import java.util.UUID;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,6 +37,21 @@ public class OrganizationService {
                 UUID organizationId = organizationContext.currentOrganizationId();
 
                 return findOrganization(organizationId);
+        }
+
+        public Page<Organization> findOrganizations(int page, int size) {
+                Page<OrganizationEntity> organizations = organizationRepository.findAll(
+                                PageRequest.of(
+                                                page,
+                                                size,
+                                                Sort.by(
+                                                                Sort.Order.asc("name"),
+                                                                Sort.Order.asc("id"))));
+
+                return organizations.map(entity -> Objects.requireNonNull(
+                                entity,
+                                "El repositorio devolvió una organización nula")
+                                .toDomain());
         }
 
         @Transactional

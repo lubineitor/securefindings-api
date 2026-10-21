@@ -103,6 +103,11 @@ public class SecurityConfig {
 
                                                 .requestMatchers(
                                                                 HttpMethod.GET,
+                                                                "/api/v1/organizations")
+                                                .hasRole("ADMIN")
+
+                                                .requestMatchers(
+                                                                HttpMethod.GET,
                                                                 "/api/v1/organizations/current")
                                                 .hasAnyRole("ANALYST", "ADMIN")
 
