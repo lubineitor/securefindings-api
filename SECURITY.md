@@ -96,6 +96,7 @@ Los principales riesgos considerados son:
 | Comentarios | Contenido no validado | Validación de longitud y obligatoriedad |
 | Credenciales | Exposición en el repositorio | `.env` excluido y `.env.example` sin secretos |
 | Dependencias | Vulnerabilidades conocidas | Revisión automatizada y CodeQL |
+| Directorio de organizaciones | Enumeración o creación no autorizada de organizaciones | El listado, la consulta global y el alta requieren `ADMIN`; la paginación limita cada respuesta a 100 organizaciones y el slug es único |
 
 ## Autenticación
 
@@ -213,6 +214,9 @@ Los permisos se aplican por endpoint:
 | Listar organizaciones | No | Sí |
 | Consultar la organización actual | Sí | Sí |
 | Actualizar el nombre de la organización actual | No | Sí |
+| Listar organizaciones | No | Sí |
+| Consultar una organización por identificador | No | Sí |
+| Crear organizaciones | No | Sí |
 
 La aplicación responde:
 
@@ -980,6 +984,12 @@ El proyecto incluye pruebas para comprobar:
 - Exclusión del endpoint de health check.
 - Integración del filtro con Spring Security.
 - Acceso a las métricas Prometheus sin autenticación, con rol `ANALYST` y con rol `ADMIN`.
+- Listado global de organizaciones reservado a `ADMIN`.
+- Límites y ordenación de la paginación de organizaciones.
+- Consulta individual de organizaciones reservada a `ADMIN`.
+- Creación de organizaciones reservada a `ADMIN`.
+- Validación del nombre y el formato del slug de una organización.
+- Rechazo de slugs duplicados, incluidos conflictos detectados al guardar.
 
 Las pruebas de integración utilizan PostgreSQL para verificar el comportamiento real de las consultas y restricciones de persistencia.
 

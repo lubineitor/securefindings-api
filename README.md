@@ -464,6 +464,8 @@ la API devuelve `413` con el código
 | Método | Endpoint | Descripción | Rol |
 |---|---|---|---|
 | `GET` | `/api/v1/organizations` | Lista organizaciones de forma paginada | `ADMIN` |
+| `GET` | `/api/v1/organizations/{id}` | Consulta una organización por identificador | `ADMIN` |
+| `POST` | `/api/v1/organizations` | Crea una organización | `ADMIN` |
 | `GET` | `/api/v1/organizations/current` | Consulta la organización asociada al token | `ANALYST`, `ADMIN` |
 | `PATCH` | `/api/v1/organizations/current` | Actualiza el nombre visible de la organización | `ADMIN` |
 
@@ -477,6 +479,25 @@ solo está disponible para el rol `ADMIN`. La respuesta se pagina con orden
 |---|---:|---|
 | `page` | `0` | Mayor o igual que `0` |
 | `size` | `20` | Entre `1` y `100` |
+
+#### Consultar una organización
+
+`GET /api/v1/organizations/{id}` devuelve una organización por su UUID. Solo
+está disponible para el rol `ADMIN`. Si el UUID no existe, la API responde
+`404 ORGANIZATION_NOT_FOUND`.
+
+#### Crear una organización
+
+`POST /api/v1/organizations` crea una organización y devuelve `201 Created`, el
+recurso en el cuerpo y su URL en la cabecera `Location`. La operación requiere
+el rol `ADMIN`.
+
+```json
+{
+  "name": "Acme Security",
+  "slug": "acme-security"
+}
+```
 
 #### Organización actual
 

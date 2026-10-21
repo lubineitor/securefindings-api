@@ -30,6 +30,8 @@ en este documento y en `SECURITY.md`.
 - Resumen de hallazgos agrupados por estado y severidad para la organización actual.
 - Exportación CSV UTF-8 filtrada por organización, limitada a 1.000 hallazgos y
   protegida frente a inyección de fórmulas en hojas de cálculo.
+- Listado global paginado, consulta individual y creación de organizaciones,
+  restringidos al rol `ADMIN`.
 
 ## Criterios de aceptación del MVP
 
