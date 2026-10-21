@@ -1,8 +1,10 @@
 package com.securefindings.organization.application;
 
+import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -52,6 +54,46 @@ public class OrganizationService {
                                 entity,
                                 "El repositorio devolvió una organización nula")
                                 .toDomain());
+        }
+
+        public Organization getOrganization(UUID organizationId) {
+                return organizationRepository
+                                .findById(Objects.requireNonNull(organizationId))
+                                .map(entity -> Objects.requireNonNull(
+                                                entity,
+                                                "El repositorio devolvió una organización nula")
+                                                .toDomain())
+                                .orElseThrow(() -> new OrganizationNotFoundException(
+                                                organizationId));
+        }
+
+        @Transactional
+        public Organization createOrganization(String name, String slug) {
+                String normalizedSlug = Objects.requireNonNull(slug).trim();
+
+                if (organizationRepository.existsBySlug(normalizedSlug)) {
+                        throw new OrganizationSlugAlreadyExistsException(normalizedSlug);
+                }
+
+                Organization organization = new Organization(
+                                UUID.randomUUID(),
+                                Objects.requireNonNull(name).trim(),
+                                normalizedSlug,
+                                Instant.now());
+
+                try {
+                        OrganizationEntity savedEntity = organizationRepository.saveAndFlush(
+                                        new OrganizationEntity(organization));
+
+                        return Objects.requireNonNull(
+                                        savedEntity,
+                                        "El repositorio devolvió una organización nula")
+                                        .toDomain();
+                } catch (DataIntegrityViolationException exception) {
+                        throw new OrganizationSlugAlreadyExistsException(
+                                        normalizedSlug,
+                                        exception);
+                }
         }
 
         @Transactional

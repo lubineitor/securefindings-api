@@ -22,6 +22,8 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import com.securefindings.finding.application.FindingExportLimitExceededException;
 import com.securefindings.finding.application.FindingNotFoundException;
 import com.securefindings.finding.application.FindingStatusTransitionException;
+import com.securefindings.organization.application.OrganizationNotFoundException;
+import com.securefindings.organization.application.OrganizationSlugAlreadyExistsException;
 
 import jakarta.validation.ConstraintViolationException;
 
@@ -240,5 +242,27 @@ public class GlobalExceptionHandler {
                                 "EXPORT_LIMIT_EXCEEDED",
                                 exception.getMessage(),
                                 Map.of("limit", String.valueOf(exception.maximumRows())));
+        }
+
+        @ExceptionHandler(OrganizationNotFoundException.class)
+        @ResponseStatus(HttpStatus.NOT_FOUND)
+        public ApiErrorResponse handleOrganizationNotFound(
+                        OrganizationNotFoundException exception) {
+
+                return new ApiErrorResponse(
+                                "ORGANIZATION_NOT_FOUND",
+                                exception.getMessage(),
+                                Map.of());
+        }
+
+        @ExceptionHandler(OrganizationSlugAlreadyExistsException.class)
+        @ResponseStatus(HttpStatus.CONFLICT)
+        public ApiErrorResponse handleOrganizationSlugAlreadyExists(
+                        OrganizationSlugAlreadyExistsException exception) {
+
+                return new ApiErrorResponse(
+                                "ORGANIZATION_SLUG_ALREADY_EXISTS",
+                                exception.getMessage(),
+                                Map.of("slug", exception.slug()));
         }
 }
