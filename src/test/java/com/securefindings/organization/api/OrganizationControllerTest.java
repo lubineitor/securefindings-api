@@ -8,6 +8,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 
 import java.time.Instant;
 import java.util.List;
@@ -28,7 +30,9 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
 import com.securefindings.api.error.GlobalExceptionHandler;
+import com.securefindings.organization.application.OrganizationNotFoundException;
 import com.securefindings.organization.application.OrganizationService;
+import com.securefindings.organization.application.OrganizationSlugAlreadyExistsException;
 import com.securefindings.organization.domain.Organization;
 import com.securefindings.security.SecurityConfig;
 
@@ -210,5 +214,155 @@ class OrganizationControllerTest {
                                                 .value("El nombre de la organización es obligatorio"));
 
                 verifyNoInteractions(organizationService);
+        }
+
+        @Test
+        @WithMockUser(username = "administrador", roles = "ADMIN")
+        void deberiaConsultarUnaOrganizacionPorIdentificadorParaAdmin() throws Exception {
+                Organization organization = new Organization(
+                                ORGANIZATION_ID,
+                                "Secure Findings",
+                                "secure-findings",
+                                CREATED_AT);
+
+                when(organizationService.getOrganization(ORGANIZATION_ID))
+                                .thenReturn(organization);
+
+                mockMvc.perform(get("/api/v1/organizations/{id}", ORGANIZATION_ID))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.id").value(ORGANIZATION_ID.toString()))
+                                .andExpect(jsonPath("$.name").value("Secure Findings"))
+                                .andExpect(jsonPath("$.slug").value("secure-findings"));
+
+                verify(organizationService).getOrganization(ORGANIZATION_ID);
+        }
+
+        @Test
+        void deberiaRechazarAlAnalistaAlConsultarUnaOrganizacion() throws Exception {
+                mockMvc.perform(get("/api/v1/organizations/{id}", ORGANIZATION_ID))
+                                .andExpect(status().isForbidden());
+
+                verifyNoInteractions(organizationService);
+        }
+
+        @Test
+        @WithMockUser(username = "administrador", roles = "ADMIN")
+        void deberiaDevolver404SiLaOrganizacionNoExiste() throws Exception {
+                when(organizationService.getOrganization(ORGANIZATION_ID))
+                                .thenThrow(new OrganizationNotFoundException(ORGANIZATION_ID));
+
+                mockMvc.perform(get("/api/v1/organizations/{id}", ORGANIZATION_ID))
+                                .andExpect(status().isNotFound())
+                                .andExpect(jsonPath("$.code").value("ORGANIZATION_NOT_FOUND"));
+        }
+
+        @Test
+        @WithMockUser(username = "administrador", roles = "ADMIN")
+        void deberiaCrearOrganizacionYDevolverLocation() throws Exception {
+                UUID createdId = UUID.fromString(
+                                "00000000-0000-0000-0000-000000000010");
+
+                Organization created = new Organization(
+                                createdId,
+                                "Acme Security",
+                                "acme-security",
+                                CREATED_AT);
+
+                when(organizationService.createOrganization(
+                                "Acme Security",
+                                "acme-security"))
+                                .thenReturn(created);
+
+                mockMvc.perform(post("/api/v1/organizations")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                                {
+                                                    "name": "Acme Security",
+                                                    "slug": "acme-security"
+                                                }
+                                                """))
+                                .andExpect(status().isCreated())
+                                .andExpect(header().exists("Location"))
+                                .andExpect(jsonPath("$.id").value(createdId.toString()))
+                                .andExpect(jsonPath("$.name").value("Acme Security"))
+                                .andExpect(jsonPath("$.slug").value("acme-security"));
+
+                verify(organizationService).createOrganization(
+                                "Acme Security",
+                                "acme-security");
+        }
+
+        @Test
+        void deberiaRechazarAlAnalistaAlCrearUnaOrganizacion() throws Exception {
+                mockMvc.perform(post("/api/v1/organizations")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                                {
+                                                    "name": "Acme Security",
+                                                    "slug": "acme-security"
+                                                }
+                                                """))
+                                .andExpect(status().isForbidden());
+
+                verifyNoInteractions(organizationService);
+        }
+
+        @Test
+        @WithMockUser(username = "administrador", roles = "ADMIN")
+        void deberiaRechazarUnSlugConFormatoInvalidoAlCrear() throws Exception {
+                mockMvc.perform(post("/api/v1/organizations")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                                {
+                                                    "name": "Acme Security",
+                                                    "slug": "Acme Security"
+                                                }
+                                                """))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                                .andExpect(jsonPath("$.errors.slug").exists());
+
+                verifyNoInteractions(organizationService);
+        }
+
+        @Test
+        @WithMockUser(username = "administrador", roles = "ADMIN")
+        void deberiaRechazarUnNombreVacioAlCrear() throws Exception {
+                mockMvc.perform(post("/api/v1/organizations")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                                {
+                                                    "name": " ",
+                                                    "slug": "acme-security"
+                                                }
+                                                """))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                                .andExpect(jsonPath("$.errors.name").exists());
+
+                verifyNoInteractions(organizationService);
+        }
+
+        @Test
+        @WithMockUser(username = "administrador", roles = "ADMIN")
+        void deberiaDevolver409SiElSlugYaEstaEnUso() throws Exception {
+                when(organizationService.createOrganization(
+                                "Acme Security",
+                                "acme-security"))
+                                .thenThrow(new OrganizationSlugAlreadyExistsException(
+                                                "acme-security"));
+
+                mockMvc.perform(post("/api/v1/organizations")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                                {
+                                                    "name": "Acme Security",
+                                                    "slug": "acme-security"
+                                                }
+                                                """))
+                                .andExpect(status().isConflict())
+                                .andExpect(jsonPath("$.code")
+                                                .value("ORGANIZATION_SLUG_ALREADY_EXISTS"))
+                                .andExpect(jsonPath("$.errors.slug").value("acme-security"));
         }
 }
