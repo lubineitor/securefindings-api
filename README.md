@@ -459,12 +459,26 @@ la API devuelve `413` con el código
 }
 ```
 
-### Organización actual
+### Organizaciones
 
 | Método | Endpoint | Descripción | Rol |
 |---|---|---|---|
+| `GET` | `/api/v1/organizations` | Lista organizaciones de forma paginada | `ADMIN` |
 | `GET` | `/api/v1/organizations/current` | Consulta la organización asociada al token | `ANALYST`, `ADMIN` |
 | `PATCH` | `/api/v1/organizations/current` | Actualiza el nombre visible de la organización | `ADMIN` |
+
+#### Listar organizaciones
+
+`GET /api/v1/organizations` devuelve el directorio global de organizaciones y
+solo está disponible para el rol `ADMIN`. La respuesta se pagina con orden
+`name ASC` e `id ASC`.
+
+| Parámetro | Valor predeterminado | Límites |
+|---|---:|---|
+| `page` | `0` | Mayor o igual que `0` |
+| `size` | `20` | Entre `1` y `100` |
+
+#### Organización actual
 
 El cuerpo de la petición PATCH contiene el nombre, con un máximo de 150 caracteres:
 
@@ -507,6 +521,7 @@ instantes ISO-8601, por ejemplo:
 
 ```text
 GET /api/v1/findings?createdFrom=2026-10-01T00:00:00Z&createdTo=2026-10-17T23:59:59Z
+```
 
 La respuesta paginada contiene:
 
@@ -997,7 +1012,7 @@ SECURITY.md
 
 El proyecto continúa en desarrollo. Algunas líneas futuras son:
 
-- Mejorar la administración de organizaciones.
+- Ampliar las operaciones de administración de organizaciones.
 - Añadir más reglas de autorización.
 - Configurar paneles y alertas para las métricas Prometheus.
 - Mejorar la configuración de producción.

@@ -86,6 +86,7 @@ Los principales riesgos considerados son:
 | API REST | Acceso sin autenticación | OAuth2 Resource Server y JWT |
 | API REST | Abuso automatizado o exceso de solicitudes | Rate limiting configurable |
 | Tokens | Manipulación o falsificación | Validación de firma, emisor y expiración |
+| Directorio de organizaciones | Enumeración de organizaciones por analistas | El listado global requiere `ADMIN` y limita el tamaño de página a 100 |
 | Parámetros de búsqueda | Inyección o consultas no controladas | Parámetros enlazados mediante JPA |
 | Ordenación | Manipulación de propiedades internas | Lista blanca de campos permitidos |
 | Filtros de auditoría | Acceso a eventos de otra organización o filtros arbitrarios | Organización derivada del token, enums y parámetros enlazados |
@@ -209,6 +210,7 @@ Los permisos se aplican por endpoint:
 | Consultar comentarios | Sí | Sí |
 | Crear comentarios | Sí | Sí |
 | Eliminar hallazgos | No | Sí |
+| Listar organizaciones | No | Sí |
 | Consultar la organización actual | Sí | Sí |
 | Actualizar el nombre de la organización actual | No | Sí |
 
@@ -932,6 +934,8 @@ El proyecto incluye pruebas para comprobar:
 - Acceso con rol insuficiente.
 - Permisos de `ANALYST`.
 - Permisos de `ADMIN`.
+- Listado global de organizaciones reservado a `ADMIN`.
+- Límites y ordenación de la paginación de organizaciones.
 - Rechazo de claims inválidos.
 - Rechazo de organizaciones inexistentes.
 - Aislamiento entre organizaciones.

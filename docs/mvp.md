@@ -19,6 +19,7 @@ en este documento y en `SECURITY.md`.
   con validación de transiciones.
 - Paginación, filtros y ordenación limitada a campos permitidos.
 - Consulta y actualización del nombre visible de la organización actual.
+- Listado global paginado de organizaciones, restringido al rol `ADMIN`.
 - Comentarios asociados a hallazgos y eventos de auditoría.
 - Identificador `X-Request-ID` para relacionar peticiones y logs.
 - Rate limiting distribuido mediante Redis, con respuestas `429` y `503` ante
@@ -46,7 +47,7 @@ en este documento y en `SECURITY.md`.
 ## Pendiente antes de considerar producción
 
 - Configurar paneles y alertas para las métricas Prometheus.
-- Completar la administración de organizaciones y revisar las reglas de
+- Ampliar la administración de organizaciones y revisar las reglas de
   autorización necesarias.
 - Revisar CORS, TLS, gestión centralizada y rotación de secretos.
 - Endurecer y escanear imágenes y contenedores.
