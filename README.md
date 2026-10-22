@@ -465,6 +465,7 @@ la API devuelve `413` con el código
 |---|---|---|---|
 | `GET` | `/api/v1/organizations` | Lista organizaciones de forma paginada | `ADMIN` |
 | `GET` | `/api/v1/organizations/{id}` | Consulta una organización por identificador | `ADMIN` |
+| `PATCH` | `/api/v1/organizations/{id}` | Actualiza el nombre visible de una organización | `ADMIN` |
 | `POST` | `/api/v1/organizations` | Crea una organización | `ADMIN` |
 | `GET` | `/api/v1/organizations/current` | Consulta la organización asociada al token | `ANALYST`, `ADMIN` |
 | `PATCH` | `/api/v1/organizations/current` | Actualiza el nombre visible de la organización | `ADMIN` |
@@ -485,6 +486,19 @@ solo está disponible para el rol `ADMIN`. La respuesta se pagina con orden
 `GET /api/v1/organizations/{id}` devuelve una organización por su UUID. Solo
 está disponible para el rol `ADMIN`. Si el UUID no existe, la API responde
 `404 ORGANIZATION_NOT_FOUND`.
+
+#### Actualizar una organización
+
+`PATCH /api/v1/organizations/{id}` actualiza el nombre visible de una
+organización y requiere el rol `ADMIN`. El UUID, el slug y la fecha de creación
+se mantienen. El cuerpo utiliza el mismo formato que la actualización de la
+organización actual:
+
+```json
+{
+  "name": "Acme Security Europe"
+}
+```
 
 #### Crear una organización
 
@@ -695,9 +709,13 @@ El cliente debe enviar:
 Authorization: Bearer <token>
 ```
 
-Para las operaciones protegidas de hallazgos, comentarios, auditoría y organización,
-el token debe incluir `organization_id` con el UUID de una organización existente.
-El claim `preferred_username` se utiliza como actor en los eventos de auditoría.
+Para las operaciones de hallazgos, comentarios, auditoría y las rutas
+`/api/v1/organizations/current`, el token debe incluir `organization_id` con el
+UUID de una organización existente. Las operaciones globales del directorio
+(`GET` y `POST /api/v1/organizations`, además de `GET` y `PATCH`
+`/api/v1/organizations/{id}`) requieren `ADMIN` y no dependen de
+`organization_id`. El claim `preferred_username` se utiliza como actor en los
+eventos de auditoría.
 
 El token para `GET /actuator/prometheus` debe pertenecer al issuer configurado,
 incluir la audiencia `securefindings-api` y tener el rol `ADMIN` o

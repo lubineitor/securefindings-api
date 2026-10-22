@@ -86,6 +86,7 @@ Los principales riesgos considerados son:
 | API REST | Acceso sin autenticación | OAuth2 Resource Server y JWT |
 | API REST | Abuso automatizado o exceso de solicitudes | Rate limiting configurable |
 | Tokens | Manipulación o falsificación | Validación de firma, emisor y expiración |
+| Directorio de organizaciones | Enumeración o modificación no autorizada de organizaciones | El listado, la consulta, la actualización y el alta requieren `ADMIN`; la paginación limita cada respuesta a 100 organizaciones y el slug es único |
 | Parámetros de búsqueda | Inyección o consultas no controladas | Parámetros enlazados mediante JPA |
 | Ordenación | Manipulación de propiedades internas | Lista blanca de campos permitidos |
 | Filtros de auditoría | Acceso a eventos de otra organización o filtros arbitrarios | Organización derivada del token, enums y parámetros enlazados |
@@ -95,7 +96,6 @@ Los principales riesgos considerados son:
 | Comentarios | Contenido no validado | Validación de longitud y obligatoriedad |
 | Credenciales | Exposición en el repositorio | `.env` excluido y `.env.example` sin secretos |
 | Dependencias | Vulnerabilidades conocidas | Revisión automatizada y CodeQL |
-| Directorio de organizaciones | Enumeración o creación no autorizada de organizaciones | El listado, la consulta global y el alta requieren `ADMIN`; la paginación limita cada respuesta a 100 organizaciones y el slug es único |
 
 ## Autenticación
 
@@ -195,6 +195,34 @@ La petición debe rechazarse.
 La organización nunca debe aceptarse desde un parámetro enviado por el cliente como mecanismo de autorización.
 
 Los endpoints `GET /api/v1/organizations/current` y `PATCH /api/v1/organizations/current` usan exclusivamente la organización del token. El PATCH solo permite modificar el nombre visible y requiere el rol `ADMIN`; el identificador, el slug y la fecha de creación se mantienen estables.
+
+Las operaciones de hallazgos, comentarios, auditoría y
+`/api/v1/organizations/current` requieren ese claim y rechazan la petición si el
+token:
+
+- No contiene `organization_id`.
+- Contiene un valor con formato inválido.
+- Hace referencia a una organización inexistente.
+
+La petición debe rechazarse. Las operaciones globales del directorio de
+organizaciones requieren `ADMIN` y no utilizan `organization_id`, porque
+gestionan el directorio completo o una organización seleccionada por UUID.
+
+La organización nunca debe aceptarse desde un parámetro enviado por el cliente
+como mecanismo de autorización.
+
+Los endpoints `GET /api/v1/organizations/current` y
+`PATCH /api/v1/organizations/current` usan exclusivamente la organización del
+token. El PATCH solo permite modificar el nombre visible y requiere el rol
+`ADMIN`; el identificador, el slug y la fecha de creación se mantienen estables.
+
+El directorio global usa `GET /api/v1/organizations`,
+`GET /api/v1/organizations/{id}`, `PATCH /api/v1/organizations/{id}` y
+`POST /api/v1/organizations`; todas las operaciones requieren el rol `ADMIN`.
+La actualización por UUID solo modifica el nombre visible y conserva el slug y
+la fecha de creación. El alta valida el nombre y el formato del slug y comprueba
+su unicidad. La restricción única de la base de datos protege también frente a
+altas simultáneas con el mismo slug.
 
 ## Autorización
 
@@ -985,6 +1013,13 @@ El proyecto incluye pruebas para comprobar:
 - Listado global de organizaciones reservado a `ADMIN`.
 - Límites y ordenación de la paginación de organizaciones.
 - Consulta individual de organizaciones reservada a `ADMIN`.
+- Creación de organizaciones reservada a `ADMIN`.
+- Validación del nombre y el formato del slug de una organización.
+- Rechazo de slugs duplicados, incluidos conflictos detectados al guardar.
+- Listado, consulta y actualización globales de organizaciones reservados a `ADMIN`.
+- Límites y ordenación de la paginación de organizaciones.
+- Consulta individual de organizaciones reservada a `ADMIN`.
+- Actualización por UUID reservada a `ADMIN` y conservación del slug y la fecha de creación.
 - Creación de organizaciones reservada a `ADMIN`.
 - Validación del nombre y el formato del slug de una organización.
 - Rechazo de slugs duplicados, incluidos conflictos detectados al guardar.
