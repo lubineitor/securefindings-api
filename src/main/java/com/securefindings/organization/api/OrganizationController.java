@@ -32,6 +32,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Size;
 
 @RestController
 @RequestMapping("/api/v1/organizations")
@@ -49,7 +50,7 @@ public class OrganizationController {
         @Operation(summary = "Listar organizaciones", description = "Devuelve una página de organizaciones. Solo ADMIN puede consultar el directorio global.")
         @ApiResponses({
                         @ApiResponse(responseCode = "200", description = "Organizaciones recuperadas correctamente", content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = @Schema(implementation = OrganizationPageResponse.class))),
-                        @ApiResponse(responseCode = "400", description = "Los parámetros de paginación no son válidos", content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class))),
+                        @ApiResponse(responseCode = "400", description = "Los parámetros de búsqueda o paginación no son válidos", content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class))),
                         @ApiResponse(responseCode = "401", description = "Token ausente o inválido"),
                         @ApiResponse(responseCode = "403", description = "Solo ADMIN puede listar organizaciones"),
                         @ApiResponse(responseCode = "429", description = "Se ha superado el límite de peticiones", headers = {
@@ -60,11 +61,16 @@ public class OrganizationController {
                         }, content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class)))
         })
         public OrganizationPageResponse findOrganizations(
+                        @Parameter(description = "Filtra por una parte del nombre o del slug, sin distinguir mayúsculas", example = "acme", in = ParameterIn.QUERY) @RequestParam(name = "q", required = false) @Size(max = 100) String query,
+
                         @Parameter(description = "Número de página. Empieza en 0", example = "0", in = ParameterIn.QUERY) @RequestParam(name = "page", defaultValue = "0") @Min(0) int page,
 
                         @Parameter(description = "Número máximo de organizaciones por página", example = "20", in = ParameterIn.QUERY) @RequestParam(name = "size", defaultValue = "20") @Min(1) @Max(100) int size) {
 
-                Page<Organization> organizations = organizationService.findOrganizations(page, size);
+                Page<Organization> organizations = organizationService.findOrganizations(
+                                page,
+                                size,
+                                query);
 
                 return OrganizationPageResponse.from(organizations);
         }

@@ -41,14 +41,26 @@ public class OrganizationService {
                 return findOrganization(organizationId);
         }
 
-        public Page<Organization> findOrganizations(int page, int size) {
-                Page<OrganizationEntity> organizations = organizationRepository.findAll(
-                                PageRequest.of(
-                                                page,
-                                                size,
-                                                Sort.by(
-                                                                Sort.Order.asc("name"),
-                                                                Sort.Order.asc("id"))));
+        public Page<Organization> findOrganizations(
+                        int page,
+                        int size,
+                        String query) {
+                String normalizedQuery = query == null ? null : query.trim();
+                var pageable = PageRequest.of(
+                                page,
+                                size,
+                                Sort.by(
+                                                Sort.Order.asc("name"),
+                                                Sort.Order.asc("id")));
+
+                Page<OrganizationEntity> organizations = normalizedQuery == null
+                                || normalizedQuery.isEmpty()
+                                                ? organizationRepository.findAll(pageable)
+                                                : organizationRepository
+                                                                .findByNameContainingIgnoreCaseOrSlugContainingIgnoreCase(
+                                                                                normalizedQuery,
+                                                                                normalizedQuery,
+                                                                                pageable);
 
                 return organizations.map(entity -> Objects.requireNonNull(
                                 entity,
