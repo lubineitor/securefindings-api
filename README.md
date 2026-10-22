@@ -480,6 +480,7 @@ solo está disponible para el rol `ADMIN`. La respuesta se pagina con orden
 |---|---:|---|
 | `page` | `0` | Mayor o igual que `0` |
 | `size` | `20` | Entre `1` y `100` |
+| `q` | Sin filtro | Hasta 100 caracteres; busca por nombre o slug sin distinguir mayúsculas |
 
 #### Consultar una organización
 

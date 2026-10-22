@@ -34,6 +34,8 @@ en este documento y en `SECURITY.md`.
   protegida frente a inyección de fórmulas en hojas de cálculo.
 - Listado global paginado, consulta individual y creación de organizaciones,
   restringidos al rol `ADMIN`.
+- Búsqueda y listado global paginado, consulta y actualización por UUID, y
+  creación de organizaciones, restringidos al rol `ADMIN`.
 
 ## Criterios de aceptación del MVP
 
