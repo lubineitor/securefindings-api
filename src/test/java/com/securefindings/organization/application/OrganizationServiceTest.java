@@ -58,7 +58,8 @@ class OrganizationServiceTest {
                                 .thenReturn(ORGANIZATION_ID);
 
                 when(organizationRepository.findById(ORGANIZATION_ID))
-                                .thenReturn(Optional.of(new OrganizationEntity(expected)));
+                                .thenReturn(Optional.of(
+                                                new OrganizationEntity(expected)));
 
                 Organization actual = organizationService.getCurrentOrganization();
 
@@ -90,7 +91,6 @@ class OrganizationServiceTest {
                                 "Alpha Security",
                                 "alpha-security",
                                 Instant.parse("2026-10-01T10:00:00Z"));
-
                 Organization second = new Organization(
                                 UUID.fromString("00000000-0000-0000-0000-000000000002"),
                                 "Secure Findings",
@@ -100,7 +100,6 @@ class OrganizationServiceTest {
                 when(organizationRepository.findAll(any(Pageable.class)))
                                 .thenAnswer(invocation -> {
                                         Pageable pageable = invocation.getArgument(0);
-
                                         return new PageImpl<>(
                                                         List.of(
                                                                         new OrganizationEntity(first),
@@ -115,7 +114,6 @@ class OrganizationServiceTest {
                 assertEquals(2, actual.getTotalElements());
 
                 ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-
                 verify(organizationRepository).findAll(pageableCaptor.capture());
 
                 assertEquals(0, pageableCaptor.getValue().getPageNumber());
@@ -153,10 +151,52 @@ class OrganizationServiceTest {
         }
 
         @Test
+        void deberiaActualizarElNombreSinCambiarElSlugNiLaFechaDeCreacion() {
+                Instant createdAt = Instant.parse("2026-10-01T10:00:00Z");
+                Organization original = new Organization(
+                                ORGANIZATION_ID,
+                                "Secure Findings",
+                                "secure-findings",
+                                createdAt);
+
+                when(organizationRepository.findById(ORGANIZATION_ID))
+                                .thenReturn(Optional.of(new OrganizationEntity(original)));
+                when(organizationRepository.save(any(OrganizationEntity.class)))
+                                .thenAnswer(invocation -> invocation.getArgument(0));
+
+                Organization actual = organizationService.updateOrganization(
+                                ORGANIZATION_ID,
+                                "  Secure Findings Europe  ");
+
+                assertEquals(
+                                new Organization(
+                                                ORGANIZATION_ID,
+                                                "Secure Findings Europe",
+                                                "secure-findings",
+                                                createdAt),
+                                actual);
+                verify(organizationRepository).save(any(OrganizationEntity.class));
+        }
+
+        @Test
+        void deberiaRechazarLaActualizacionSiLaOrganizacionNoExiste() {
+                when(organizationRepository.findById(ORGANIZATION_ID))
+                                .thenReturn(Optional.empty());
+
+                assertThrows(
+                                OrganizationNotFoundException.class,
+                                () -> organizationService.updateOrganization(
+                                                ORGANIZATION_ID,
+                                                "Secure Findings Europe"));
+
+                verify(organizationRepository, never())
+                                .save(any(OrganizationEntity.class));
+        }
+
+        @Test
         void deberiaCrearOrganizacionConNombreNormalizado() {
                 when(organizationRepository.existsBySlug("acme-security"))
                                 .thenReturn(false);
-
                 when(organizationRepository.saveAndFlush(any(OrganizationEntity.class)))
                                 .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -185,7 +225,6 @@ class OrganizationServiceTest {
                                                 "acme-security"));
 
                 assertEquals("acme-security", exception.slug());
-
                 verify(organizationRepository, never())
                                 .saveAndFlush(any(OrganizationEntity.class));
         }
@@ -194,7 +233,6 @@ class OrganizationServiceTest {
         void deberiaConvertirUnaColisionDeSlugEnConflictoDeDominio() {
                 when(organizationRepository.existsBySlug("acme-security"))
                                 .thenReturn(false);
-
                 when(organizationRepository.saveAndFlush(any(OrganizationEntity.class)))
                                 .thenThrow(new DataIntegrityViolationException("unique slug"));
 
