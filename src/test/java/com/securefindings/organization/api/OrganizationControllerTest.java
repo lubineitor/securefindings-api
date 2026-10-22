@@ -81,7 +81,7 @@ class OrganizationControllerTest {
                                 "secure-findings",
                                 CREATED_AT);
 
-                when(organizationService.findOrganizations(0, 20))
+                when(organizationService.findOrganizations(0, 20, null))
                                 .thenReturn(new PageImpl<>(
                                                 List.of(first, second),
                                                 PageRequest.of(0, 20),
@@ -101,7 +101,51 @@ class OrganizationControllerTest {
                                 .andExpect(jsonPath("$.first").value(true))
                                 .andExpect(jsonPath("$.last").value(true));
 
-                verify(organizationService).findOrganizations(0, 20);
+                verify(organizationService).findOrganizations(0, 20, null);
+        }
+
+        @Test
+        @WithMockUser(username = "administrador", roles = "ADMIN")
+        void deberiaFiltrarOrganizacionesPorNombreOSlug() throws Exception {
+                Organization organization = new Organization(
+                                ORGANIZATION_ID,
+                                "Acme Security",
+                                "acme-security",
+                                CREATED_AT);
+
+                when(organizationService.findOrganizations(1, 10, "acme"))
+                                .thenReturn(new PageImpl<>(
+                                                List.of(organization),
+                                                PageRequest.of(1, 10),
+                                                11));
+
+                mockMvc.perform(get("/api/v1/organizations")
+                                .param("q", "acme")
+                                .param("page", "1")
+                                .param("size", "10"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.content[0].slug")
+                                                .value("acme-security"))
+                                .andExpect(jsonPath("$.page").value(1))
+                                .andExpect(jsonPath("$.size").value(10))
+                                .andExpect(jsonPath("$.totalElements").value(11));
+
+                verify(organizationService).findOrganizations(1, 10, "acme");
+        }
+
+        @Test
+        @WithMockUser(username = "administrador", roles = "ADMIN")
+        void deberiaRechazarUnaBusquedaDeOrganizacionesSuperiorAlMaximo()
+                        throws Exception {
+
+                mockMvc.perform(get("/api/v1/organizations")
+                                .param("q", "a".repeat(101)))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.code")
+                                                .value("VALIDATION_ERROR"))
+                                .andExpect(jsonPath("$.errors.q").exists());
+
+                verifyNoInteractions(organizationService);
         }
 
         @Test

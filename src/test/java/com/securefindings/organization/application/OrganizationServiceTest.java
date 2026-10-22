@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -108,7 +109,7 @@ class OrganizationServiceTest {
                                                         2);
                                 });
 
-                Page<Organization> actual = organizationService.findOrganizations(0, 20);
+                Page<Organization> actual = organizationService.findOrganizations(0, 20, "   ");
 
                 assertEquals(List.of(first, second), actual.getContent());
                 assertEquals(2, actual.getTotalElements());
@@ -121,6 +122,41 @@ class OrganizationServiceTest {
                 assertEquals(
                                 Sort.by(Sort.Order.asc("name"), Sort.Order.asc("id")),
                                 pageableCaptor.getValue().getSort());
+        }
+
+        @Test
+        void deberiaBuscarOrganizacionesPorNombreOSlugSinDistincionDeMayusculas() {
+                Organization expected = new Organization(
+                                ORGANIZATION_ID,
+                                "Acme Security",
+                                "acme-security",
+                                Instant.parse("2026-10-01T10:00:00Z"));
+
+                when(organizationRepository
+                                .findByNameContainingIgnoreCaseOrSlugContainingIgnoreCase(
+                                                eq("Acme"),
+                                                eq("Acme"),
+                                                any(Pageable.class)))
+                                .thenAnswer(invocation -> {
+                                        Pageable pageable = invocation.getArgument(2);
+                                        return new PageImpl<>(
+                                                        List.of(new OrganizationEntity(expected)),
+                                                        pageable,
+                                                        1);
+                                });
+
+                Page<Organization> actual = organizationService.findOrganizations(
+                                0,
+                                20,
+                                "  Acme  ");
+
+                assertEquals(List.of(expected), actual.getContent());
+                assertEquals(1, actual.getTotalElements());
+                verify(organizationRepository)
+                                .findByNameContainingIgnoreCaseOrSlugContainingIgnoreCase(
+                                                eq("Acme"),
+                                                eq("Acme"),
+                                                any(Pageable.class));
         }
 
         @Test
