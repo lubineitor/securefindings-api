@@ -68,6 +68,13 @@ public class OrganizationService {
         }
 
         @Transactional
+        public Organization updateOrganization(UUID organizationId, String name) {
+                Organization organization = getOrganization(organizationId);
+
+                return updateOrganizationName(organization, name);
+        }
+
+        @Transactional
         public Organization createOrganization(String name, String slug) {
                 String normalizedSlug = Objects.requireNonNull(slug).trim();
 
@@ -101,11 +108,17 @@ public class OrganizationService {
                 UUID organizationId = organizationContext.currentOrganizationId();
                 Organization currentOrganization = findOrganization(organizationId);
 
+                return updateOrganizationName(currentOrganization, name);
+        }
+
+        private Organization updateOrganizationName(
+                        Organization organization,
+                        String name) {
                 Organization updatedOrganization = new Organization(
-                                currentOrganization.id(),
+                                organization.id(),
                                 Objects.requireNonNull(name).trim(),
-                                currentOrganization.slug(),
-                                currentOrganization.createdAt());
+                                organization.slug(),
+                                organization.createdAt());
 
                 OrganizationEntity savedEntity = organizationRepository.save(
                                 new OrganizationEntity(updatedOrganization));

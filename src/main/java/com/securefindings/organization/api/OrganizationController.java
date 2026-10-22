@@ -64,9 +64,7 @@ public class OrganizationController {
 
                         @Parameter(description = "Número máximo de organizaciones por página", example = "20", in = ParameterIn.QUERY) @RequestParam(name = "size", defaultValue = "20") @Min(1) @Max(100) int size) {
 
-                Page<Organization> organizations = organizationService.findOrganizations(
-                                page,
-                                size);
+                Page<Organization> organizations = organizationService.findOrganizations(page, size);
 
                 return OrganizationPageResponse.from(organizations);
         }
@@ -93,8 +91,33 @@ public class OrganizationController {
                                 organizationService.getOrganization(organizationId));
         }
 
+        @PatchMapping(value = "/{organizationId}", consumes = MediaType.APPLICATION_JSON_VALUE)
+        @Operation(summary = "Actualizar una organización", description = "Actualiza el nombre visible de una organización por identificador. Solo ADMIN puede hacerlo; el ID, el slug y la fecha de creación se mantienen.")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "200", description = "Organización actualizada correctamente", content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = @Schema(implementation = OrganizationResponse.class))),
+                        @ApiResponse(responseCode = "400", description = "El identificador o el nombre no son válidos", content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class))),
+                        @ApiResponse(responseCode = "401", description = "Token ausente o inválido"),
+                        @ApiResponse(responseCode = "403", description = "Solo ADMIN puede actualizar organizaciones"),
+                        @ApiResponse(responseCode = "404", description = "La organización no existe", content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class))),
+                        @ApiResponse(responseCode = "429", description = "Se ha superado el límite de peticiones", headers = {
+                                        @Header(name = "Retry-After", description = "Segundos que deben transcurrir antes de reintentar", schema = @Schema(type = "integer", format = "int64")),
+                                        @Header(name = "X-RateLimit-Limit", description = "Capacidad máxima del cubo de tokens", schema = @Schema(type = "integer", format = "int32")),
+                                        @Header(name = "X-RateLimit-Remaining", description = "Tokens enteros disponibles", schema = @Schema(type = "integer", format = "int32")),
+                                        @Header(name = "X-RateLimit-Reset", description = "Instante Unix en que el cubo volverá a estar lleno", schema = @Schema(type = "integer", format = "int64"))
+                        }, content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class)))
+        })
+        public OrganizationResponse updateOrganization(
+                        @Parameter(description = "Identificador UUID de la organización", example = "00000000-0000-0000-0000-000000000001", in = ParameterIn.PATH) @PathVariable("organizationId") UUID organizationId,
+                        @Valid @RequestBody UpdateOrganizationRequest request) {
+
+                return OrganizationResponse.from(
+                                organizationService.updateOrganization(
+                                                organizationId,
+                                                request.name()));
+        }
+
         @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
-        @Operation(summary = "Crear una organización", description = "Crea una organización con un nombre y un slug únicos. Solo ADMIN puede crear organizaciones.")
+        @Operation(summary = "Crear una organización", description = "Crea una organización con un nombre y un slug único. Solo ADMIN puede crear organizaciones.")
         @ApiResponses({
                         @ApiResponse(responseCode = "201", description = "Organización creada correctamente", content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = @Schema(implementation = OrganizationResponse.class))),
                         @ApiResponse(responseCode = "400", description = "Los datos de la organización no son válidos", content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = @Schema(implementation = ApiErrorResponse.class))),
