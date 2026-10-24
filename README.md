@@ -469,6 +469,7 @@ la API devuelve `413` con el código
 | `POST` | `/api/v1/organizations` | Crea una organización | `ADMIN` |
 | `GET` | `/api/v1/organizations/current` | Consulta la organización asociada al token | `ANALYST`, `ADMIN` |
 | `PATCH` | `/api/v1/organizations/current` | Actualiza el nombre visible de la organización | `ADMIN` |
+| `DELETE` | `/api/v1/organizations/{id}` | Elimina una organización vacía | `ADMIN` |
 
 #### Listar organizaciones
 
@@ -513,6 +514,13 @@ el rol `ADMIN`.
   "slug": "acme-security"
 }
 ```
+
+#### Eliminar una organización
+
+`DELETE /api/v1/organizations/{id}` elimina una organización solo si no tiene
+hallazgos, comentarios ni eventos de auditoría asociados. La operación requiere
+`ADMIN` y devuelve `204 No Content` si se completa. Si conserva datos, devuelve
+`409 ORGANIZATION_HAS_ASSOCIATED_DATA`; la API no elimina ni modifica esos datos.
 
 El nombre es obligatorio y admite hasta 150 caracteres. El slug es obligatorio,
 único y admite hasta 100 caracteres; solo puede contener letras minúsculas,

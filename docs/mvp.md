@@ -35,7 +35,8 @@ en este documento y en `SECURITY.md`.
 - Listado global paginado, consulta individual y creación de organizaciones,
   restringidos al rol `ADMIN`.
 - Búsqueda y listado global paginado, consulta y actualización por UUID, y
-  creación de organizaciones, restringidos al rol `ADMIN`.
+  creación de organizaciones, además de eliminación segura de organizaciones
+  vacías, restringidos al rol `ADMIN`.
 
 ## Criterios de aceptación del MVP
 

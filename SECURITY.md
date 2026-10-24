@@ -86,7 +86,7 @@ Los principales riesgos considerados son:
 | API REST | Acceso sin autenticación | OAuth2 Resource Server y JWT |
 | API REST | Abuso automatizado o exceso de solicitudes | Rate limiting configurable |
 | Tokens | Manipulación o falsificación | Validación de firma, emisor y expiración |
-| Directorio de organizaciones | Enumeración o modificación no autorizada de organizaciones | El listado, la consulta, la actualización y el alta requieren `ADMIN`; la paginación limita cada respuesta a 100 organizaciones, la búsqueda a 100 caracteres y el slug es único |
+| Directorio de organizaciones | Enumeración, modificación o eliminación no autorizada de organizaciones | El listado, la consulta, la actualización, el alta y la eliminación requieren `ADMIN`; la paginación limita cada respuesta a 100 organizaciones, la búsqueda a 100 caracteres, el slug es único y solo se eliminan organizaciones sin datos asociados |
 | Parámetros de búsqueda | Inyección o consultas no controladas | Parámetros enlazados mediante JPA |
 | Ordenación | Manipulación de propiedades internas | Lista blanca de campos permitidos |
 | Filtros de auditoría | Acceso a eventos de otra organización o filtros arbitrarios | Organización derivada del token, enums y parámetros enlazados |
@@ -1025,6 +1025,8 @@ El proyecto incluye pruebas para comprobar:
 - Rechazo de slugs duplicados, incluidos conflictos detectados al guardar.
 - Búsqueda, límites y ordenación de la paginación de organizaciones.
 - Búsqueda por nombre y slug con PostgreSQL, sin distinguir mayúsculas.
+- Rechazo de la eliminación de organizaciones con hallazgos, comentarios o auditoría.
+- Eliminación de una organización vacía y protección de la clave foránea ante concurrencia.
 
 Las pruebas de integración utilizan PostgreSQL para verificar el comportamiento real de las consultas y restricciones de persistencia.
 
