@@ -180,6 +180,11 @@ Las transiciones de estado no permitidas no generan eventos de auditoría.
 
 El campo `requestId` se obtiene de la cabecera `X-Request-ID` y del contexto MDC. Se persiste en `finding_audit.request_id` y se devuelve al consultar el historial del hallazgo.
 
+También se puede consultar el historial completo de la organización actual:
+
+```text
+GET /api/v1/organizations/current/audit
+
 #### Filtros de auditoría
 
 El historial puede filtrarse por:
