@@ -22,6 +22,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import com.securefindings.finding.application.FindingExportLimitExceededException;
 import com.securefindings.finding.application.FindingNotFoundException;
 import com.securefindings.finding.application.FindingStatusTransitionException;
+import com.securefindings.organization.application.OrganizationHasAssociatedDataException;
 import com.securefindings.organization.application.OrganizationNotFoundException;
 import com.securefindings.organization.application.OrganizationSlugAlreadyExistsException;
 
@@ -264,5 +265,16 @@ public class GlobalExceptionHandler {
                                 "ORGANIZATION_SLUG_ALREADY_EXISTS",
                                 exception.getMessage(),
                                 Map.of("slug", exception.slug()));
+        }
+
+        @ExceptionHandler(OrganizationHasAssociatedDataException.class)
+        @ResponseStatus(HttpStatus.CONFLICT)
+        public ApiErrorResponse handleOrganizationHasAssociatedData(
+                        OrganizationHasAssociatedDataException exception) {
+
+                return new ApiErrorResponse(
+                                "ORGANIZATION_HAS_ASSOCIATED_DATA",
+                                exception.getMessage(),
+                                Map.of("organizationId", exception.organizationId().toString()));
         }
 }

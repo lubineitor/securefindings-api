@@ -91,4 +91,6 @@ public interface FindingRepository
                         @Param("organizationId") UUID organizationId,
                         @Param("createdFrom") Instant createdFrom,
                         @Param("createdTo") Instant createdTo);
+
+        boolean existsByOrganizationId(UUID organizationId);
 }

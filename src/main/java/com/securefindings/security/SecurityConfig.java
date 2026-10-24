@@ -165,6 +165,11 @@ public class SecurityConfig {
                                                 .requestMatchers("/actuator/prometheus")
                                                 .hasAnyRole("ADMIN", "METRICS_READER")
 
+                                                .requestMatchers(
+                                                                HttpMethod.DELETE,
+                                                                "/api/v1/organizations/*")
+                                                .hasRole("ADMIN")
+
                                                 .anyRequest()
                                                 .hasAnyRole("ANALYST", "ADMIN"))
 

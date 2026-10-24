@@ -7,10 +7,12 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface FindingCommentRepository
-        extends JpaRepository<FindingCommentEntity, UUID> {
+                extends JpaRepository<FindingCommentEntity, UUID> {
 
-    Page<FindingCommentEntity> findByFindingIdAndOrganizationIdOrderByCreatedAtAscIdAsc(
-            UUID findingId,
-            UUID organizationId,
-            Pageable pageable);
+        Page<FindingCommentEntity> findByFindingIdAndOrganizationIdOrderByCreatedAtAscIdAsc(
+                        UUID findingId,
+                        UUID organizationId,
+                        Pageable pageable);
+
+        boolean existsByOrganizationId(UUID organizationId);
 }

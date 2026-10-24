@@ -5,6 +5,7 @@ import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -193,5 +194,22 @@ public class OrganizationController {
                 return OrganizationResponse.from(
                                 organizationService.updateCurrentOrganizationName(
                                                 request.name()));
+        }
+
+        @DeleteMapping("/{organizationId}")
+        @Operation(summary = "Eliminar una organización vacía", description = "Solo ADMIN puede eliminar una organización que no tenga hallazgos, comentarios ni eventos de auditoría asociados.")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "204", description = "Organización eliminada"),
+                        @ApiResponse(responseCode = "400", description = "El identificador no es un UUID válido"),
+                        @ApiResponse(responseCode = "401", description = "Token ausente o inválido"),
+                        @ApiResponse(responseCode = "403", description = "Solo ADMIN puede eliminar organizaciones"),
+                        @ApiResponse(responseCode = "404", description = "La organización no existe"),
+                        @ApiResponse(responseCode = "409", description = "La organización conserva datos asociados")
+        })
+        public ResponseEntity<Void> deleteOrganization(
+                        @Parameter(description = "Identificador UUID de la organización", example = "00000000-0000-0000-0000-000000000001", in = ParameterIn.PATH) @PathVariable("organizationId") UUID organizationId) {
+
+                organizationService.deleteOrganization(organizationId);
+                return ResponseEntity.noContent().build();
         }
 }

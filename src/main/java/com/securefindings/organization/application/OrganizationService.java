@@ -12,6 +12,9 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.securefindings.audit.persistence.FindingAuditRepository;
+import com.securefindings.comment.persistence.FindingCommentRepository;
+import com.securefindings.finding.persistence.FindingRepository;
 import com.securefindings.organization.domain.Organization;
 import com.securefindings.organization.persistence.OrganizationEntity;
 import com.securefindings.organization.persistence.OrganizationRepository;
@@ -23,16 +26,22 @@ public class OrganizationService {
 
         private final OrganizationRepository organizationRepository;
         private final OrganizationContext organizationContext;
+        private final FindingRepository findingRepository;
+        private final FindingCommentRepository findingCommentRepository;
+        private final FindingAuditRepository findingAuditRepository;
 
         public OrganizationService(
                         OrganizationRepository organizationRepository,
-                        OrganizationContext organizationContext) {
+                        OrganizationContext organizationContext,
+                        FindingRepository findingRepository,
+                        FindingCommentRepository findingCommentRepository,
+                        FindingAuditRepository findingAuditRepository) {
 
-                this.organizationRepository = Objects.requireNonNull(
-                                organizationRepository);
-
-                this.organizationContext = Objects.requireNonNull(
-                                organizationContext);
+                this.organizationRepository = Objects.requireNonNull(organizationRepository);
+                this.organizationContext = Objects.requireNonNull(organizationContext);
+                this.findingRepository = Objects.requireNonNull(findingRepository);
+                this.findingCommentRepository = Objects.requireNonNull(findingCommentRepository);
+                this.findingAuditRepository = Objects.requireNonNull(findingAuditRepository);
         }
 
         public Organization getCurrentOrganization() {
@@ -150,5 +159,27 @@ public class OrganizationService {
                                                 .toDomain())
                                 .orElseThrow(() -> new AccessDeniedException(
                                                 "La organización del token no existe"));
+        }
+
+        @Transactional
+        public void deleteOrganization(UUID organizationId) {
+                UUID checkedOrganizationId = Objects.requireNonNull(organizationId);
+                getOrganization(checkedOrganizationId);
+
+                if (findingRepository.existsByOrganizationId(checkedOrganizationId)
+                                || findingCommentRepository.existsByOrganizationId(checkedOrganizationId)
+                                || findingAuditRepository.existsByOrganizationId(checkedOrganizationId)) {
+                        throw new OrganizationHasAssociatedDataException(checkedOrganizationId);
+                }
+
+                try {
+                        organizationRepository.deleteById(checkedOrganizationId);
+                        organizationRepository.flush();
+                } catch (DataIntegrityViolationException exception) {
+                        // La clave foránea de PostgreSQL protege también ante escrituras concurrentes.
+                        throw new OrganizationHasAssociatedDataException(
+                                        checkedOrganizationId,
+                                        exception);
+                }
         }
 }
