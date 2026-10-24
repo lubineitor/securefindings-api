@@ -341,4 +341,34 @@ public class AuditService {
 
                 return auditRepository.findAll(specification, pageable);
         }
+
+        @Transactional(readOnly = true)
+        public Page<FindingAuditEntity> findPageByOrganization(
+                        int page,
+                        int size,
+                        AuditAction action,
+                        String requestId,
+                        String actor,
+                        Instant occurredFrom,
+                        Instant occurredTo) {
+
+                if (occurredFrom != null
+                                && occurredTo != null
+                                && occurredFrom.isAfter(occurredTo)) {
+                        throw new IllegalArgumentException(
+                                        "occurredFrom debe ser anterior o igual a occurredTo");
+                }
+
+                UUID organizationId = organizationContext.currentOrganizationId();
+                Pageable pageable = createPageable(page, size);
+
+                return auditRepository.findPageByOrganizationIdAndFilters(
+                                organizationId,
+                                action,
+                                requestId,
+                                actor,
+                                occurredFrom,
+                                occurredTo,
+                                pageable);
+        }
 }
