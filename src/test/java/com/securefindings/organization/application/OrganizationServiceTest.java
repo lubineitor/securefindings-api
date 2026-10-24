@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -27,6 +28,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.access.AccessDeniedException;
 
+import com.securefindings.audit.persistence.FindingAuditRepository;
+import com.securefindings.comment.persistence.FindingCommentRepository;
+import com.securefindings.finding.persistence.FindingRepository;
 import com.securefindings.organization.domain.Organization;
 import com.securefindings.organization.persistence.OrganizationEntity;
 import com.securefindings.organization.persistence.OrganizationRepository;
@@ -46,6 +50,15 @@ class OrganizationServiceTest {
 
         @InjectMocks
         private OrganizationService organizationService;
+
+        @Mock
+        private FindingRepository findingRepository;
+
+        @Mock
+        private FindingCommentRepository findingCommentRepository;
+
+        @Mock
+        private FindingAuditRepository findingAuditRepository;
 
         @Test
         void deberiaDevolverLaOrganizacionDelContextoActual() {
@@ -279,5 +292,86 @@ class OrganizationServiceTest {
                                                 "acme-security"));
 
                 assertEquals("acme-security", exception.slug());
+        }
+
+        @Test
+        void deberiaEliminarUnaOrganizacionSinDatosAsociados() {
+                Organization organization = new Organization(
+                                ORGANIZATION_ID,
+                                "Secure Findings",
+                                "secure-findings",
+                                Instant.parse("2026-10-01T10:00:00Z"));
+
+                when(organizationRepository.findById(ORGANIZATION_ID))
+                                .thenReturn(Optional.of(new OrganizationEntity(organization)));
+                when(findingRepository.existsByOrganizationId(ORGANIZATION_ID))
+                                .thenReturn(false);
+                when(findingCommentRepository.existsByOrganizationId(ORGANIZATION_ID))
+                                .thenReturn(false);
+                when(findingAuditRepository.existsByOrganizationId(ORGANIZATION_ID))
+                                .thenReturn(false);
+
+                organizationService.deleteOrganization(ORGANIZATION_ID);
+
+                verify(organizationRepository).deleteById(ORGANIZATION_ID);
+                verify(organizationRepository).flush();
+        }
+
+        @Test
+        void deberiaImpedirEliminarOrganizacionesConHallazgosComentariosOAuditoria() {
+                Organization organization = new Organization(
+                                ORGANIZATION_ID,
+                                "Secure Findings",
+                                "secure-findings",
+                                Instant.parse("2026-10-01T10:00:00Z"));
+
+                when(organizationRepository.findById(ORGANIZATION_ID))
+                                .thenReturn(Optional.of(new OrganizationEntity(organization)));
+                when(findingRepository.existsByOrganizationId(ORGANIZATION_ID))
+                                .thenReturn(true, false, false);
+                when(findingCommentRepository.existsByOrganizationId(ORGANIZATION_ID))
+                                .thenReturn(false, true, false);
+                when(findingAuditRepository.existsByOrganizationId(ORGANIZATION_ID))
+                                .thenReturn(true);
+
+                assertThrows(
+                                OrganizationHasAssociatedDataException.class,
+                                () -> organizationService.deleteOrganization(ORGANIZATION_ID));
+                assertThrows(
+                                OrganizationHasAssociatedDataException.class,
+                                () -> organizationService.deleteOrganization(ORGANIZATION_ID));
+                assertThrows(
+                                OrganizationHasAssociatedDataException.class,
+                                () -> organizationService.deleteOrganization(ORGANIZATION_ID));
+
+                verify(organizationRepository, never()).deleteById(ORGANIZATION_ID);
+                verify(organizationRepository, never()).flush();
+        }
+
+        @Test
+        void deberiaConvertirUnConflictoDeClaveForaneaEnConflictoDeDominio() {
+                Organization organization = new Organization(
+                                ORGANIZATION_ID,
+                                "Secure Findings",
+                                "secure-findings",
+                                Instant.parse("2026-10-01T10:00:00Z"));
+
+                when(organizationRepository.findById(ORGANIZATION_ID))
+                                .thenReturn(Optional.of(new OrganizationEntity(organization)));
+                when(findingRepository.existsByOrganizationId(ORGANIZATION_ID))
+                                .thenReturn(false);
+                when(findingCommentRepository.existsByOrganizationId(ORGANIZATION_ID))
+                                .thenReturn(false);
+                when(findingAuditRepository.existsByOrganizationId(ORGANIZATION_ID))
+                                .thenReturn(false);
+                doThrow(new DataIntegrityViolationException("foreign key"))
+                                .when(organizationRepository).flush();
+
+                OrganizationHasAssociatedDataException exception = assertThrows(
+                                OrganizationHasAssociatedDataException.class,
+                                () -> organizationService.deleteOrganization(ORGANIZATION_ID));
+
+                assertEquals(ORGANIZATION_ID, exception.organizationId());
+                assertNotNull(exception.getCause());
         }
 }

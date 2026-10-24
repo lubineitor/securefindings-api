@@ -1,6 +1,7 @@
 package com.securefindings.organization.api;
 
 import static org.hamcrest.Matchers.endsWith;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -11,6 +12,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 
 import java.time.Instant;
 import java.util.List;
@@ -31,6 +33,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
 import com.securefindings.api.error.GlobalExceptionHandler;
+import com.securefindings.organization.application.OrganizationHasAssociatedDataException;
 import com.securefindings.organization.application.OrganizationNotFoundException;
 import com.securefindings.organization.application.OrganizationSlugAlreadyExistsException;
 import com.securefindings.organization.application.OrganizationService;
@@ -549,5 +552,49 @@ class OrganizationControllerTest {
                                                 .value("El nombre de la organización es obligatorio"));
 
                 verifyNoInteractions(organizationService);
+        }
+
+        @Test
+        @WithMockUser(username = "administrador", roles = "ADMIN")
+        void deberiaEliminarUnaOrganizacionVaciaYDevolver204() throws Exception {
+                mockMvc.perform(delete("/api/v1/organizations/{id}", ORGANIZATION_ID))
+                                .andExpect(status().isNoContent());
+
+                verify(organizationService).deleteOrganization(ORGANIZATION_ID);
+        }
+
+        @Test
+        void deberiaRechazarAlAnalistaAlEliminarUnaOrganizacion() throws Exception {
+                mockMvc.perform(delete("/api/v1/organizations/{id}", ORGANIZATION_ID))
+                                .andExpect(status().isForbidden());
+
+                verifyNoInteractions(organizationService);
+        }
+
+        @Test
+        @WithMockUser(username = "administrador", roles = "ADMIN")
+        void deberiaDevolver404AlEliminarUnaOrganizacionInexistente() throws Exception {
+                doThrow(new OrganizationNotFoundException(ORGANIZATION_ID))
+                                .when(organizationService)
+                                .deleteOrganization(ORGANIZATION_ID);
+
+                mockMvc.perform(delete("/api/v1/organizations/{id}", ORGANIZATION_ID))
+                                .andExpect(status().isNotFound())
+                                .andExpect(jsonPath("$.code").value("ORGANIZATION_NOT_FOUND"));
+        }
+
+        @Test
+        @WithMockUser(username = "administrador", roles = "ADMIN")
+        void deberiaDevolver409SiLaOrganizacionTieneDatosAsociados() throws Exception {
+                doThrow(new OrganizationHasAssociatedDataException(ORGANIZATION_ID))
+                                .when(organizationService)
+                                .deleteOrganization(ORGANIZATION_ID);
+
+                mockMvc.perform(delete("/api/v1/organizations/{id}", ORGANIZATION_ID))
+                                .andExpect(status().isConflict())
+                                .andExpect(jsonPath("$.code")
+                                                .value("ORGANIZATION_HAS_ASSOCIATED_DATA"))
+                                .andExpect(jsonPath("$.errors.organizationId")
+                                                .value(ORGANIZATION_ID.toString()));
         }
 }
