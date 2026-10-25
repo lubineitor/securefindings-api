@@ -30,6 +30,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 
+import com.securefindings.asset.persistence.AssetRepository;
 import com.securefindings.audit.application.AuditService;
 import com.securefindings.finding.api.FindingSortDirection;
 import com.securefindings.finding.api.FindingSortField;
@@ -58,6 +59,9 @@ class FindingServiceTest {
 
         @InjectMocks
         private FindingService findingService;
+
+        @Mock
+        private AssetRepository assetRepository;
 
         @BeforeEach
         void configurarOrganizacion() {
