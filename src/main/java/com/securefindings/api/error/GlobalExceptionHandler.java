@@ -19,6 +19,10 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
+import com.securefindings.asset.application.AssetArchivedException;
+import com.securefindings.asset.application.AssetHasFindingsException;
+import com.securefindings.asset.application.AssetIdentifierAlreadyExistsException;
+import com.securefindings.asset.application.AssetNotFoundException;
 import com.securefindings.finding.application.FindingExportLimitExceededException;
 import com.securefindings.finding.application.FindingNotFoundException;
 import com.securefindings.finding.application.FindingStatusTransitionException;
@@ -276,5 +280,42 @@ public class GlobalExceptionHandler {
                                 "ORGANIZATION_HAS_ASSOCIATED_DATA",
                                 exception.getMessage(),
                                 Map.of("organizationId", exception.organizationId().toString()));
+        }
+
+        @ExceptionHandler(AssetNotFoundException.class)
+        @ResponseStatus(HttpStatus.NOT_FOUND)
+        public ApiErrorResponse handleAssetNotFound(AssetNotFoundException exception) {
+                return new ApiErrorResponse(
+                                "ASSET_NOT_FOUND",
+                                exception.getMessage(),
+                                Map.of("assetId", exception.assetId().toString()));
+        }
+
+        @ExceptionHandler(AssetIdentifierAlreadyExistsException.class)
+        @ResponseStatus(HttpStatus.CONFLICT)
+        public ApiErrorResponse handleAssetIdentifierAlreadyExists(
+                        AssetIdentifierAlreadyExistsException exception) {
+                return new ApiErrorResponse(
+                                "ASSET_IDENTIFIER_ALREADY_EXISTS",
+                                exception.getMessage(),
+                                Map.of("identifier", exception.identifier()));
+        }
+
+        @ExceptionHandler(AssetHasFindingsException.class)
+        @ResponseStatus(HttpStatus.CONFLICT)
+        public ApiErrorResponse handleAssetHasFindings(AssetHasFindingsException exception) {
+                return new ApiErrorResponse(
+                                "ASSET_HAS_FINDINGS",
+                                exception.getMessage(),
+                                Map.of("assetId", exception.assetId().toString()));
+        }
+
+        @ExceptionHandler(AssetArchivedException.class)
+        @ResponseStatus(HttpStatus.CONFLICT)
+        public ApiErrorResponse handleAssetArchived(AssetArchivedException exception) {
+                return new ApiErrorResponse(
+                                "ASSET_ARCHIVED",
+                                exception.getMessage(),
+                                Map.of("assetId", exception.assetId().toString()));
         }
 }

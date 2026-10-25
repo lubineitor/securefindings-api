@@ -133,6 +133,27 @@ public class SecurityConfig {
 
                                                 .requestMatchers(
                                                                 HttpMethod.GET,
+                                                                "/api/v1/assets",
+                                                                "/api/v1/assets/**")
+                                                .hasAnyRole("ANALYST", "ADMIN")
+
+                                                .requestMatchers(
+                                                                HttpMethod.POST,
+                                                                "/api/v1/assets")
+                                                .hasRole("ADMIN")
+
+                                                .requestMatchers(
+                                                                HttpMethod.PATCH,
+                                                                "/api/v1/assets/**")
+                                                .hasRole("ADMIN")
+
+                                                .requestMatchers(
+                                                                HttpMethod.DELETE,
+                                                                "/api/v1/assets/**")
+                                                .hasRole("ADMIN")
+
+                                                .requestMatchers(
+                                                                HttpMethod.GET,
                                                                 "/api/v1/findings",
                                                                 "/api/v1/findings/**")
                                                 .hasAnyRole("ANALYST", "ADMIN")
