@@ -11,7 +11,19 @@ public record Finding(
         FindingSeverity severity,
         FindingStatus status,
         Instant createdAt,
-        Instant updatedAt) {
+        Instant updatedAt,
+        UUID assetId) {
+
+    public Finding(
+            UUID id,
+            String title,
+            String description,
+            FindingSeverity severity,
+            FindingStatus status,
+            Instant createdAt,
+            Instant updatedAt) {
+        this(id, title, description, severity, status, createdAt, updatedAt, null);
+    }
 
     public Finding {
         Objects.requireNonNull(id, "El identificador no puede ser nulo");
@@ -33,6 +45,14 @@ public record Finding(
             String title,
             String description,
             FindingSeverity severity) {
+        return create(title, description, severity, null);
+    }
+
+    public static Finding create(
+            String title,
+            String description,
+            FindingSeverity severity,
+            UUID assetId) {
         Instant now = Instant.now();
 
         return new Finding(
@@ -42,7 +62,8 @@ public record Finding(
                 severity,
                 FindingStatus.OPEN,
                 now,
-                now);
+                now,
+                assetId);
     }
 
     public Finding withStatus(FindingStatus newStatus) {
@@ -53,7 +74,8 @@ public record Finding(
                 severity,
                 newStatus,
                 createdAt,
-                Instant.now());
+                Instant.now(),
+                assetId);
     }
 
     public Finding withDetails(
@@ -67,6 +89,19 @@ public record Finding(
                 newSeverity,
                 status,
                 createdAt,
-                Instant.now());
+                Instant.now(),
+                assetId);
+    }
+
+    public Finding withAssetId(UUID newAssetId) {
+        return new Finding(
+                id,
+                title,
+                description,
+                severity,
+                status,
+                createdAt,
+                Instant.now(),
+                newAssetId);
     }
 }

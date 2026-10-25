@@ -28,6 +28,9 @@ public class FindingEntity {
     @Column(name = "organization_id", nullable = false, updatable = false)
     private UUID organizationId;
 
+    @Column(name = "asset_id")
+    private UUID assetId;
+
     @Column(name = "title", nullable = false, length = 200)
     private String title;
 
@@ -58,9 +61,9 @@ public class FindingEntity {
     public FindingEntity(
             Finding finding,
             UUID organizationId) {
-
         this.id = finding.id();
         this.organizationId = organizationId;
+        this.assetId = finding.assetId();
         this.title = finding.title();
         this.description = finding.description();
         this.severity = finding.severity();
@@ -77,7 +80,8 @@ public class FindingEntity {
                 severity,
                 status,
                 createdAt,
-                updatedAt);
+                updatedAt,
+                assetId);
     }
 
     public UUID getId() {
@@ -86,6 +90,10 @@ public class FindingEntity {
 
     public UUID getOrganizationId() {
         return organizationId;
+    }
+
+    public UUID getAssetId() {
+        return assetId;
     }
 
     public String getTitle() {
