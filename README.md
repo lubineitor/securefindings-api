@@ -75,6 +75,23 @@ Cada hallazgo contiene:
 - Estado.
 - Fecha de creación.
 - Fecha de actualización.
+- Activo asociado, si se ha indicado.
+
+### Inventario de activos
+
+La API permite administrar un inventario de activos por organización. Cada activo
+tiene nombre, identificador, tipo, entorno, criticidad y estado (`ACTIVE` o
+`ARCHIVED`). El identificador es único dentro de la organización, sin distinguir
+mayúsculas.
+
+Los activos archivados se conservan para mantener el contexto de los hallazgos,
+pero no se pueden asociar a hallazgos nuevos. Solo se pueden eliminar si no
+tienen hallazgos asociados.
+
+Se puede indicar el activo al crear un hallazgo o asociarlo después con
+`PATCH /api/v1/findings/{id}/asset`. Para quitar la asociación se utiliza
+`DELETE /api/v1/findings/{id}/asset`. La API verifica que el activo pertenezca
+a la organización del hallazgo.
 
 ### Ciclo de vida de los hallazgos
 
@@ -117,6 +134,7 @@ El listado permite combinar:
 - Búsqueda textual en título y descripción mediante `q`.
 - Filtro por severidad.
 - Filtro por estado.
+- Filtro por `assetId`.
 - Rango de fechas de creación mediante `createdFrom` y `createdTo`.
 - Paginación.
 - Ordenación ascendente o descendente.
@@ -421,6 +439,31 @@ Las pruebas públicas devuelven únicamente el estado, sin mostrar componentes n
 | `DELETE` | `/api/v1/findings/{id}` | Elimina un hallazgo | `ADMIN` |
 | `GET` | `/api/v1/findings/summary` | Resume hallazgos por estado y severidad | `ANALYST`, `ADMIN` |
 | `GET` | `/api/v1/findings/export` | Exporta hallazgos filtrados a CSV | `ANALYST`, `ADMIN` |
+| `PATCH` | `/api/v1/findings/{id}/asset` | Asocia un activo | `ANALYST`, `ADMIN` |
+| `DELETE` | `/api/v1/findings/{id}/asset` | Desvincula el activo | `ANALYST`, `ADMIN` |
+
+### Activos
+
+| Método | Endpoint | Descripción | Rol |
+|---|---|---|---|
+| `GET` | `/api/v1/assets` | Lista activos con paginación y filtros | `ANALYST`, `ADMIN` |
+| `GET` | `/api/v1/assets/{id}` | Consulta un activo | `ANALYST`, `ADMIN` |
+| `POST` | `/api/v1/assets` | Crea un activo | `ADMIN` |
+| `PATCH` | `/api/v1/assets/{id}` | Actualiza, archiva o reactiva un activo | `ADMIN` |
+| `DELETE` | `/api/v1/assets/{id}` | Elimina un activo sin hallazgos asociados | `ADMIN` |
+
+#### Crear un activo
+
+`POST /api/v1/assets` crea el activo en la organización del token.
+
+```json
+{
+  "name": "API de pagos",
+  "identifier": "https://payments.example.test",
+  "type": "API",
+  "environment": "PRODUCTION",
+  "criticality": "HIGH"
+}
 
 #### Resumen de hallazgos
 
@@ -563,6 +606,7 @@ Parámetros disponibles:
 | `direction` | No | `DESC` | Dirección `ASC` o `DESC`. |
 | `createdFrom` | No | — | Fecha de creación inicial inclusiva, en formato ISO-8601. |
 | `createdTo` | No | — | Fecha de creación final inclusiva, en formato ISO-8601. |
+| `assetId` | No | — | UUID del activo asociado al hallazgo. |
 
 Ejemplo:
 

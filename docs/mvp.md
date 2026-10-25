@@ -37,14 +37,17 @@ en este documento y en `SECURITY.md`.
 - Búsqueda y listado global paginado, consulta y actualización por UUID, y
   creación de organizaciones, además de eliminación segura de organizaciones
   vacías, restringidos al rol `ADMIN`.
+  - Aislamiento de activos, hallazgos, comentarios y auditoría por organización.
+- Inventario de activos paginado con búsqueda, filtros, archivado y eliminación
+  segura; asociación de activos a hallazgos y filtro de hallazgos por activo.
 
 ## Criterios de aceptación del MVP
 
 1. PostgreSQL, Redis y Keycloak arrancan con la configuración local documentada.
 2. La API valida la firma, el emisor, la audiencia y los claims necesarios del
    token.
-3. Las operaciones de hallazgos, comentarios y auditoría no permiten acceder a
-   datos de otra organización.
+3. Las operaciones de activos, hallazgos, comentarios y auditoría no permiten
+   acceder a datos de otra organización.
 4. Los roles y las transiciones de estado se aplican en cada operación protegida.
 5. Las respuestas de error, el rate limiting y los identificadores de petición
    mantienen el formato documentado.

@@ -507,7 +507,8 @@ Su objetivo es facilitar la correlación técnica entre una petición, su respue
 
 ## Aislamiento entre organizaciones
 
-Todos los accesos a hallazgos, comentarios y auditoría deben estar limitados a la organización del token.
+Todos los accesos a activos, hallazgos, comentarios y auditoría deben estar
+limitados a la organización del token.
 
 El aislamiento se aplica en:
 
@@ -522,6 +523,7 @@ El aislamiento se aplica en:
 - Eliminaciones.
 - Auditoría.
 - Comentarios.
+- Inventario de activos.
 
 Las consultas combinan el identificador del recurso con el identificador de organización.
 
@@ -875,6 +877,13 @@ Las migraciones actuales incluyen cambios relacionados con:
 - Creación de comentarios.
 - Auditoría de comentarios.
 - Persistencia del identificador de petición en auditoría mediante `V6__registrar_request_id_en_auditoria.sql`.
+- Relación de organización en activos.
+- Clave externa compuesta para impedir que un hallazgo se asocie a un activo de otra organización.
+
+Los activos se buscan por UUID y por la organización del contexto; la organización
+no se acepta desde datos enviados por el cliente. Los activos archivados no
+admiten nuevas asociaciones y no se pueden eliminar mientras tengan hallazgos
+asociados.
 
 Las migraciones no deben modificarse después de haberse aplicado en un entorno compartido.
 
@@ -1027,6 +1036,13 @@ El proyecto incluye pruebas para comprobar:
 - Búsqueda por nombre y slug con PostgreSQL, sin distinguir mayúsculas.
 - Rechazo de la eliminación de organizaciones con hallazgos, comentarios o auditoría.
 - Eliminación de una organización vacía y protección de la clave foránea ante concurrencia.
+- Lectura de activos para `ANALYST` y `ADMIN`.
+- Creación, actualización y eliminación de activos reservadas a `ADMIN`.
+- Aislamiento por organización al listar, consultar y asociar activos.
+- Rechazo de asociaciones con activos archivados.
+- Restricción de eliminación de activos asociados a hallazgos.
+- Clave foránea compuesta contra asociaciones entre organizaciones.
+- Unicidad del identificador de activo sin distinguir mayúsculas.
 
 Las pruebas de integración utilizan PostgreSQL para verificar el comportamiento real de las consultas y restricciones de persistencia.
 
