@@ -2,6 +2,7 @@ package com.securefindings.finding.application;
 
 import java.time.Instant;
 import java.util.EnumMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -17,6 +18,11 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.securefindings.asset.application.AssetArchivedException;
+import com.securefindings.asset.application.AssetNotFoundException;
+import com.securefindings.asset.domain.AssetStatus;
+import com.securefindings.asset.persistence.AssetEntity;
+import com.securefindings.asset.persistence.AssetRepository;
 import com.securefindings.audit.application.AuditService;
 import com.securefindings.audit.domain.AuditAction;
 import com.securefindings.finding.api.FindingSortDirection;
@@ -34,24 +40,23 @@ import com.securefindings.security.OrganizationContext;
 public class FindingService {
 
         private static final String SYSTEM_ACTOR = "system";
+        public static final int MAX_EXPORT_ROWS = 1_000;
 
         private final FindingRepository findingRepository;
+        private final AssetRepository assetRepository;
         private final AuditService auditService;
         private final OrganizationContext organizationContext;
 
         public FindingService(
                         FindingRepository findingRepository,
+                        AssetRepository assetRepository,
                         AuditService auditService,
                         OrganizationContext organizationContext) {
 
-                this.findingRepository = Objects.requireNonNull(
-                                findingRepository);
-
-                this.auditService = Objects.requireNonNull(
-                                auditService);
-
-                this.organizationContext = Objects.requireNonNull(
-                                organizationContext);
+                this.findingRepository = Objects.requireNonNull(findingRepository);
+                this.assetRepository = Objects.requireNonNull(assetRepository);
+                this.auditService = Objects.requireNonNull(auditService);
+                this.organizationContext = Objects.requireNonNull(organizationContext);
         }
 
         public FindingSummary getSummary() {
@@ -120,13 +125,24 @@ public class FindingService {
                         String title,
                         String description,
                         FindingSeverity severity) {
+                return create(title, description, severity, null);
+        }
+
+        @Transactional
+        public Finding create(
+                        String title,
+                        String description,
+                        FindingSeverity severity,
+                        UUID assetId) {
 
                 UUID organizationId = organizationContext.currentOrganizationId();
+                ensureAssetCanBeLinked(assetId, organizationId);
 
                 Finding finding = Finding.create(
                                 title,
                                 description,
-                                severity);
+                                severity,
+                                assetId);
 
                 Finding savedFinding = findingRepository
                                 .save(new FindingEntity(finding, organizationId))
@@ -203,6 +219,31 @@ public class FindingService {
                         Instant createdFrom,
                         Instant createdTo) {
 
+                return findPage(
+                                page,
+                                size,
+                                searchTerm,
+                                severity,
+                                status,
+                                sortField,
+                                sortDirection,
+                                createdFrom,
+                                createdTo,
+                                null);
+        }
+
+        public Page<Finding> findPage(
+                        int page,
+                        int size,
+                        String searchTerm,
+                        FindingSeverity severity,
+                        FindingStatus status,
+                        FindingSortField sortField,
+                        FindingSortDirection sortDirection,
+                        Instant createdFrom,
+                        Instant createdTo,
+                        UUID assetId) {
+
                 UUID organizationId = organizationContext.currentOrganizationId();
 
                 Pageable pageable = createPageable(
@@ -213,17 +254,64 @@ public class FindingService {
 
                 String normalizedSearchTerm = normalizeSearchTerm(searchTerm);
 
-                Page<FindingEntity> entities = findingRepository
-                                .findPageByFilters(
+                Page<FindingEntity> entities = assetId == null
+                                ? findingRepository.findPageByFilters(
                                                 organizationId,
                                                 normalizedSearchTerm,
                                                 severity,
                                                 status,
                                                 createdFrom,
                                                 createdTo,
+                                                pageable)
+                                : findingRepository.findPageByFiltersAndAssetId(
+                                                organizationId,
+                                                normalizedSearchTerm,
+                                                severity,
+                                                status,
+                                                createdFrom,
+                                                createdTo,
+                                                assetId,
                                                 pageable);
 
                 return toDomainPage(entities);
+        }
+
+        public List<Finding> findForExport(
+                        String searchTerm,
+                        FindingSeverity severity,
+                        FindingStatus status,
+                        Instant createdFrom,
+                        Instant createdTo) {
+
+                if (createdFrom != null
+                                && createdTo != null
+                                && createdFrom.isAfter(createdTo)) {
+                        throw new IllegalArgumentException(
+                                        "createdFrom no puede ser posterior a createdTo");
+                }
+
+                UUID organizationId = organizationContext.currentOrganizationId();
+                Pageable pageable = PageRequest.of(
+                                0,
+                                MAX_EXPORT_ROWS + 1,
+                                Sort.by(
+                                                Sort.Order.desc("createdAt"),
+                                                Sort.Order.asc("id")));
+
+                Page<FindingEntity> entities = findingRepository.findPageByFilters(
+                                organizationId,
+                                normalizeSearchTerm(searchTerm),
+                                severity,
+                                status,
+                                createdFrom,
+                                createdTo,
+                                pageable);
+
+                if (entities.getTotalElements() > MAX_EXPORT_ROWS) {
+                        throw new FindingExportLimitExceededException(MAX_EXPORT_ROWS);
+                }
+
+                return toDomainPage(entities).getContent();
         }
 
         public Optional<Finding> findById(UUID id) {
@@ -416,5 +504,22 @@ public class FindingService {
                 return name == null || name.isBlank()
                                 ? SYSTEM_ACTOR
                                 : name;
+        }
+
+        private void ensureAssetCanBeLinked(
+                        UUID assetId,
+                        UUID organizationId) {
+
+                if (assetId == null) {
+                        return;
+                }
+
+                AssetEntity asset = assetRepository
+                                .findByIdAndOrganizationId(assetId, organizationId)
+                                .orElseThrow(() -> new AssetNotFoundException(assetId));
+
+                if (asset.getStatus() == AssetStatus.ARCHIVED) {
+                        throw new AssetArchivedException(assetId);
+                }
         }
 }

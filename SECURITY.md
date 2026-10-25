@@ -86,6 +86,7 @@ Los principales riesgos considerados son:
 | API REST | Acceso sin autenticación | OAuth2 Resource Server y JWT |
 | API REST | Abuso automatizado o exceso de solicitudes | Rate limiting configurable |
 | Tokens | Manipulación o falsificación | Validación de firma, emisor y expiración |
+| Directorio de organizaciones | Enumeración, modificación o eliminación no autorizada de organizaciones | El listado, la consulta, la actualización, el alta y la eliminación requieren `ADMIN`; la paginación limita cada respuesta a 100 organizaciones, la búsqueda a 100 caracteres, el slug es único y solo se eliminan organizaciones sin datos asociados |
 | Parámetros de búsqueda | Inyección o consultas no controladas | Parámetros enlazados mediante JPA |
 | Ordenación | Manipulación de propiedades internas | Lista blanca de campos permitidos |
 | Filtros de auditoría | Acceso a eventos de otra organización o filtros arbitrarios | Organización derivada del token, enums y parámetros enlazados |
@@ -195,6 +196,34 @@ La organización nunca debe aceptarse desde un parámetro enviado por el cliente
 
 Los endpoints `GET /api/v1/organizations/current` y `PATCH /api/v1/organizations/current` usan exclusivamente la organización del token. El PATCH solo permite modificar el nombre visible y requiere el rol `ADMIN`; el identificador, el slug y la fecha de creación se mantienen estables.
 
+Las operaciones de hallazgos, comentarios, auditoría y
+`/api/v1/organizations/current` requieren ese claim y rechazan la petición si el
+token:
+
+- No contiene `organization_id`.
+- Contiene un valor con formato inválido.
+- Hace referencia a una organización inexistente.
+
+La petición debe rechazarse. Las operaciones globales del directorio de
+organizaciones requieren `ADMIN` y no utilizan `organization_id`, porque
+gestionan el directorio completo o una organización seleccionada por UUID.
+
+La organización nunca debe aceptarse desde un parámetro enviado por el cliente
+como mecanismo de autorización.
+
+Los endpoints `GET /api/v1/organizations/current` y
+`PATCH /api/v1/organizations/current` usan exclusivamente la organización del
+token. El PATCH solo permite modificar el nombre visible y requiere el rol
+`ADMIN`; el identificador, el slug y la fecha de creación se mantienen estables.
+
+El directorio global usa `GET /api/v1/organizations`,
+`GET /api/v1/organizations/{id}`, `PATCH /api/v1/organizations/{id}` y
+`POST /api/v1/organizations`; todas las operaciones requieren el rol `ADMIN`.
+La actualización por UUID solo modifica el nombre visible y conserva el slug y
+la fecha de creación. El alta valida el nombre y el formato del slug y comprueba
+su unicidad. La restricción única de la base de datos protege también frente a
+altas simultáneas con el mismo slug.
+
 ## Autorización
 
 Los permisos se aplican por endpoint:
@@ -209,6 +238,9 @@ Los permisos se aplican por endpoint:
 | Consultar comentarios | Sí | Sí |
 | Crear comentarios | Sí | Sí |
 | Eliminar hallazgos | No | Sí |
+| Listar organizaciones | No | Sí |
+| Consultar una organización por identificador | No | Sí |
+| Crear organizaciones | No | Sí |
 | Consultar la organización actual | Sí | Sí |
 | Actualizar el nombre de la organización actual | No | Sí |
 
@@ -475,7 +507,8 @@ Su objetivo es facilitar la correlación técnica entre una petición, su respue
 
 ## Aislamiento entre organizaciones
 
-Todos los accesos a hallazgos, comentarios y auditoría deben estar limitados a la organización del token.
+Todos los accesos a activos, hallazgos, comentarios y auditoría deben estar
+limitados a la organización del token.
 
 El aislamiento se aplica en:
 
@@ -490,6 +523,7 @@ El aislamiento se aplica en:
 - Eliminaciones.
 - Auditoría.
 - Comentarios.
+- Inventario de activos.
 
 Las consultas combinan el identificador del recurso con el identificador de organización.
 
@@ -616,6 +650,19 @@ El parámetro `q`:
 - Puede omitirse sin provocar errores de tipo en PostgreSQL.
 
 Un valor vacío se trata como ausencia de filtro.
+
+## Exportación CSV
+
+La exportación reutiliza los filtros del listado y siempre consulta los hallazgos
+de la organización asociada al token. Se limita a 1.000 filas; si se supera ese
+límite, la API devuelve `413 EXPORT_LIMIT_EXCEEDED` antes de generar el CSV e
+incluye el máximo en `errors.limit`.
+
+El generador encierra cada campo entre comillas y duplica las comillas internas.
+También neutraliza los valores que comienzan con caracteres de fórmula de hoja
+de cálculo (`=`, `+`, `-` o `@`), incluso cuando están precedidos por espacios o
+caracteres de control. La descarga usa un nombre de archivo constante, codificación
+UTF-8 y la cabecera `Cache-Control: no-store`.
 
 ## Ordenación segura
 
@@ -830,6 +877,13 @@ Las migraciones actuales incluyen cambios relacionados con:
 - Creación de comentarios.
 - Auditoría de comentarios.
 - Persistencia del identificador de petición en auditoría mediante `V6__registrar_request_id_en_auditoria.sql`.
+- Relación de organización en activos.
+- Clave externa compuesta para impedir que un hallazgo se asocie a un activo de otra organización.
+
+Los activos se buscan por UUID y por la organización del contexto; la organización
+no se acepta desde datos enviados por el cliente. Los activos archivados no
+admiten nuevas asociaciones y no se pueden eliminar mientras tengan hallazgos
+asociados.
 
 Las migraciones no deben modificarse después de haberse aplicado en un entorno compartido.
 
@@ -919,6 +973,8 @@ El proyecto incluye pruebas para comprobar:
 - Acceso con rol insuficiente.
 - Permisos de `ANALYST`.
 - Permisos de `ADMIN`.
+- Listado global de organizaciones reservado a `ADMIN`.
+- Límites y ordenación de la paginación de organizaciones.
 - Rechazo de claims inválidos.
 - Rechazo de organizaciones inexistentes.
 - Aislamiento entre organizaciones.
@@ -926,6 +982,10 @@ El proyecto incluye pruebas para comprobar:
 - Validación de datos.
 - Parámetros de paginación.
 - Filtros y búsqueda.
+- Filtros de la exportación CSV dentro de la organización actual.
+- Escape de comas, comillas y saltos de línea en CSV.
+- Neutralización de fórmulas en celdas de CSV.
+- Respuesta `413` estructurada cuando la exportación supera 1.000 hallazgos.
 - Ordenación permitida.
 - Ordenación no permitida.
 - Filtros de auditoría por acción.
@@ -959,6 +1019,30 @@ El proyecto incluye pruebas para comprobar:
 - Exclusión del endpoint de health check.
 - Integración del filtro con Spring Security.
 - Acceso a las métricas Prometheus sin autenticación, con rol `ANALYST` y con rol `ADMIN`.
+- Listado global de organizaciones reservado a `ADMIN`.
+- Límites y ordenación de la paginación de organizaciones.
+- Consulta individual de organizaciones reservada a `ADMIN`.
+- Creación de organizaciones reservada a `ADMIN`.
+- Validación del nombre y el formato del slug de una organización.
+- Rechazo de slugs duplicados, incluidos conflictos detectados al guardar.
+- Listado, consulta y actualización globales de organizaciones reservados a `ADMIN`.
+- Límites y ordenación de la paginación de organizaciones.
+- Consulta individual de organizaciones reservada a `ADMIN`.
+- Actualización por UUID reservada a `ADMIN` y conservación del slug y la fecha de creación.
+- Creación de organizaciones reservada a `ADMIN`.
+- Validación del nombre y el formato del slug de una organización.
+- Rechazo de slugs duplicados, incluidos conflictos detectados al guardar.
+- Búsqueda, límites y ordenación de la paginación de organizaciones.
+- Búsqueda por nombre y slug con PostgreSQL, sin distinguir mayúsculas.
+- Rechazo de la eliminación de organizaciones con hallazgos, comentarios o auditoría.
+- Eliminación de una organización vacía y protección de la clave foránea ante concurrencia.
+- Lectura de activos para `ANALYST` y `ADMIN`.
+- Creación, actualización y eliminación de activos reservadas a `ADMIN`.
+- Aislamiento por organización al listar, consultar y asociar activos.
+- Rechazo de asociaciones con activos archivados.
+- Restricción de eliminación de activos asociados a hallazgos.
+- Clave foránea compuesta contra asociaciones entre organizaciones.
+- Unicidad del identificador de activo sin distinguir mayúsculas.
 
 Las pruebas de integración utilizan PostgreSQL para verificar el comportamiento real de las consultas y restricciones de persistencia.
 

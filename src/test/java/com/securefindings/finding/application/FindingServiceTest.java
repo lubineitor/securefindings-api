@@ -26,9 +26,11 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 
+import com.securefindings.asset.persistence.AssetRepository;
 import com.securefindings.audit.application.AuditService;
 import com.securefindings.finding.api.FindingSortDirection;
 import com.securefindings.finding.api.FindingSortField;
@@ -57,6 +59,9 @@ class FindingServiceTest {
 
         @InjectMocks
         private FindingService findingService;
+
+        @Mock
+        private AssetRepository assetRepository;
 
         @BeforeEach
         void configurarOrganizacion() {
@@ -551,5 +556,79 @@ class FindingServiceTest {
                                 () -> findingService.getSummary(createdFrom, createdTo));
 
                 verifyNoInteractions(organizationContext, findingRepository);
+        }
+
+        @Test
+        void deberiaExportarHallazgosFiltradosDeLaOrganizacionActual() {
+                Instant createdFrom = Instant.parse("2026-10-01T00:00:00Z");
+                Instant createdTo = Instant.parse("2026-10-19T23:59:59Z");
+                Finding finding = Finding.create(
+                                "SQL Injection",
+                                "Entrada sin validar",
+                                FindingSeverity.HIGH);
+
+                when(findingRepository.findPageByFilters(
+                                eq(TEST_ORGANIZATION_ID),
+                                eq("SQL"),
+                                eq(FindingSeverity.HIGH),
+                                eq(FindingStatus.OPEN),
+                                eq(createdFrom),
+                                eq(createdTo),
+                                any(Pageable.class)))
+                                .thenReturn(new PageImpl<>(
+                                                List.of(new FindingEntity(finding)),
+                                                PageRequest.of(0, FindingService.MAX_EXPORT_ROWS + 1),
+                                                1));
+
+                List<Finding> exportedFindings = findingService.findForExport(
+                                " SQL ",
+                                FindingSeverity.HIGH,
+                                FindingStatus.OPEN,
+                                createdFrom,
+                                createdTo);
+
+                assertEquals(List.of(finding), exportedFindings);
+
+                ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+                verify(findingRepository).findPageByFilters(
+                                eq(TEST_ORGANIZATION_ID),
+                                eq("SQL"),
+                                eq(FindingSeverity.HIGH),
+                                eq(FindingStatus.OPEN),
+                                eq(createdFrom),
+                                eq(createdTo),
+                                pageableCaptor.capture());
+
+                assertEquals(
+                                FindingService.MAX_EXPORT_ROWS + 1,
+                                pageableCaptor.getValue().getPageSize());
+                assertEquals(
+                                Sort.by(Sort.Order.desc("createdAt"), Sort.Order.asc("id")),
+                                pageableCaptor.getValue().getSort());
+        }
+
+        @Test
+        void deberiaRechazarUnaExportacionQueSupereElLimite() {
+                when(findingRepository.findPageByFilters(
+                                eq(TEST_ORGANIZATION_ID),
+                                isNull(String.class),
+                                isNull(FindingSeverity.class),
+                                isNull(FindingStatus.class),
+                                isNull(Instant.class),
+                                isNull(Instant.class),
+                                any(Pageable.class)))
+                                .thenReturn(new PageImpl<>(
+                                                List.of(),
+                                                PageRequest.of(0, FindingService.MAX_EXPORT_ROWS + 1),
+                                                FindingService.MAX_EXPORT_ROWS + 1));
+
+                assertThrows(
+                                FindingExportLimitExceededException.class,
+                                () -> findingService.findForExport(
+                                                null,
+                                                null,
+                                                null,
+                                                null,
+                                                null));
         }
 }

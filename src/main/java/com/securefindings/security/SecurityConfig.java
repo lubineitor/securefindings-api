@@ -103,12 +103,53 @@ public class SecurityConfig {
 
                                                 .requestMatchers(
                                                                 HttpMethod.GET,
+                                                                "/api/v1/organizations")
+                                                .hasRole("ADMIN")
+
+                                                .requestMatchers(
+                                                                HttpMethod.POST,
+                                                                "/api/v1/organizations")
+                                                .hasRole("ADMIN")
+
+                                                .requestMatchers(
+                                                                HttpMethod.GET,
                                                                 "/api/v1/organizations/current")
                                                 .hasAnyRole("ANALYST", "ADMIN")
 
                                                 .requestMatchers(
+                                                                HttpMethod.GET,
+                                                                "/api/v1/organizations/*")
+                                                .hasRole("ADMIN")
+
+                                                .requestMatchers(
                                                                 HttpMethod.PATCH,
                                                                 "/api/v1/organizations/current")
+                                                .hasRole("ADMIN")
+
+                                                .requestMatchers(
+                                                                HttpMethod.PATCH,
+                                                                "/api/v1/organizations/*")
+                                                .hasRole("ADMIN")
+
+                                                .requestMatchers(
+                                                                HttpMethod.GET,
+                                                                "/api/v1/assets",
+                                                                "/api/v1/assets/**")
+                                                .hasAnyRole("ANALYST", "ADMIN")
+
+                                                .requestMatchers(
+                                                                HttpMethod.POST,
+                                                                "/api/v1/assets")
+                                                .hasRole("ADMIN")
+
+                                                .requestMatchers(
+                                                                HttpMethod.PATCH,
+                                                                "/api/v1/assets/**")
+                                                .hasRole("ADMIN")
+
+                                                .requestMatchers(
+                                                                HttpMethod.DELETE,
+                                                                "/api/v1/assets/**")
                                                 .hasRole("ADMIN")
 
                                                 .requestMatchers(
@@ -144,6 +185,16 @@ public class SecurityConfig {
 
                                                 .requestMatchers("/actuator/prometheus")
                                                 .hasAnyRole("ADMIN", "METRICS_READER")
+
+                                                .requestMatchers(
+                                                                HttpMethod.DELETE,
+                                                                "/api/v1/organizations/*")
+                                                .hasRole("ADMIN")
+
+                                                .requestMatchers(
+                                                                HttpMethod.GET,
+                                                                "/api/v1/organizations/current/audit")
+                                                .hasAnyRole("ANALYST", "ADMIN")
 
                                                 .anyRequest()
                                                 .hasAnyRole("ANALYST", "ADMIN"))

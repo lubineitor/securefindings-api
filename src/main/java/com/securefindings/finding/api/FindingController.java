@@ -1,12 +1,17 @@
 package com.securefindings.finding.api;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.data.domain.Page;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.format.annotation.DateTimeFormat.ISO;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -49,9 +54,13 @@ import jakarta.validation.constraints.Size;
 public class FindingController {
 
         private final FindingService findingService;
+        private final FindingCsvExporter findingCsvExporter;
 
-        public FindingController(FindingService findingService) {
+        public FindingController(
+                        FindingService findingService,
+                        FindingCsvExporter findingCsvExporter) {
                 this.findingService = findingService;
+                this.findingCsvExporter = findingCsvExporter;
         }
 
         @GetMapping
@@ -140,6 +149,61 @@ public class FindingController {
                         @Parameter(description = "Fecha final inclusiva en formato ISO-8601", example = "2026-10-19T23:59:59Z", in = ParameterIn.QUERY) @RequestParam(name = "createdTo", required = false) @DateTimeFormat(iso = ISO.DATE_TIME) Instant createdTo) {
 
                 return findingService.getSummary(createdFrom, createdTo);
+        }
+
+        @GetMapping(value = "/export", produces = "text/csv")
+        @Operation(summary = "Exportar hallazgos a CSV", description = "Exporta los hallazgos de la organización actual aplicando los filtros disponibles")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "200", description = "Archivo CSV generado", content = @Content(mediaType = "text/csv")),
+                        @ApiResponse(responseCode = "400", description = "Los parámetros enviados no son válidos"),
+                        @ApiResponse(responseCode = "401", description = "Token ausente o inválido"),
+                        @ApiResponse(responseCode = "403", description = "El usuario no tiene permisos"),
+                        @ApiResponse(responseCode = "413", description = "La exportación supera el límite de filas", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class))),
+                        @ApiResponse(responseCode = "429", description = "Se ha superado el límite de peticiones", headers = {
+                                        @Header(name = "Retry-After", description = "Segundos que deben transcurrir antes de reintentar", schema = @Schema(type = "integer", format = "int64")),
+                                        @Header(name = "X-RateLimit-Limit", description = "Capacidad máxima del cubo de tokens", schema = @Schema(type = "integer", format = "int32")),
+                                        @Header(name = "X-RateLimit-Remaining", description = "Tokens enteros disponibles", schema = @Schema(type = "integer", format = "int32")),
+                                        @Header(name = "X-RateLimit-Reset", description = "Instante Unix en que el cubo volverá a estar lleno", schema = @Schema(type = "integer", format = "int64"))
+                        }, content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class)))
+        })
+        public ResponseEntity<byte[]> exportCsv(
+                        @Parameter(description = "Texto que se buscará en título y descripción", example = "SQL Injection", in = ParameterIn.QUERY) @RequestParam(name = "q", required = false) @Size(max = 100) String searchTerm,
+
+                        @Parameter(description = "Filtrar por severidad", example = "HIGH", in = ParameterIn.QUERY) @RequestParam(name = "severity", required = false) FindingSeverity severity,
+
+                        @Parameter(description = "Filtrar por estado", example = "OPEN", in = ParameterIn.QUERY) @RequestParam(name = "status", required = false) FindingStatus status,
+
+                        @Parameter(description = "Fecha de creación inicial inclusiva, en formato ISO-8601", example = "2026-10-01T00:00:00Z", in = ParameterIn.QUERY) @RequestParam(name = "createdFrom", required = false) @DateTimeFormat(iso = ISO.DATE_TIME) Instant createdFrom,
+
+                        @Parameter(description = "Fecha de creación final inclusiva, en formato ISO-8601", example = "2026-10-19T23:59:59Z", in = ParameterIn.QUERY) @RequestParam(name = "createdTo", required = false) @DateTimeFormat(iso = ISO.DATE_TIME) Instant createdTo) {
+
+                if (createdFrom != null
+                                && createdTo != null
+                                && createdFrom.isAfter(createdTo)) {
+                        throw new IllegalArgumentException(
+                                        "createdFrom debe ser anterior o igual a createdTo");
+                }
+
+                List<Finding> findings = findingService.findForExport(
+                                searchTerm,
+                                severity,
+                                status,
+                                createdFrom,
+                                createdTo);
+
+                byte[] csv = findingCsvExporter.toCsv(findings)
+                                .getBytes(StandardCharsets.UTF_8);
+
+                return ResponseEntity.ok()
+                                .contentType(new MediaType(
+                                                "text",
+                                                "csv",
+                                                StandardCharsets.UTF_8))
+                                .header(
+                                                HttpHeaders.CONTENT_DISPOSITION,
+                                                "attachment; filename=\"securefindings.csv\"")
+                                .header(HttpHeaders.CACHE_CONTROL, "no-store")
+                                .body(csv);
         }
 
         @GetMapping("/{id}")

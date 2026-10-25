@@ -75,6 +75,23 @@ Cada hallazgo contiene:
 - Estado.
 - Fecha de creación.
 - Fecha de actualización.
+- Activo asociado, si se ha indicado.
+
+### Inventario de activos
+
+La API permite administrar un inventario de activos por organización. Cada activo
+tiene nombre, identificador, tipo, entorno, criticidad y estado (`ACTIVE` o
+`ARCHIVED`). El identificador es único dentro de la organización, sin distinguir
+mayúsculas.
+
+Los activos archivados se conservan para mantener el contexto de los hallazgos,
+pero no se pueden asociar a hallazgos nuevos. Solo se pueden eliminar si no
+tienen hallazgos asociados.
+
+Se puede indicar el activo al crear un hallazgo o asociarlo después con
+`PATCH /api/v1/findings/{id}/asset`. Para quitar la asociación se utiliza
+`DELETE /api/v1/findings/{id}/asset`. La API verifica que el activo pertenezca
+a la organización del hallazgo.
 
 ### Ciclo de vida de los hallazgos
 
@@ -117,6 +134,7 @@ El listado permite combinar:
 - Búsqueda textual en título y descripción mediante `q`.
 - Filtro por severidad.
 - Filtro por estado.
+- Filtro por `assetId`.
 - Rango de fechas de creación mediante `createdFrom` y `createdTo`.
 - Paginación.
 - Ordenación ascendente o descendente.
@@ -179,6 +197,11 @@ Antes de registrar un evento, el servicio verifica que el hallazgo pertenece a l
 Las transiciones de estado no permitidas no generan eventos de auditoría.
 
 El campo `requestId` se obtiene de la cabecera `X-Request-ID` y del contexto MDC. Se persiste en `finding_audit.request_id` y se devuelve al consultar el historial del hallazgo.
+
+También se puede consultar el historial completo de la organización actual:
+
+```text
+GET /api/v1/organizations/current/audit
 
 #### Filtros de auditoría
 
@@ -415,6 +438,32 @@ Las pruebas públicas devuelven únicamente el estado, sin mostrar componentes n
 | `PATCH` | `/api/v1/findings/{id}/status` | Actualiza el estado | `ANALYST`, `ADMIN` |
 | `DELETE` | `/api/v1/findings/{id}` | Elimina un hallazgo | `ADMIN` |
 | `GET` | `/api/v1/findings/summary` | Resume hallazgos por estado y severidad | `ANALYST`, `ADMIN` |
+| `GET` | `/api/v1/findings/export` | Exporta hallazgos filtrados a CSV | `ANALYST`, `ADMIN` |
+| `PATCH` | `/api/v1/findings/{id}/asset` | Asocia un activo | `ANALYST`, `ADMIN` |
+| `DELETE` | `/api/v1/findings/{id}/asset` | Desvincula el activo | `ANALYST`, `ADMIN` |
+
+### Activos
+
+| Método | Endpoint | Descripción | Rol |
+|---|---|---|---|
+| `GET` | `/api/v1/assets` | Lista activos con paginación y filtros | `ANALYST`, `ADMIN` |
+| `GET` | `/api/v1/assets/{id}` | Consulta un activo | `ANALYST`, `ADMIN` |
+| `POST` | `/api/v1/assets` | Crea un activo | `ADMIN` |
+| `PATCH` | `/api/v1/assets/{id}` | Actualiza, archiva o reactiva un activo | `ADMIN` |
+| `DELETE` | `/api/v1/assets/{id}` | Elimina un activo sin hallazgos asociados | `ADMIN` |
+
+#### Crear un activo
+
+`POST /api/v1/assets` crea el activo en la organización del token.
+
+```json
+{
+  "name": "API de pagos",
+  "identifier": "https://payments.example.test",
+  "type": "API",
+  "environment": "PRODUCTION",
+  "criticality": "HIGH"
+}
 
 #### Resumen de hallazgos
 
@@ -433,12 +482,100 @@ Parámetros opcionales:
 
 Si se envían ambos, `createdFrom` debe ser anterior o igual a `createdTo`.
 
-### Organización actual
+#### Exportación CSV
+
+`GET /api/v1/findings/export` descarga los hallazgos de la organización actual
+como `securefindings.csv`. Acepta los filtros `q`, `severity`, `status`,
+`createdFrom` y `createdTo`, con el mismo comportamiento que el listado. El orden
+es `createdAt DESC` e `id ASC`. Las fechas son inclusivas y `q` admite hasta 100
+caracteres.
+
+El archivo contiene las columnas `id`, `title`, `description`, `severity`,
+`status`, `createdAt` y `updatedAt`. Se descarga como `text/csv; charset=UTF-8`,
+con nombre `securefindings.csv` y la cabecera `Cache-Control: no-store`. La
+exportación admite hasta 1.000 filas; si los filtros coinciden con más resultados,
+la API devuelve `413` con el código
+`EXPORT_LIMIT_EXCEEDED` y el límite en `errors.limit`:
+
+```json
+{
+  "code": "EXPORT_LIMIT_EXCEEDED",
+  "message": "La exportación supera el máximo de 1000 hallazgos",
+  "errors": {
+    "limit": "1000"
+  }
+}
+```
+
+### Organizaciones
 
 | Método | Endpoint | Descripción | Rol |
 |---|---|---|---|
+| `GET` | `/api/v1/organizations` | Lista organizaciones de forma paginada | `ADMIN` |
+| `GET` | `/api/v1/organizations/{id}` | Consulta una organización por identificador | `ADMIN` |
+| `PATCH` | `/api/v1/organizations/{id}` | Actualiza el nombre visible de una organización | `ADMIN` |
+| `POST` | `/api/v1/organizations` | Crea una organización | `ADMIN` |
 | `GET` | `/api/v1/organizations/current` | Consulta la organización asociada al token | `ANALYST`, `ADMIN` |
 | `PATCH` | `/api/v1/organizations/current` | Actualiza el nombre visible de la organización | `ADMIN` |
+| `DELETE` | `/api/v1/organizations/{id}` | Elimina una organización vacía | `ADMIN` |
+
+#### Listar organizaciones
+
+`GET /api/v1/organizations` devuelve el directorio global de organizaciones y
+solo está disponible para el rol `ADMIN`. La respuesta se pagina con orden
+`name ASC` e `id ASC`.
+
+| Parámetro | Valor predeterminado | Límites |
+|---|---:|---|
+| `page` | `0` | Mayor o igual que `0` |
+| `size` | `20` | Entre `1` y `100` |
+| `q` | Sin filtro | Hasta 100 caracteres; busca por nombre o slug sin distinguir mayúsculas |
+
+#### Consultar una organización
+
+`GET /api/v1/organizations/{id}` devuelve una organización por su UUID. Solo
+está disponible para el rol `ADMIN`. Si el UUID no existe, la API responde
+`404 ORGANIZATION_NOT_FOUND`.
+
+#### Actualizar una organización
+
+`PATCH /api/v1/organizations/{id}` actualiza el nombre visible de una
+organización y requiere el rol `ADMIN`. El UUID, el slug y la fecha de creación
+se mantienen. El cuerpo utiliza el mismo formato que la actualización de la
+organización actual:
+
+```json
+{
+  "name": "Acme Security Europe"
+}
+```
+
+#### Crear una organización
+
+`POST /api/v1/organizations` crea una organización y devuelve `201 Created`, el
+recurso en el cuerpo y su URL en la cabecera `Location`. La operación requiere
+el rol `ADMIN`.
+
+```json
+{
+  "name": "Acme Security",
+  "slug": "acme-security"
+}
+```
+
+#### Eliminar una organización
+
+`DELETE /api/v1/organizations/{id}` elimina una organización solo si no tiene
+hallazgos, comentarios ni eventos de auditoría asociados. La operación requiere
+`ADMIN` y devuelve `204 No Content` si se completa. Si conserva datos, devuelve
+`409 ORGANIZATION_HAS_ASSOCIATED_DATA`; la API no elimina ni modifica esos datos.
+
+El nombre es obligatorio y admite hasta 150 caracteres. El slug es obligatorio,
+único y admite hasta 100 caracteres; solo puede contener letras minúsculas,
+números y guiones simples entre segmentos. Si ya existe, la API devuelve
+`409 ORGANIZATION_SLUG_ALREADY_EXISTS`.
+
+#### Organización actual
 
 El cuerpo de la petición PATCH contiene el nombre, con un máximo de 150 caracteres:
 
@@ -469,6 +606,7 @@ Parámetros disponibles:
 | `direction` | No | `DESC` | Dirección `ASC` o `DESC`. |
 | `createdFrom` | No | — | Fecha de creación inicial inclusiva, en formato ISO-8601. |
 | `createdTo` | No | — | Fecha de creación final inclusiva, en formato ISO-8601. |
+| `assetId` | No | — | UUID del activo asociado al hallazgo. |
 
 Ejemplo:
 
@@ -481,6 +619,7 @@ instantes ISO-8601, por ejemplo:
 
 ```text
 GET /api/v1/findings?createdFrom=2026-10-01T00:00:00Z&createdTo=2026-10-17T23:59:59Z
+```
 
 La respuesta paginada contiene:
 
@@ -628,9 +767,13 @@ El cliente debe enviar:
 Authorization: Bearer <token>
 ```
 
-Para las operaciones protegidas de hallazgos, comentarios, auditoría y organización,
-el token debe incluir `organization_id` con el UUID de una organización existente.
-El claim `preferred_username` se utiliza como actor en los eventos de auditoría.
+Para las operaciones de hallazgos, comentarios, auditoría y las rutas
+`/api/v1/organizations/current`, el token debe incluir `organization_id` con el
+UUID de una organización existente. Las operaciones globales del directorio
+(`GET` y `POST /api/v1/organizations`, además de `GET` y `PATCH`
+`/api/v1/organizations/{id}`) requieren `ADMIN` y no dependen de
+`organization_id`. El claim `preferred_username` se utiliza como actor en los
+eventos de auditoría.
 
 El token para `GET /actuator/prometheus` debe pertenecer al issuer configurado,
 incluir la audiencia `securefindings-api` y tener el rol `ADMIN` o
@@ -640,7 +783,8 @@ incluir la audiencia `securefindings-api` y tener el rol `ADMIN` o
 Los roles se obtienen desde Keycloak:
 
 - `ANALYST`: puede consultar, crear y modificar hallazgos.
-- `ADMIN`: puede realizar todas las operaciones, incluida la eliminación.
+- `ADMIN`: puede realizar todas las operaciones sobre hallazgos, incluida la
+  eliminación, y administrar el directorio de organizaciones.
 
 La API valida también la audiencia del access token. El claim `aud` debe incluir `securefindings-api`, configurada mediante la variable `JWT_AUDIENCE`.
 
@@ -971,7 +1115,7 @@ SECURITY.md
 
 El proyecto continúa en desarrollo. Algunas líneas futuras son:
 
-- Mejorar la administración de organizaciones.
+- Ampliar las operaciones de administración de organizaciones.
 - Añadir más reglas de autorización.
 - Configurar paneles y alertas para las métricas Prometheus.
 - Mejorar la configuración de producción.

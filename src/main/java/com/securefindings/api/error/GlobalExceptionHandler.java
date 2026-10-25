@@ -19,8 +19,16 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
+import com.securefindings.asset.application.AssetArchivedException;
+import com.securefindings.asset.application.AssetHasFindingsException;
+import com.securefindings.asset.application.AssetIdentifierAlreadyExistsException;
+import com.securefindings.asset.application.AssetNotFoundException;
+import com.securefindings.finding.application.FindingExportLimitExceededException;
 import com.securefindings.finding.application.FindingNotFoundException;
 import com.securefindings.finding.application.FindingStatusTransitionException;
+import com.securefindings.organization.application.OrganizationHasAssociatedDataException;
+import com.securefindings.organization.application.OrganizationNotFoundException;
+import com.securefindings.organization.application.OrganizationSlugAlreadyExistsException;
 
 import jakarta.validation.ConstraintViolationException;
 
@@ -228,5 +236,86 @@ public class GlobalExceptionHandler {
                                 "INVALID_STATUS_TRANSITION",
                                 exception.getMessage(),
                                 Map.of());
+        }
+
+        @ExceptionHandler(FindingExportLimitExceededException.class)
+        @ResponseStatus(HttpStatus.CONTENT_TOO_LARGE)
+        public ApiErrorResponse handleFindingExportLimitExceeded(
+                        FindingExportLimitExceededException exception) {
+
+                return new ApiErrorResponse(
+                                "EXPORT_LIMIT_EXCEEDED",
+                                exception.getMessage(),
+                                Map.of("limit", String.valueOf(exception.maximumRows())));
+        }
+
+        @ExceptionHandler(OrganizationNotFoundException.class)
+        @ResponseStatus(HttpStatus.NOT_FOUND)
+        public ApiErrorResponse handleOrganizationNotFound(
+                        OrganizationNotFoundException exception) {
+
+                return new ApiErrorResponse(
+                                "ORGANIZATION_NOT_FOUND",
+                                exception.getMessage(),
+                                Map.of());
+        }
+
+        @ExceptionHandler(OrganizationSlugAlreadyExistsException.class)
+        @ResponseStatus(HttpStatus.CONFLICT)
+        public ApiErrorResponse handleOrganizationSlugAlreadyExists(
+                        OrganizationSlugAlreadyExistsException exception) {
+
+                return new ApiErrorResponse(
+                                "ORGANIZATION_SLUG_ALREADY_EXISTS",
+                                exception.getMessage(),
+                                Map.of("slug", exception.slug()));
+        }
+
+        @ExceptionHandler(OrganizationHasAssociatedDataException.class)
+        @ResponseStatus(HttpStatus.CONFLICT)
+        public ApiErrorResponse handleOrganizationHasAssociatedData(
+                        OrganizationHasAssociatedDataException exception) {
+
+                return new ApiErrorResponse(
+                                "ORGANIZATION_HAS_ASSOCIATED_DATA",
+                                exception.getMessage(),
+                                Map.of("organizationId", exception.organizationId().toString()));
+        }
+
+        @ExceptionHandler(AssetNotFoundException.class)
+        @ResponseStatus(HttpStatus.NOT_FOUND)
+        public ApiErrorResponse handleAssetNotFound(AssetNotFoundException exception) {
+                return new ApiErrorResponse(
+                                "ASSET_NOT_FOUND",
+                                exception.getMessage(),
+                                Map.of("assetId", exception.assetId().toString()));
+        }
+
+        @ExceptionHandler(AssetIdentifierAlreadyExistsException.class)
+        @ResponseStatus(HttpStatus.CONFLICT)
+        public ApiErrorResponse handleAssetIdentifierAlreadyExists(
+                        AssetIdentifierAlreadyExistsException exception) {
+                return new ApiErrorResponse(
+                                "ASSET_IDENTIFIER_ALREADY_EXISTS",
+                                exception.getMessage(),
+                                Map.of("identifier", exception.identifier()));
+        }
+
+        @ExceptionHandler(AssetHasFindingsException.class)
+        @ResponseStatus(HttpStatus.CONFLICT)
+        public ApiErrorResponse handleAssetHasFindings(AssetHasFindingsException exception) {
+                return new ApiErrorResponse(
+                                "ASSET_HAS_FINDINGS",
+                                exception.getMessage(),
+                                Map.of("assetId", exception.assetId().toString()));
+        }
+
+        @ExceptionHandler(AssetArchivedException.class)
+        @ResponseStatus(HttpStatus.CONFLICT)
+        public ApiErrorResponse handleAssetArchived(AssetArchivedException exception) {
+                return new ApiErrorResponse(
+                                "ASSET_ARCHIVED",
+                                exception.getMessage(),
+                                Map.of("assetId", exception.assetId().toString()));
         }
 }

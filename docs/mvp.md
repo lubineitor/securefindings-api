@@ -19,6 +19,7 @@ en este documento y en `SECURITY.md`.
   con validación de transiciones.
 - Paginación, filtros y ordenación limitada a campos permitidos.
 - Consulta y actualización del nombre visible de la organización actual.
+- Listado global paginado de organizaciones, restringido al rol `ADMIN`.
 - Comentarios asociados a hallazgos y eventos de auditoría.
 - Identificador `X-Request-ID` para relacionar peticiones y logs.
 - Rate limiting distribuido mediante Redis, con respuestas `429` y `503` ante
@@ -27,14 +28,26 @@ en este documento y en `SECURITY.md`.
 - Migraciones PostgreSQL con Flyway, documentación OpenAPI y ejecución local con
   Docker Compose.
 - Resumen de hallazgos agrupados por estado y severidad para la organización actual.
+- Listado global paginado, consulta y actualización por UUID, y creación de
+  organizaciones, restringidos al rol `ADMIN`.
+- Exportación CSV UTF-8 filtrada por organización, limitada a 1.000 hallazgos y
+  protegida frente a inyección de fórmulas en hojas de cálculo.
+- Listado global paginado, consulta individual y creación de organizaciones,
+  restringidos al rol `ADMIN`.
+- Búsqueda y listado global paginado, consulta y actualización por UUID, y
+  creación de organizaciones, además de eliminación segura de organizaciones
+  vacías, restringidos al rol `ADMIN`.
+  - Aislamiento de activos, hallazgos, comentarios y auditoría por organización.
+- Inventario de activos paginado con búsqueda, filtros, archivado y eliminación
+  segura; asociación de activos a hallazgos y filtro de hallazgos por activo.
 
 ## Criterios de aceptación del MVP
 
 1. PostgreSQL, Redis y Keycloak arrancan con la configuración local documentada.
 2. La API valida la firma, el emisor, la audiencia y los claims necesarios del
    token.
-3. Las operaciones de hallazgos, comentarios y auditoría no permiten acceder a
-   datos de otra organización.
+3. Las operaciones de activos, hallazgos, comentarios y auditoría no permiten
+   acceder a datos de otra organización.
 4. Los roles y las transiciones de estado se aplican en cada operación protegida.
 5. Las respuestas de error, el rate limiting y los identificadores de petición
    mantienen el formato documentado.
@@ -44,7 +57,7 @@ en este documento y en `SECURITY.md`.
 ## Pendiente antes de considerar producción
 
 - Configurar paneles y alertas para las métricas Prometheus.
-- Completar la administración de organizaciones y revisar las reglas de
+- Ampliar la administración de organizaciones y revisar las reglas de
   autorización necesarias.
 - Revisar CORS, TLS, gestión centralizada y rotación de secretos.
 - Endurecer y escanear imágenes y contenedores.
