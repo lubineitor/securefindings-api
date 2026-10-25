@@ -29,6 +29,8 @@ public interface FindingRepository
                         UUID id,
                         UUID organizationId);
 
+        boolean existsByOrganizationIdAndAssetId(UUID organizationId, UUID assetId);
+
         @Query("""
                         SELECT finding
                         FROM FindingEntity finding
@@ -93,4 +95,31 @@ public interface FindingRepository
                         @Param("createdTo") Instant createdTo);
 
         boolean existsByOrganizationId(UUID organizationId);
+
+        @Query("""
+                        SELECT finding
+                        FROM FindingEntity finding
+                        WHERE finding.organizationId = :organizationId
+                          AND finding.assetId = :assetId
+                          AND (
+                                COALESCE(:searchTerm, '') = ''
+                                OR LOWER(finding.title) LIKE LOWER(
+                                        CONCAT('%', COALESCE(:searchTerm, ''), '%')) ESCAPE '!'
+                                OR LOWER(finding.description) LIKE LOWER(
+                                        CONCAT('%', COALESCE(:searchTerm, ''), '%')) ESCAPE '!'
+                          )
+                          AND (:severity IS NULL OR finding.severity = :severity)
+                          AND (:status IS NULL OR finding.status = :status)
+                          AND finding.createdAt >= COALESCE(:createdFrom, finding.createdAt)
+                          AND finding.createdAt <= COALESCE(:createdTo, finding.createdAt)
+                        """)
+        Page<FindingEntity> findPageByFiltersAndAssetId(
+                        @Param("organizationId") UUID organizationId,
+                        @Param("searchTerm") String searchTerm,
+                        @Param("severity") FindingSeverity severity,
+                        @Param("status") FindingStatus status,
+                        @Param("createdFrom") Instant createdFrom,
+                        @Param("createdTo") Instant createdTo,
+                        @Param("assetId") UUID assetId,
+                        Pageable pageable);
 }
