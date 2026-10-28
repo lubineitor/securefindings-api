@@ -851,7 +851,8 @@ class FindingControllerTest {
                                 FindingSeverity.HIGH,
                                 FindingStatus.OPEN,
                                 createdFrom,
-                                createdTo))
+                                createdTo,
+                                null))
                                 .thenReturn(findings);
                 when(findingCsvExporter.toCsv(findings)).thenReturn(csv);
 
@@ -874,12 +875,14 @@ class FindingControllerTest {
                                 FindingSeverity.HIGH,
                                 FindingStatus.OPEN,
                                 createdFrom,
-                                createdTo);
+                                createdTo,
+                                null);
         }
 
         @Test
         void deberiaDevolver413SiLaExportacionSuperaElLimite() throws Exception {
                 when(findingService.findForExport(
+                                null,
                                 null,
                                 null,
                                 null,
@@ -989,5 +992,46 @@ class FindingControllerTest {
                                 .andExpect(status().isNoContent());
 
                 verify(findingService).updateAsset(finding.id(), null);
+        }
+
+        @Test
+        void deberiaExportarHallazgosFiltradosPorActivo() throws Exception {
+                UUID assetId = UUID.fromString(
+                                "22222222-2222-2222-2222-222222222222");
+
+                Finding finding = Finding.create(
+                                "SQL Injection",
+                                "Entrada sin validar",
+                                FindingSeverity.HIGH,
+                                assetId);
+
+                List<Finding> findings = List.of(finding);
+                String csv = "\"id\",\"assetId\"\r\n";
+
+                when(findingService.findForExport(
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                assetId))
+                                .thenReturn(findings);
+
+                when(findingCsvExporter.toCsv(findings))
+                                .thenReturn(csv);
+
+                mockMvc.perform(get("/api/v1/findings/export")
+                                .param("assetId", assetId.toString()))
+                                .andExpect(status().isOk())
+                                .andExpect(content().contentTypeCompatibleWith("text/csv"))
+                                .andExpect(content().string(csv));
+
+                verify(findingService).findForExport(
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                assetId);
         }
 }
