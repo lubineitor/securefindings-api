@@ -16,7 +16,8 @@ public class FindingCsvExporter {
             "severity",
             "status",
             "createdAt",
-            "updatedAt");
+            "updatedAt",
+            "assetId");
 
     public String toCsv(List<Finding> findings) {
         StringBuilder csv = new StringBuilder();
@@ -30,7 +31,10 @@ public class FindingCsvExporter {
                     finding.severity().name(),
                     finding.status().name(),
                     finding.createdAt().toString(),
-                    finding.updatedAt().toString()));
+                    finding.updatedAt().toString(),
+                    finding.assetId() == null
+                            ? ""
+                            : finding.assetId().toString()));
         }
 
         return csv.toString();

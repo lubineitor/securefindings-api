@@ -189,7 +189,9 @@ public class FindingController {
 
                         @Parameter(description = "Fecha de creación inicial inclusiva, en formato ISO-8601", example = "2026-10-01T00:00:00Z", in = ParameterIn.QUERY) @RequestParam(name = "createdFrom", required = false) @DateTimeFormat(iso = ISO.DATE_TIME) Instant createdFrom,
 
-                        @Parameter(description = "Fecha de creación final inclusiva, en formato ISO-8601", example = "2026-10-19T23:59:59Z", in = ParameterIn.QUERY) @RequestParam(name = "createdTo", required = false) @DateTimeFormat(iso = ISO.DATE_TIME) Instant createdTo) {
+                        @Parameter(description = "Fecha de creación final inclusiva, en formato ISO-8601", example = "2026-10-19T23:59:59Z", in = ParameterIn.QUERY) @RequestParam(name = "createdTo", required = false) @DateTimeFormat(iso = ISO.DATE_TIME) Instant createdTo,
+
+                        @Parameter(description = "Filtrar por identificador del activo", in = ParameterIn.QUERY) @RequestParam(name = "assetId", required = false) UUID assetId) {
 
                 if (createdFrom != null
                                 && createdTo != null
@@ -203,7 +205,8 @@ public class FindingController {
                                 severity,
                                 status,
                                 createdFrom,
-                                createdTo);
+                                createdTo,
+                                assetId);
 
                 byte[] csv = findingCsvExporter.toCsv(findings)
                                 .getBytes(StandardCharsets.UTF_8);

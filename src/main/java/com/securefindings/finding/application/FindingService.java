@@ -283,6 +283,23 @@ public class FindingService {
                         Instant createdFrom,
                         Instant createdTo) {
 
+                return findForExport(
+                                searchTerm,
+                                severity,
+                                status,
+                                createdFrom,
+                                createdTo,
+                                null);
+        }
+
+        public List<Finding> findForExport(
+                        String searchTerm,
+                        FindingSeverity severity,
+                        FindingStatus status,
+                        Instant createdFrom,
+                        Instant createdTo,
+                        UUID assetId) {
+
                 if (createdFrom != null
                                 && createdTo != null
                                 && createdFrom.isAfter(createdTo)) {
@@ -298,14 +315,26 @@ public class FindingService {
                                                 Sort.Order.desc("createdAt"),
                                                 Sort.Order.asc("id")));
 
-                Page<FindingEntity> entities = findingRepository.findPageByFilters(
-                                organizationId,
-                                normalizeSearchTerm(searchTerm),
-                                severity,
-                                status,
-                                createdFrom,
-                                createdTo,
-                                pageable);
+                String normalizedSearchTerm = normalizeSearchTerm(searchTerm);
+
+                Page<FindingEntity> entities = assetId == null
+                                ? findingRepository.findPageByFilters(
+                                                organizationId,
+                                                normalizedSearchTerm,
+                                                severity,
+                                                status,
+                                                createdFrom,
+                                                createdTo,
+                                                pageable)
+                                : findingRepository.findPageByFiltersAndAssetId(
+                                                organizationId,
+                                                normalizedSearchTerm,
+                                                severity,
+                                                status,
+                                                createdFrom,
+                                                createdTo,
+                                                assetId,
+                                                pageable);
 
                 if (entities.getTotalElements() > MAX_EXPORT_ROWS) {
                         throw new FindingExportLimitExceededException(MAX_EXPORT_ROWS);
