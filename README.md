@@ -467,36 +467,37 @@ Las pruebas públicas devuelven únicamente el estado, sin mostrar componentes n
 
 #### Resumen de hallazgos
 
-`GET /api/v1/findings/summary` devuelve los recuentos de hallazgos de la
-organización asociada al token, agrupados por estado y severidad. Las categorías
-sin hallazgos aparecen con valor `0`.
-
-La consulta requiere un token con rol `ANALYST` o `ADMIN`.
-
-Parámetros opcionales:
+`GET /api/v1/findings/summary` la consulta devuelve los recuentos de hallazgos agrupados por estado y severidad
+para la organización del token. Admite filtros opcionales por fechas y por activo.
+Los hallazgos de otras organizaciones no aparecen en el resultado.
 
 | Parámetro | Descripción |
 |---|---|
 | `createdFrom` | Fecha de creación inicial inclusiva, en formato ISO-8601. |
 | `createdTo` | Fecha de creación final inclusiva, en formato ISO-8601. |
+| `assetId` | UUID del activo por el que filtrar. |
 
-Si se envían ambos, `createdFrom` debe ser anterior o igual a `createdTo`.
+Ejemplo:
+
+```text
+GET /api/v1/findings/summary?assetId=22222222-2222-2222-2222-222222222222
+```
 
 #### Exportación CSV
 
 `GET /api/v1/findings/export` descarga los hallazgos de la organización actual
 como `securefindings.csv`. Acepta los filtros `q`, `severity`, `status`,
 `createdFrom`, `createdTo` y `assetId`. El orden es `createdAt DESC` e `id ASC`.
+
 El archivo incluye las columnas `id`, `title`, `description`, `severity`,
 `status`, `createdAt`, `updatedAt` y `assetId`. La columna `assetId` queda vacía
-si el hallazgo no tiene activo asociado.
+si el hallazgo no tiene activo asociado. Se descarga como
+`text/csv; charset=UTF-8`, con nombre `securefindings.csv` y la cabecera
+`Cache-Control: no-store`.
 
-El archivo contiene las columnas `id`, `title`, `description`, `severity`,
-`status`, `createdAt` y `updatedAt`. Se descarga como `text/csv; charset=UTF-8`,
-con nombre `securefindings.csv` y la cabecera `Cache-Control: no-store`. La
-exportación admite hasta 1.000 filas; si los filtros coinciden con más resultados,
-la API devuelve `413` con el código
-`EXPORT_LIMIT_EXCEEDED` y el límite en `errors.limit`:
+La exportación admite hasta 1.000 filas. Si los filtros coinciden con más
+resultados, la API devuelve `413` con el código `EXPORT_LIMIT_EXCEEDED` y el
+límite en `errors.limit`:
 
 ```json
 {

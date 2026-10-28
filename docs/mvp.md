@@ -29,7 +29,8 @@ en este documento y en `SECURITY.md`.
 - Probes de liveness y readiness, y métricas Prometheus protegidas para `ADMIN`.
 - Migraciones PostgreSQL con Flyway, documentación OpenAPI y ejecución local con
   Docker Compose.
-- Resumen de hallazgos agrupados por estado y severidad para la organización actual.
+- Resumen de hallazgos agrupados por estado y severidad, con filtros por fechas
+  y activo para la organización actual.
 - Exportación CSV UTF-8 filtrada por organización, limitada a 1.000 hallazgos y
   protegida frente a la inyección de fórmulas en hojas de cálculo.
 - Inventario de activos por organización con paginación, búsqueda, filtros,
