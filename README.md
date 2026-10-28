@@ -88,10 +88,9 @@ Los activos archivados se conservan para mantener el contexto de los hallazgos,
 pero no se pueden asociar a hallazgos nuevos. Solo se pueden eliminar si no
 tienen hallazgos asociados.
 
-Se puede indicar el activo al crear un hallazgo o asociarlo después con
-`PATCH /api/v1/findings/{id}/asset`. Para quitar la asociación se utiliza
-`DELETE /api/v1/findings/{id}/asset`. La API verifica que el activo pertenezca
-a la organización del hallazgo.
+La persistencia contempla la asociación de activos a hallazgos, pero la API REST
+actual todavía no permite enviar `assetId` al crear un hallazgo, asociar o
+desvincular un activo posteriormente ni filtrar el listado HTTP por activo.
 
 ### Ciclo de vida de los hallazgos
 
@@ -134,7 +133,6 @@ El listado permite combinar:
 - Búsqueda textual en título y descripción mediante `q`.
 - Filtro por severidad.
 - Filtro por estado.
-- Filtro por `assetId`.
 - Rango de fechas de creación mediante `createdFrom` y `createdTo`.
 - Paginación.
 - Ordenación ascendente o descendente.
@@ -202,6 +200,7 @@ También se puede consultar el historial completo de la organización actual:
 
 ```text
 GET /api/v1/organizations/current/audit
+```
 
 #### Filtros de auditoría
 
@@ -439,8 +438,6 @@ Las pruebas públicas devuelven únicamente el estado, sin mostrar componentes n
 | `DELETE` | `/api/v1/findings/{id}` | Elimina un hallazgo | `ADMIN` |
 | `GET` | `/api/v1/findings/summary` | Resume hallazgos por estado y severidad | `ANALYST`, `ADMIN` |
 | `GET` | `/api/v1/findings/export` | Exporta hallazgos filtrados a CSV | `ANALYST`, `ADMIN` |
-| `PATCH` | `/api/v1/findings/{id}/asset` | Asocia un activo | `ANALYST`, `ADMIN` |
-| `DELETE` | `/api/v1/findings/{id}/asset` | Desvincula el activo | `ANALYST`, `ADMIN` |
 
 ### Activos
 
@@ -464,6 +461,7 @@ Las pruebas públicas devuelven únicamente el estado, sin mostrar componentes n
   "environment": "PRODUCTION",
   "criticality": "HIGH"
 }
+```
 
 #### Resumen de hallazgos
 
@@ -635,7 +633,7 @@ La respuesta paginada contiene:
 }
 ```
 
-### Auditoría
+### Endpoints de auditoría
 
 Endpoint:
 
@@ -671,7 +669,7 @@ GET /api/v1/findings/3bfa1ad2-eee1-4ea5-ba7c-16b47d1da147/audit?action=UPDATED&r
 
 Los filtros siempre se aplican dentro de la organización asociada al token JWT.
 
-### Comentarios
+### Endpoints de comentarios
 
 Crear un comentario:
 

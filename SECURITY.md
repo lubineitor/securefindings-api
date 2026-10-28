@@ -1019,20 +1019,11 @@ El proyecto incluye pruebas para comprobar:
 - Exclusión del endpoint de health check.
 - Integración del filtro con Spring Security.
 - Acceso a las métricas Prometheus sin autenticación, con rol `ANALYST` y con rol `ADMIN`.
-- Listado global de organizaciones reservado a `ADMIN`.
-- Límites y ordenación de la paginación de organizaciones.
 - Consulta individual de organizaciones reservada a `ADMIN`.
 - Creación de organizaciones reservada a `ADMIN`.
-- Validación del nombre y el formato del slug de una organización.
+- Validación del nombre y del formato del slug de una organización.
 - Rechazo de slugs duplicados, incluidos conflictos detectados al guardar.
-- Listado, consulta y actualización globales de organizaciones reservados a `ADMIN`.
-- Límites y ordenación de la paginación de organizaciones.
-- Consulta individual de organizaciones reservada a `ADMIN`.
-- Actualización por UUID reservada a `ADMIN` y conservación del slug y la fecha de creación.
-- Creación de organizaciones reservada a `ADMIN`.
-- Validación del nombre y el formato del slug de una organización.
-- Rechazo de slugs duplicados, incluidos conflictos detectados al guardar.
-- Búsqueda, límites y ordenación de la paginación de organizaciones.
+- Actualización por UUID reservada a `ADMIN`, conservando el slug y la fecha de creación.
 - Búsqueda por nombre y slug con PostgreSQL, sin distinguir mayúsculas.
 - Rechazo de la eliminación de organizaciones con hallazgos, comentarios o auditoría.
 - Eliminación de una organización vacía y protección de la clave foránea ante concurrencia.

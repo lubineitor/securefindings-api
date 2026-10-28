@@ -12,14 +12,16 @@ en este documento y en `SECURITY.md`.
 
 ## Funcionalidad implementada
 
-- Autenticación JWT con Keycloak, validación de emisor y audiencia.
-- Roles `ANALYST` y `ADMIN` para autorizar operaciones.
-- Aislamiento de hallazgos, comentarios y auditoría por organización.
+- Autenticación JWT con Keycloak y validación de emisor y audiencia.
+- Autorización por roles `ANALYST` y `ADMIN`.
+- Aislamiento de hallazgos, activos, comentarios y auditoría por organización.
 - Consulta, creación, actualización, cambio de estado y eliminación de hallazgos,
   con validación de transiciones.
-- Paginación, filtros y ordenación limitada a campos permitidos.
+- Paginación, filtros disponibles y ordenación limitada a campos permitidos.
 - Consulta y actualización del nombre visible de la organización actual.
-- Listado global paginado de organizaciones, restringido al rol `ADMIN`.
+- Administración global de organizaciones para `ADMIN`: búsqueda y listado
+  paginados, consulta individual, creación, actualización y eliminación segura
+  de organizaciones vacías.
 - Comentarios asociados a hallazgos y eventos de auditoría.
 - Identificador `X-Request-ID` para relacionar peticiones y logs.
 - Rate limiting distribuido mediante Redis, con respuestas `429` y `503` ante
@@ -28,18 +30,12 @@ en este documento y en `SECURITY.md`.
 - Migraciones PostgreSQL con Flyway, documentación OpenAPI y ejecución local con
   Docker Compose.
 - Resumen de hallazgos agrupados por estado y severidad para la organización actual.
-- Listado global paginado, consulta y actualización por UUID, y creación de
-  organizaciones, restringidos al rol `ADMIN`.
 - Exportación CSV UTF-8 filtrada por organización, limitada a 1.000 hallazgos y
-  protegida frente a inyección de fórmulas en hojas de cálculo.
-- Listado global paginado, consulta individual y creación de organizaciones,
-  restringidos al rol `ADMIN`.
-- Búsqueda y listado global paginado, consulta y actualización por UUID, y
-  creación de organizaciones, además de eliminación segura de organizaciones
-  vacías, restringidos al rol `ADMIN`.
-  - Aislamiento de activos, hallazgos, comentarios y auditoría por organización.
-- Inventario de activos paginado con búsqueda, filtros, archivado y eliminación
-  segura; asociación de activos a hallazgos y filtro de hallazgos por activo.
+  protegida frente a la inyección de fórmulas en hojas de cálculo.
+- Inventario de activos por organización con paginación, búsqueda, filtros,
+  archivado y eliminación segura.
+- La asociación y desvinculación de activos mediante la API de hallazgos, y el
+  filtro HTTP por `assetId`, quedan pendientes de exposición en los controladores.
 
 ## Criterios de aceptación del MVP
 
