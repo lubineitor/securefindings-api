@@ -522,4 +522,26 @@ public class FindingService {
                         throw new AssetArchivedException(assetId);
                 }
         }
+
+        @Transactional
+        public Finding updateAsset(UUID id, UUID assetId) {
+                UUID organizationId = organizationContext.currentOrganizationId();
+                Finding currentFinding = getById(id);
+
+                if (Objects.equals(currentFinding.assetId(), assetId)) {
+                        return currentFinding;
+                }
+
+                ensureAssetCanBeLinked(assetId, organizationId);
+
+                Finding updatedFinding = currentFinding.withAssetId(assetId);
+                Finding savedFinding = save(updatedFinding, organizationId);
+
+                auditService.register(
+                                savedFinding.id(),
+                                AuditAction.UPDATED,
+                                currentActor());
+
+                return savedFinding;
+        }
 }
