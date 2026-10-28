@@ -34,8 +34,8 @@ en este documento y en `SECURITY.md`.
   protegida frente a la inyección de fórmulas en hojas de cálculo.
 - Inventario de activos por organización con paginación, búsqueda, filtros,
   archivado y eliminación segura.
-- La asociación y desvinculación de activos mediante la API de hallazgos, y el
-  filtro HTTP por `assetId`, quedan pendientes de exposición en los controladores.
+- Inventario de activos por organización y asociación, desvinculación y filtrado
+  de hallazgos y exportaciones por `assetId`.
 
 ## Criterios de aceptación del MVP
 

@@ -88,9 +88,11 @@ Los activos archivados se conservan para mantener el contexto de los hallazgos,
 pero no se pueden asociar a hallazgos nuevos. Solo se pueden eliminar si no
 tienen hallazgos asociados.
 
-La persistencia contempla la asociación de activos a hallazgos, pero la API REST
-actual todavía no permite enviar `assetId` al crear un hallazgo, asociar o
-desvincular un activo posteriormente ni filtrar el listado HTTP por activo.
+La API permite asociar activos al crear hallazgos, filtrar el listado y la
+exportación por `assetId`, y vincular o desvincular activos posteriormente.
+El CSV incluye la columna `assetId`; queda vacía cuando el hallazgo no tiene un
+activo asociado. Estas operaciones respetan la organización actual y no permiten
+asociar activos archivados.
 
 ### Ciclo de vida de los hallazgos
 
@@ -484,9 +486,10 @@ Si se envían ambos, `createdFrom` debe ser anterior o igual a `createdTo`.
 
 `GET /api/v1/findings/export` descarga los hallazgos de la organización actual
 como `securefindings.csv`. Acepta los filtros `q`, `severity`, `status`,
-`createdFrom` y `createdTo`, con el mismo comportamiento que el listado. El orden
-es `createdAt DESC` e `id ASC`. Las fechas son inclusivas y `q` admite hasta 100
-caracteres.
+`createdFrom`, `createdTo` y `assetId`. El orden es `createdAt DESC` e `id ASC`.
+El archivo incluye las columnas `id`, `title`, `description`, `severity`,
+`status`, `createdAt`, `updatedAt` y `assetId`. La columna `assetId` queda vacía
+si el hallazgo no tiene activo asociado.
 
 El archivo contiene las columnas `id`, `title`, `description`, `severity`,
 `status`, `createdAt` y `updatedAt`. Se descarga como `text/csv; charset=UTF-8`,
