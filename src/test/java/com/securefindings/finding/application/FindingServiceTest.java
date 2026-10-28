@@ -631,4 +631,29 @@ class FindingServiceTest {
                                                 null,
                                                 null));
         }
+
+        @Test
+        void noDeberiaGuardarNiAuditarSiElActivoYaEstaAsociado() {
+                UUID assetId = UUID.randomUUID();
+                Finding current = Finding.create(
+                                "SQL Injection",
+                                "Entrada sin validar",
+                                FindingSeverity.HIGH,
+                                assetId);
+
+                when(findingRepository.findByIdAndOrganizationId(
+                                current.id(),
+                                TEST_ORGANIZATION_ID))
+                                .thenReturn(Optional.of(new FindingEntity(
+                                                current,
+                                                TEST_ORGANIZATION_ID)));
+
+                Finding unchanged = findingService.updateAsset(
+                                current.id(),
+                                assetId);
+
+                assertEquals(current, unchanged);
+                verify(findingRepository, never()).save(any(FindingEntity.class));
+                verifyNoInteractions(assetRepository, auditService);
+        }
 }
