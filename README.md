@@ -447,6 +447,7 @@ Las pruebas públicas devuelven únicamente el estado, sin mostrar componentes n
 |---|---|---|---|
 | `GET` | `/api/v1/assets` | Lista activos con paginación y filtros | `ANALYST`, `ADMIN` |
 | `GET` | `/api/v1/assets/{id}` | Consulta un activo | `ANALYST`, `ADMIN` |
+| `GET` | `/api/v1/assets/export` | Exporta activos filtrados a CSV | `ANALYST`, `ADMIN` |
 | `POST` | `/api/v1/assets` | Crea un activo | `ADMIN` |
 | `PATCH` | `/api/v1/assets/{id}` | Actualiza, archiva o reactiva un activo | `ADMIN` |
 | `DELETE` | `/api/v1/assets/{id}` | Elimina un activo sin hallazgos asociados | `ADMIN` |
@@ -462,6 +463,37 @@ Las pruebas públicas devuelven únicamente el estado, sin mostrar componentes n
   "type": "API",
   "environment": "PRODUCTION",
   "criticality": "HIGH"
+}
+```
+
+#### Exportar activos a CSV
+
+`GET /api/v1/assets/export` descarga `securefindings-assets.csv` con los activos
+de la organización actual. Acepta filtros opcionales:
+
+| Parámetro | Descripción |
+|---|---|
+| `q` | Busca por nombre o identificador; máximo 100 caracteres. |
+| `type` | Tipo del activo. |
+| `environment` | Entorno del activo. |
+| `criticality` | Criticidad del activo. |
+| `status` | Estado `ACTIVE` o `ARCHIVED`. |
+
+El resultado se ordena por `name ASC` e `id ASC`. El archivo UTF-8 contiene las
+columnas `id`, `name`, `identifier`, `type`, `environment`, `criticality`,
+`status`, `createdAt` y `updatedAt`. Las celdas se escapan y neutralizan para
+evitar la inyección de fórmulas en hojas de cálculo. La respuesta incluye
+`Cache-Control: no-store`.
+
+La exportación admite hasta 1.000 activos. Si hay más, responde `413`:
+
+```json
+{
+  "code": "ASSET_EXPORT_LIMIT_EXCEEDED",
+  "message": "La exportación supera el máximo de 1000 activos",
+  "errors": {
+    "limit": "1000"
+  }
 }
 ```
 
@@ -1045,6 +1077,7 @@ Las pruebas cubren:
 - Limpieza del contexto MDC.
 - Integración del filtro en Spring Security.
 - Persistencia y recuperación del `requestId` en auditoría.
+- Exportación CSV de activos, límite de filas y neutralización de fórmulas.
 
 ## Integración continua
 

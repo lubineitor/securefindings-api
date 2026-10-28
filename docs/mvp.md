@@ -34,9 +34,8 @@ en este documento y en `SECURITY.md`.
 - Exportación CSV UTF-8 filtrada por organización, limitada a 1.000 hallazgos y
   protegida frente a la inyección de fórmulas en hojas de cálculo.
 - Inventario de activos por organización con paginación, búsqueda, filtros,
-  archivado y eliminación segura.
-- Inventario de activos por organización y asociación, desvinculación y filtrado
-  de hallazgos y exportaciones por `assetId`.
+  archivado, eliminación segura y exportación CSV limitada y protegida frente a
+  la inyección de fórmulas.
 
 ## Criterios de aceptación del MVP
 
