@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 
 import java.time.Instant;
 import java.util.List;
@@ -32,6 +33,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
 import com.securefindings.api.error.GlobalExceptionHandler;
+import com.securefindings.asset.application.AssetExportLimitExceededException;
 import com.securefindings.asset.application.AssetHasFindingsException;
 import com.securefindings.asset.application.AssetIdentifierAlreadyExistsException;
 import com.securefindings.asset.application.AssetService;
@@ -47,220 +49,276 @@ import com.securefindings.security.SecurityConfig;
 @WithMockUser(username = "analista", roles = "ANALYST")
 class AssetControllerTest {
 
-    @Autowired
-    private WebApplicationContext context;
+        @Autowired
+        private WebApplicationContext context;
 
-    @MockitoBean
-    private AssetService assetService;
+        @MockitoBean
+        private AssetService assetService;
 
-    private MockMvc mockMvc;
+        @MockitoBean
+        private AssetCsvExporter assetCsvExporter;
 
-    @BeforeEach
-    void configurarMockMvc() {
-        mockMvc = MockMvcBuilders.webAppContextSetup(context)
-                .apply(springSecurity())
-                .build();
-    }
+        private MockMvc mockMvc;
 
-    @Test
-    void deberiaListarActivosPaginados() throws Exception {
-        when(assetService.findPage(0, 20, null, null, null, null, null))
-                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+        @BeforeEach
+        void configurarMockMvc() {
+                mockMvc = MockMvcBuilders.webAppContextSetup(context)
+                                .apply(springSecurity())
+                                .build();
+        }
 
-        mockMvc.perform(get("/api/v1/assets"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content").isArray())
-                .andExpect(jsonPath("$.content").isEmpty())
-                .andExpect(jsonPath("$.page").value(0))
-                .andExpect(jsonPath("$.size").value(20));
-    }
+        @Test
+        void deberiaListarActivosPaginados() throws Exception {
+                when(assetService.findPage(0, 20, null, null, null, null, null))
+                                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
 
-    @Test
-    void deberiaRechazarUnFiltroDeTipoDesconocido() throws Exception {
-        mockMvc.perform(get("/api/v1/assets").param("type", "UNKNOWN"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+                mockMvc.perform(get("/api/v1/assets"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.content").isArray())
+                                .andExpect(jsonPath("$.content").isEmpty())
+                                .andExpect(jsonPath("$.page").value(0))
+                                .andExpect(jsonPath("$.size").value(20));
+        }
 
-        verifyNoInteractions(assetService);
-    }
+        @Test
+        void deberiaExportarActivosAplicandoFiltros() throws Exception {
+                Asset asset = sampleAsset(UUID.randomUUID());
+                String csv = "\"id\",\"name\",\"identifier\",\"type\",\"environment\",\"criticality\",\"status\",\"createdAt\",\"updatedAt\"\r\n";
 
-    @Test
-    @WithMockUser(username = "administrador", roles = "ADMIN")
-    void deberiaCrearUnActivoYDevolverLocation() throws Exception {
-        Asset asset = sampleAsset(UUID.fromString("22222222-2222-2222-2222-222222222222"));
-        when(assetService.create(
-                "API pagos",
-                "https://payments.example.test",
-                AssetType.API,
-                AssetEnvironment.PRODUCTION,
-                AssetCriticality.HIGH))
-                .thenReturn(asset);
+                when(assetService.findForExport(
+                                "payments",
+                                AssetType.API,
+                                null,
+                                null,
+                                AssetStatus.ACTIVE))
+                                .thenReturn(List.of(asset));
+                when(assetCsvExporter.toCsv(List.of(asset))).thenReturn(csv);
 
-        mockMvc.perform(post("/api/v1/assets")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""
-                        {
-                          "name": "API pagos",
-                          "identifier": "https://payments.example.test",
-                          "type": "API",
-                          "environment": "PRODUCTION",
-                          "criticality": "HIGH"
-                        }
-                        """))
-                .andExpect(status().isCreated())
-                .andExpect(header().string(
-                        "Location",
-                        org.hamcrest.Matchers.endsWith(
-                                "/api/v1/assets/22222222-2222-2222-2222-222222222222")))
-                .andExpect(jsonPath("$.name").value("API pagos"))
-                .andExpect(jsonPath("$.status").value("ACTIVE"));
+                mockMvc.perform(get("/api/v1/assets/export")
+                                .param("q", "payments")
+                                .param("type", "API")
+                                .param("status", "ACTIVE"))
+                                .andExpect(status().isOk())
+                                .andExpect(content().contentTypeCompatibleWith(
+                                                MediaType.parseMediaType("text/csv")))
+                                .andExpect(header().string(
+                                                "Content-Disposition",
+                                                "attachment; filename=\"securefindings-assets.csv\""))
+                                .andExpect(header().string("Cache-Control", "no-store"))
+                                .andExpect(content().string(csv));
 
-        verify(assetService).create(
-                "API pagos",
-                "https://payments.example.test",
-                AssetType.API,
-                AssetEnvironment.PRODUCTION,
-                AssetCriticality.HIGH);
-    }
+                verify(assetService).findForExport(
+                                "payments",
+                                AssetType.API,
+                                null,
+                                null,
+                                AssetStatus.ACTIVE);
+        }
 
-    @Test
-    void analystNoPuedeCrearActivos() throws Exception {
-        mockMvc.perform(post("/api/v1/assets")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{}"))
-                .andExpect(status().isForbidden());
+        @Test
+        void deberiaResponder413SiLaExportacionSuperaElLimite() throws Exception {
+                when(assetService.findForExport(
+                                null,
+                                null,
+                                null,
+                                null,
+                                null))
+                                .thenThrow(new AssetExportLimitExceededException(
+                                                AssetService.MAX_EXPORT_ROWS));
 
-        verifyNoInteractions(assetService);
-    }
+                mockMvc.perform(get("/api/v1/assets/export"))
+                                .andExpect(status().is(413))
+                                .andExpect(jsonPath("$.code")
+                                                .value("ASSET_EXPORT_LIMIT_EXCEEDED"))
+                                .andExpect(jsonPath("$.errors.limit").value("1000"));
+        }
 
-    @Test
-    void analystNoPuedeEliminarActivos() throws Exception {
-        mockMvc.perform(delete("/api/v1/assets/{id}", UUID.randomUUID()))
-                .andExpect(status().isForbidden());
+        @Test
+        void deberiaRechazarUnFiltroDeTipoDesconocido() throws Exception {
+                mockMvc.perform(get("/api/v1/assets").param("type", "UNKNOWN"))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 
-        verifyNoInteractions(assetService);
-    }
+                verifyNoInteractions(assetService);
+        }
 
-    @Test
-    @WithMockUser(username = "administrador", roles = "ADMIN")
-    void deberiaPermitirArchivarConUnaActualizacionParcial() throws Exception {
-        UUID assetId = UUID.randomUUID();
-        Asset archivedAsset = new Asset(
-                assetId,
-                "API pagos",
-                "https://payments.example.test",
-                AssetType.API,
-                AssetEnvironment.PRODUCTION,
-                AssetCriticality.HIGH,
-                AssetStatus.ARCHIVED,
-                Instant.parse("2026-10-01T10:00:00Z"),
-                Instant.parse("2026-10-02T10:00:00Z"));
-        when(assetService.update(
-                assetId,
-                null,
-                null,
-                null,
-                null,
-                null,
-                AssetStatus.ARCHIVED))
-                .thenReturn(archivedAsset);
+        @Test
+        @WithMockUser(username = "administrador", roles = "ADMIN")
+        void deberiaCrearUnActivoYDevolverLocation() throws Exception {
+                Asset asset = sampleAsset(UUID.fromString("22222222-2222-2222-2222-222222222222"));
+                when(assetService.create(
+                                "API pagos",
+                                "https://payments.example.test",
+                                AssetType.API,
+                                AssetEnvironment.PRODUCTION,
+                                AssetCriticality.HIGH))
+                                .thenReturn(asset);
 
-        mockMvc.perform(patch("/api/v1/assets/{id}", assetId)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""
-                        { "status": "ARCHIVED" }
-                        """))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("ARCHIVED"));
+                mockMvc.perform(post("/api/v1/assets")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                                {
+                                                  "name": "API pagos",
+                                                  "identifier": "https://payments.example.test",
+                                                  "type": "API",
+                                                  "environment": "PRODUCTION",
+                                                  "criticality": "HIGH"
+                                                }
+                                                """))
+                                .andExpect(status().isCreated())
+                                .andExpect(header().string(
+                                                "Location",
+                                                org.hamcrest.Matchers.endsWith(
+                                                                "/api/v1/assets/22222222-2222-2222-2222-222222222222")))
+                                .andExpect(jsonPath("$.name").value("API pagos"))
+                                .andExpect(jsonPath("$.status").value("ACTIVE"));
 
-        verify(assetService).update(
-                assetId,
-                null,
-                null,
-                null,
-                null,
-                null,
-                AssetStatus.ARCHIVED);
-    }
+                verify(assetService).create(
+                                "API pagos",
+                                "https://payments.example.test",
+                                AssetType.API,
+                                AssetEnvironment.PRODUCTION,
+                                AssetCriticality.HIGH);
+        }
 
-    @Test
-    @WithMockUser(username = "administrador", roles = "ADMIN")
-    void deberiaRechazarUnNombreEnBlancoEnLaActualizacionParcial() throws Exception {
-        mockMvc.perform(patch("/api/v1/assets/{id}", UUID.randomUUID())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""
-                        { "name": "   " }
-                        """))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+        @Test
+        void analystNoPuedeCrearActivos() throws Exception {
+                mockMvc.perform(post("/api/v1/assets")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{}"))
+                                .andExpect(status().isForbidden());
 
-        verifyNoInteractions(assetService);
-    }
+                verifyNoInteractions(assetService);
+        }
 
-    @Test
-    @WithMockUser(username = "administrador", roles = "ADMIN")
-    void deberiaValidarLosCamposObligatoriosAlCrearUnActivo() throws Exception {
-        mockMvc.perform(post("/api/v1/assets")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{}"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
-                .andExpect(jsonPath("$.errors.name")
-                        .value("El nombre del activo es obligatorio"));
+        @Test
+        void analystNoPuedeEliminarActivos() throws Exception {
+                mockMvc.perform(delete("/api/v1/assets/{id}", UUID.randomUUID()))
+                                .andExpect(status().isForbidden());
 
-        verifyNoInteractions(assetService);
-    }
+                verifyNoInteractions(assetService);
+        }
 
-    @Test
-    @WithMockUser(username = "administrador", roles = "ADMIN")
-    void deberiaResponder409SiElIdentificadorYaExiste() throws Exception {
-        when(assetService.create(
-                "API pagos",
-                "payments-api",
-                AssetType.API,
-                AssetEnvironment.PRODUCTION,
-                AssetCriticality.HIGH))
-                .thenThrow(new AssetIdentifierAlreadyExistsException("payments-api"));
+        @Test
+        @WithMockUser(username = "administrador", roles = "ADMIN")
+        void deberiaPermitirArchivarConUnaActualizacionParcial() throws Exception {
+                UUID assetId = UUID.randomUUID();
+                Asset archivedAsset = new Asset(
+                                assetId,
+                                "API pagos",
+                                "https://payments.example.test",
+                                AssetType.API,
+                                AssetEnvironment.PRODUCTION,
+                                AssetCriticality.HIGH,
+                                AssetStatus.ARCHIVED,
+                                Instant.parse("2026-10-01T10:00:00Z"),
+                                Instant.parse("2026-10-02T10:00:00Z"));
+                when(assetService.update(
+                                assetId,
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                AssetStatus.ARCHIVED))
+                                .thenReturn(archivedAsset);
 
-        mockMvc.perform(post("/api/v1/assets")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""
-                        {
-                          "name": "API pagos",
-                          "identifier": "payments-api",
-                          "type": "API",
-                          "environment": "PRODUCTION",
-                          "criticality": "HIGH"
-                        }
-                        """))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code")
-                        .value("ASSET_IDENTIFIER_ALREADY_EXISTS"));
-    }
+                mockMvc.perform(patch("/api/v1/assets/{id}", assetId)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                                { "status": "ARCHIVED" }
+                                                """))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.status").value("ARCHIVED"));
 
-    @Test
-    @WithMockUser(username = "administrador", roles = "ADMIN")
-    void deberiaResponder409AlEliminarUnActivoAsociado() throws Exception {
-        UUID assetId = UUID.randomUUID();
-        doThrow(new AssetHasFindingsException(assetId))
-                .when(assetService).delete(assetId);
+                verify(assetService).update(
+                                assetId,
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                AssetStatus.ARCHIVED);
+        }
 
-        mockMvc.perform(delete("/api/v1/assets/{id}", assetId))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("ASSET_HAS_FINDINGS"));
-    }
+        @Test
+        @WithMockUser(username = "administrador", roles = "ADMIN")
+        void deberiaRechazarUnNombreEnBlancoEnLaActualizacionParcial() throws Exception {
+                mockMvc.perform(patch("/api/v1/assets/{id}", UUID.randomUUID())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                                { "name": "   " }
+                                                """))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 
-    private Asset sampleAsset(UUID id) {
-        Instant now = Instant.parse("2026-10-01T10:00:00Z");
-        return new Asset(
-                id,
-                "API pagos",
-                "https://payments.example.test",
-                AssetType.API,
-                AssetEnvironment.PRODUCTION,
-                AssetCriticality.HIGH,
-                AssetStatus.ACTIVE,
-                now,
-                now);
-    }
+                verifyNoInteractions(assetService);
+        }
+
+        @Test
+        @WithMockUser(username = "administrador", roles = "ADMIN")
+        void deberiaValidarLosCamposObligatoriosAlCrearUnActivo() throws Exception {
+                mockMvc.perform(post("/api/v1/assets")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{}"))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                                .andExpect(jsonPath("$.errors.name")
+                                                .value("El nombre del activo es obligatorio"));
+
+                verifyNoInteractions(assetService);
+        }
+
+        @Test
+        @WithMockUser(username = "administrador", roles = "ADMIN")
+        void deberiaResponder409SiElIdentificadorYaExiste() throws Exception {
+                when(assetService.create(
+                                "API pagos",
+                                "payments-api",
+                                AssetType.API,
+                                AssetEnvironment.PRODUCTION,
+                                AssetCriticality.HIGH))
+                                .thenThrow(new AssetIdentifierAlreadyExistsException("payments-api"));
+
+                mockMvc.perform(post("/api/v1/assets")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                                {
+                                                  "name": "API pagos",
+                                                  "identifier": "payments-api",
+                                                  "type": "API",
+                                                  "environment": "PRODUCTION",
+                                                  "criticality": "HIGH"
+                                                }
+                                                """))
+                                .andExpect(status().isConflict())
+                                .andExpect(jsonPath("$.code")
+                                                .value("ASSET_IDENTIFIER_ALREADY_EXISTS"));
+        }
+
+        @Test
+        @WithMockUser(username = "administrador", roles = "ADMIN")
+        void deberiaResponder409AlEliminarUnActivoAsociado() throws Exception {
+                UUID assetId = UUID.randomUUID();
+                doThrow(new AssetHasFindingsException(assetId))
+                                .when(assetService).delete(assetId);
+
+                mockMvc.perform(delete("/api/v1/assets/{id}", assetId))
+                                .andExpect(status().isConflict())
+                                .andExpect(jsonPath("$.code").value("ASSET_HAS_FINDINGS"));
+        }
+
+        private Asset sampleAsset(UUID id) {
+                Instant now = Instant.parse("2026-10-01T10:00:00Z");
+                return new Asset(
+                                id,
+                                "API pagos",
+                                "https://payments.example.test",
+                                AssetType.API,
+                                AssetEnvironment.PRODUCTION,
+                                AssetCriticality.HIGH,
+                                AssetStatus.ACTIVE,
+                                now,
+                                now);
+        }
 }
