@@ -60,12 +60,20 @@ public class FindingService {
         }
 
         public FindingSummary getSummary() {
-                return getSummary(null, null);
+                return getSummary(null, null, null);
         }
 
         public FindingSummary getSummary(
                         Instant createdFrom,
                         Instant createdTo) {
+
+                return getSummary(createdFrom, createdTo, null);
+        }
+
+        public FindingSummary getSummary(
+                        Instant createdFrom,
+                        Instant createdTo,
+                        UUID assetId) {
 
                 if (createdFrom != null
                                 && createdTo != null
@@ -76,20 +84,37 @@ public class FindingService {
 
                 UUID organizationId = organizationContext.currentOrganizationId();
 
+                List<FindingRepository.StatusCountProjection> statusCounts = assetId == null
+                                ? findingRepository.countStatusesByOrganization(
+                                                organizationId,
+                                                createdFrom,
+                                                createdTo)
+                                : findingRepository.countStatusesByOrganizationAndAssetId(
+                                                organizationId,
+                                                assetId,
+                                                createdFrom,
+                                                createdTo);
+
+                List<FindingRepository.SeverityCountProjection> severityCounts = assetId == null
+                                ? findingRepository.countSeveritiesByOrganization(
+                                                organizationId,
+                                                createdFrom,
+                                                createdTo)
+                                : findingRepository.countSeveritiesByOrganizationAndAssetId(
+                                                organizationId,
+                                                assetId,
+                                                createdFrom,
+                                                createdTo);
+
                 Map<FindingStatus, Long> byStatus = new EnumMap<>(FindingStatus.class);
 
                 for (FindingStatus status : FindingStatus.values()) {
                         byStatus.put(status, 0L);
                 }
 
-                findingRepository
-                                .countStatusesByOrganization(
-                                                organizationId,
-                                                createdFrom,
-                                                createdTo)
-                                .forEach(result -> byStatus.put(
-                                                result.getStatus(),
-                                                result.getTotal()));
+                statusCounts.forEach(result -> byStatus.put(
+                                result.getStatus(),
+                                result.getTotal()));
 
                 Map<FindingSeverity, Long> bySeverity = new EnumMap<>(FindingSeverity.class);
 
@@ -97,14 +122,9 @@ public class FindingService {
                         bySeverity.put(severity, 0L);
                 }
 
-                findingRepository
-                                .countSeveritiesByOrganization(
-                                                organizationId,
-                                                createdFrom,
-                                                createdTo)
-                                .forEach(result -> bySeverity.put(
-                                                result.getSeverity(),
-                                                result.getTotal()));
+                severityCounts.forEach(result -> bySeverity.put(
+                                result.getSeverity(),
+                                result.getTotal()));
 
                 long total = 0L;
 

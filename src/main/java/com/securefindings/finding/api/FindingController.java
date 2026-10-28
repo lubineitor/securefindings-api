@@ -160,9 +160,11 @@ public class FindingController {
         public FindingSummary getSummary(
                         @Parameter(description = "Fecha inicial inclusiva en formato ISO-8601", example = "2026-10-01T00:00:00Z", in = ParameterIn.QUERY) @RequestParam(name = "createdFrom", required = false) @DateTimeFormat(iso = ISO.DATE_TIME) Instant createdFrom,
 
-                        @Parameter(description = "Fecha final inclusiva en formato ISO-8601", example = "2026-10-19T23:59:59Z", in = ParameterIn.QUERY) @RequestParam(name = "createdTo", required = false) @DateTimeFormat(iso = ISO.DATE_TIME) Instant createdTo) {
+                        @Parameter(description = "Fecha final inclusiva en formato ISO-8601", example = "2026-10-19T23:59:59Z", in = ParameterIn.QUERY) @RequestParam(name = "createdTo", required = false) @DateTimeFormat(iso = ISO.DATE_TIME) Instant createdTo,
 
-                return findingService.getSummary(createdFrom, createdTo);
+                        @Parameter(description = "Filtrar por identificador del activo", in = ParameterIn.QUERY) @RequestParam(name = "assetId", required = false) UUID assetId) {
+
+                return findingService.getSummary(createdFrom, createdTo, assetId);
         }
 
         @GetMapping(value = "/export", produces = "text/csv")
