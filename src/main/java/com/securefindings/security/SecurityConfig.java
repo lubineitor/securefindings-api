@@ -174,14 +174,19 @@ public class SecurityConfig {
                                                 .hasAnyRole("ANALYST", "ADMIN")
 
                                                 .requestMatchers(
-                                                                HttpMethod.DELETE,
-                                                                "/api/v1/findings/**")
-                                                .hasRole("ADMIN")
-
-                                                .requestMatchers(
                                                                 HttpMethod.POST,
                                                                 "/api/v1/findings/*/comments")
                                                 .hasAnyRole("ANALYST", "ADMIN")
+
+                                                .requestMatchers(
+                                                                HttpMethod.DELETE,
+                                                                "/api/v1/findings/*/asset")
+                                                .hasAnyRole("ANALYST", "ADMIN")
+
+                                                .requestMatchers(
+                                                                HttpMethod.DELETE,
+                                                                "/api/v1/findings/**")
+                                                .hasRole("ADMIN")
 
                                                 .requestMatchers("/actuator/prometheus")
                                                 .hasAnyRole("ADMIN", "METRICS_READER")

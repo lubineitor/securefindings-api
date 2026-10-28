@@ -94,7 +94,9 @@ public class FindingController {
 
                         @Parameter(description = "Fecha de creación inicial inclusiva, en formato ISO-8601", example = "2026-10-01T00:00:00Z", in = ParameterIn.QUERY) @RequestParam(name = "createdFrom", required = false) @DateTimeFormat(iso = ISO.DATE_TIME) Instant createdFrom,
 
-                        @Parameter(description = "Fecha de creación final inclusiva, en formato ISO-8601", example = "2026-10-17T23:59:59Z", in = ParameterIn.QUERY) @RequestParam(name = "createdTo", required = false) @DateTimeFormat(iso = ISO.DATE_TIME) Instant createdTo) {
+                        @Parameter(description = "Fecha de creación final inclusiva, en formato ISO-8601", example = "2026-10-17T23:59:59Z", in = ParameterIn.QUERY) @RequestParam(name = "createdTo", required = false) @DateTimeFormat(iso = ISO.DATE_TIME) Instant createdTo,
+
+                        @Parameter(description = "Filtrar por identificador de activo", in = ParameterIn.QUERY) @RequestParam(name = "assetId", required = false) UUID assetId) {
 
                 if (createdFrom != null
                                 && createdTo != null
@@ -105,7 +107,19 @@ public class FindingController {
 
                 Page<Finding> findingPage;
 
-                if (createdFrom == null && createdTo == null) {
+                if (assetId != null) {
+                        findingPage = findingService.findPage(
+                                        page,
+                                        size,
+                                        searchTerm,
+                                        severity,
+                                        status,
+                                        FindingSortField.from(sortBy),
+                                        FindingSortDirection.from(direction),
+                                        createdFrom,
+                                        createdTo,
+                                        assetId);
+                } else if (createdFrom == null && createdTo == null) {
                         findingPage = findingService.findPage(
                                         page,
                                         size,
@@ -247,7 +261,8 @@ public class FindingController {
                 return findingService.create(
                                 request.title(),
                                 request.description(),
-                                request.severity());
+                                request.severity(),
+                                request.assetId());
         }
 
         @PatchMapping("/{id}/status")
@@ -274,6 +289,35 @@ public class FindingController {
                 return findingService.updateStatus(
                                 id,
                                 request.status());
+        }
+
+        @PatchMapping("/{id}/asset")
+        @Operation(summary = "Asociar un activo a un hallazgo", description = "Asocia un activo de la organización actual al hallazgo")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "200", description = "Activo asociado correctamente", content = @Content(mediaType = "application/json", schema = @Schema(implementation = Finding.class))),
+                        @ApiResponse(responseCode = "400", description = "El identificador del activo no es válido"),
+                        @ApiResponse(responseCode = "404", description = "El hallazgo o el activo no existe en la organización"),
+                        @ApiResponse(responseCode = "409", description = "El activo está archivado")
+        })
+        public Finding updateAsset(
+                        @Parameter(description = "Identificador del hallazgo", required = true) @PathVariable UUID id,
+
+                        @Valid @RequestBody UpdateFindingAssetRequest request) {
+
+                return findingService.updateAsset(id, request.assetId());
+        }
+
+        @DeleteMapping("/{id}/asset")
+        @ResponseStatus(HttpStatus.NO_CONTENT)
+        @Operation(summary = "Desvincular el activo de un hallazgo", description = "Elimina la asociación entre el hallazgo y su activo")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "204", description = "Activo desvinculado correctamente"),
+                        @ApiResponse(responseCode = "404", description = "El hallazgo no existe en la organización")
+        })
+        public void removeAsset(
+                        @Parameter(description = "Identificador del hallazgo", required = true) @PathVariable UUID id) {
+
+                findingService.updateAsset(id, null);
         }
 
         @PutMapping("/{id}")
