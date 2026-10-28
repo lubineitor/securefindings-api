@@ -804,7 +804,7 @@ class FindingControllerTest {
                                                 FindingSeverity.HIGH, 1L,
                                                 FindingSeverity.CRITICAL, 0L));
 
-                when(findingService.getSummary(null, null)).thenReturn(summary);
+                when(findingService.getSummary(null, null, null)).thenReturn(summary);
 
                 mockMvc.perform(get("/api/v1/findings/summary"))
                                 .andExpect(status().isOk())
@@ -814,7 +814,7 @@ class FindingControllerTest {
                                 .andExpect(jsonPath("$.bySeverity.MEDIUM").value(1))
                                 .andExpect(jsonPath("$.bySeverity.HIGH").value(1));
 
-                verify(findingService).getSummary(null, null);
+                verify(findingService).getSummary(null, null, null);
         }
 
         @Test
@@ -823,7 +823,7 @@ class FindingControllerTest {
                 Instant createdTo = Instant.parse("2026-10-19T23:59:59Z");
                 FindingSummary summary = new FindingSummary(0L, Map.of(), Map.of());
 
-                when(findingService.getSummary(createdFrom, createdTo))
+                when(findingService.getSummary(createdFrom, createdTo, null))
                                 .thenReturn(summary);
 
                 mockMvc.perform(get("/api/v1/findings/summary")
@@ -832,7 +832,7 @@ class FindingControllerTest {
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.total").value(0));
 
-                verify(findingService).getSummary(createdFrom, createdTo);
+                verify(findingService).getSummary(createdFrom, createdTo, null);
         }
 
         @Test
@@ -1033,5 +1033,28 @@ class FindingControllerTest {
                                 null,
                                 null,
                                 assetId);
+        }
+
+        @Test
+        void deberiaFiltrarElResumenPorActivo() throws Exception {
+                UUID assetId = UUID.fromString(
+                                "22222222-2222-2222-2222-222222222222");
+
+                FindingSummary summary = new FindingSummary(
+                                1L,
+                                Map.of(FindingStatus.OPEN, 1L),
+                                Map.of(FindingSeverity.HIGH, 1L));
+
+                when(findingService.getSummary(null, null, assetId))
+                                .thenReturn(summary);
+
+                mockMvc.perform(get("/api/v1/findings/summary")
+                                .param("assetId", assetId.toString()))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.total").value(1))
+                                .andExpect(jsonPath("$.byStatus.OPEN").value(1))
+                                .andExpect(jsonPath("$.bySeverity.HIGH").value(1));
+
+                verify(findingService).getSummary(null, null, assetId);
         }
 }

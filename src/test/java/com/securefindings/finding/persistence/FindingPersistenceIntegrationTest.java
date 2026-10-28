@@ -22,6 +22,11 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
+import com.securefindings.asset.application.AssetService;
+import com.securefindings.asset.domain.Asset;
+import com.securefindings.asset.domain.AssetCriticality;
+import com.securefindings.asset.domain.AssetEnvironment;
+import com.securefindings.asset.domain.AssetType;
 import com.securefindings.audit.application.AuditService;
 import com.securefindings.audit.domain.AuditAction;
 import com.securefindings.audit.persistence.FindingAuditEntity;
@@ -70,6 +75,9 @@ class FindingPersistenceIntegrationTest {
 
         @Autowired
         private FindingAuditRepository findingAuditRepository;
+
+        @Autowired
+        private AssetService assetService;
 
         @BeforeEach
         void limpiarBaseDeDatos() {
@@ -675,5 +683,58 @@ class FindingPersistenceIntegrationTest {
                                                                 "El repositorio devolvió un evento nulo")
                                                                 .getOccurredAt())
                                                 .toList());
+        }
+
+        @Test
+        void deberiaFiltrarElResumenPersistidoPorActivo() {
+                Asset firstAsset = assetService.create(
+                                "Activo de resumen A",
+                                "https://summary-" + UUID.randomUUID() + ".example.test",
+                                AssetType.API,
+                                AssetEnvironment.PRODUCTION,
+                                AssetCriticality.HIGH);
+
+                Asset secondAsset = assetService.create(
+                                "Activo de resumen B",
+                                "https://summary-" + UUID.randomUUID() + ".example.test",
+                                AssetType.API,
+                                AssetEnvironment.PRODUCTION,
+                                AssetCriticality.HIGH);
+
+                Finding inProgressFinding = findingService.create(
+                                "Hallazgo en curso del activo A",
+                                "Descripción del hallazgo",
+                                FindingSeverity.HIGH,
+                                firstAsset.id());
+
+                findingService.updateStatus(
+                                inProgressFinding.id(),
+                                FindingStatus.IN_PROGRESS);
+
+                findingService.create(
+                                "Hallazgo abierto del activo A",
+                                "Otro hallazgo del activo",
+                                FindingSeverity.MEDIUM,
+                                firstAsset.id());
+
+                findingService.create(
+                                "Hallazgo de otro activo",
+                                "No debe aparecer en el resumen",
+                                FindingSeverity.CRITICAL,
+                                secondAsset.id());
+
+                FindingSummary summary = findingService.getSummary(
+                                null,
+                                null,
+                                firstAsset.id());
+
+                assertEquals(2L, summary.total());
+                assertEquals(1L, summary.byStatus().get(FindingStatus.OPEN));
+                assertEquals(1L, summary.byStatus().get(FindingStatus.IN_PROGRESS));
+                assertEquals(0L, summary.byStatus().get(FindingStatus.RESOLVED));
+
+                assertEquals(1L, summary.bySeverity().get(FindingSeverity.HIGH));
+                assertEquals(1L, summary.bySeverity().get(FindingSeverity.MEDIUM));
+                assertEquals(0L, summary.bySeverity().get(FindingSeverity.CRITICAL));
         }
 }

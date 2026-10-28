@@ -703,4 +703,57 @@ class FindingServiceTest {
                                 eq(assetId),
                                 any(Pageable.class));
         }
+
+        @Test
+        void deberiaResumirLosHallazgosDeUnActivo() {
+                UUID assetId = UUID.randomUUID();
+                Instant createdFrom = Instant.parse("2026-10-01T00:00:00Z");
+                Instant createdTo = Instant.parse("2026-10-19T23:59:59Z");
+
+                FindingRepository.StatusCountProjection openCount = mock(FindingRepository.StatusCountProjection.class);
+                when(openCount.getStatus()).thenReturn(FindingStatus.OPEN);
+                when(openCount.getTotal()).thenReturn(1L);
+
+                FindingRepository.SeverityCountProjection highCount = mock(
+                                FindingRepository.SeverityCountProjection.class);
+                when(highCount.getSeverity()).thenReturn(FindingSeverity.HIGH);
+                when(highCount.getTotal()).thenReturn(1L);
+
+                when(findingRepository.countStatusesByOrganizationAndAssetId(
+                                eq(TEST_ORGANIZATION_ID),
+                                eq(assetId),
+                                eq(createdFrom),
+                                eq(createdTo)))
+                                .thenReturn(List.of(openCount));
+
+                when(findingRepository.countSeveritiesByOrganizationAndAssetId(
+                                eq(TEST_ORGANIZATION_ID),
+                                eq(assetId),
+                                eq(createdFrom),
+                                eq(createdTo)))
+                                .thenReturn(List.of(highCount));
+
+                FindingSummary summary = findingService.getSummary(
+                                createdFrom,
+                                createdTo,
+                                assetId);
+
+                assertEquals(1L, summary.total());
+                assertEquals(1L, summary.byStatus().get(FindingStatus.OPEN));
+                assertEquals(0L, summary.byStatus().get(FindingStatus.IN_PROGRESS));
+                assertEquals(1L, summary.bySeverity().get(FindingSeverity.HIGH));
+                assertEquals(0L, summary.bySeverity().get(FindingSeverity.LOW));
+
+                verify(findingRepository).countStatusesByOrganizationAndAssetId(
+                                TEST_ORGANIZATION_ID,
+                                assetId,
+                                createdFrom,
+                                createdTo);
+
+                verify(findingRepository).countSeveritiesByOrganizationAndAssetId(
+                                TEST_ORGANIZATION_ID,
+                                assetId,
+                                createdFrom,
+                                createdTo);
+        }
 }
