@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.isNull;
 
 import java.time.Instant;
 import java.util.List;
@@ -175,5 +176,54 @@ class AssetAuditQueryServiceTest {
                                                 earlier));
 
                 verifyNoInteractions(organizationContext, assetAuditRepository);
+        }
+
+        @Test
+        void deberiaRechazarLaExportacionAlSuperarElMaximo() {
+                when(organizationContext.currentOrganizationId())
+                                .thenReturn(ORGANIZATION_ID);
+
+                when(assetAuditRepository.findPageByOrganizationIdAndFilters(
+                                eq(ORGANIZATION_ID),
+                                isNull(AssetAuditAction.class),
+                                isNull(String.class),
+                                isNull(String.class),
+                                isNull(Instant.class),
+                                isNull(Instant.class),
+                                any(Pageable.class)))
+                                .thenReturn(new PageImpl<>(
+                                                List.of(),
+                                                org.springframework.data.domain.PageRequest.of(
+                                                                0,
+                                                                AssetAuditQueryService.MAX_EXPORT_ROWS + 1),
+                                                AssetAuditQueryService.MAX_EXPORT_ROWS + 1));
+
+                AssetAuditExportLimitExceededException exception = assertThrows(
+                                AssetAuditExportLimitExceededException.class,
+                                () -> assetAuditQueryService.findForOrganizationExport(
+                                                null,
+                                                null,
+                                                null,
+                                                null,
+                                                null));
+
+                assertEquals(
+                                AssetAuditQueryService.MAX_EXPORT_ROWS,
+                                exception.maximumRows());
+
+                ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+
+                verify(assetAuditRepository).findPageByOrganizationIdAndFilters(
+                                eq(ORGANIZATION_ID),
+                                isNull(AssetAuditAction.class),
+                                isNull(String.class),
+                                isNull(String.class),
+                                isNull(Instant.class),
+                                isNull(Instant.class),
+                                pageableCaptor.capture());
+
+                assertEquals(
+                                AssetAuditQueryService.MAX_EXPORT_ROWS + 1,
+                                pageableCaptor.getValue().getPageSize());
         }
 }
