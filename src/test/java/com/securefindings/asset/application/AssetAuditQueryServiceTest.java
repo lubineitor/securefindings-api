@@ -32,95 +32,148 @@ import com.securefindings.security.OrganizationContext;
 @ExtendWith(MockitoExtension.class)
 class AssetAuditQueryServiceTest {
 
-    private static final UUID ORGANIZATION_ID = UUID.fromString(
-            "00000000-0000-0000-0000-000000000001");
+        private static final UUID ORGANIZATION_ID = UUID.fromString(
+                        "00000000-0000-0000-0000-000000000001");
 
-    private static final UUID ASSET_ID = UUID.fromString(
-            "00000000-0000-0000-0000-000000000101");
+        private static final UUID ASSET_ID = UUID.fromString(
+                        "00000000-0000-0000-0000-000000000101");
 
-    private static final Instant OCCURRED_FROM = Instant.parse("2026-10-01T00:00:00Z");
+        private static final Instant OCCURRED_FROM = Instant.parse("2026-10-01T00:00:00Z");
 
-    private static final Instant OCCURRED_TO = Instant.parse("2026-10-31T23:59:59Z");
+        private static final Instant OCCURRED_TO = Instant.parse("2026-10-31T23:59:59Z");
 
-    @Mock
-    private AssetAuditRepository assetAuditRepository;
+        @Mock
+        private AssetAuditRepository assetAuditRepository;
 
-    @Mock
-    private OrganizationContext organizationContext;
+        @Mock
+        private OrganizationContext organizationContext;
 
-    @InjectMocks
-    private AssetAuditQueryService assetAuditQueryService;
+        @InjectMocks
+        private AssetAuditQueryService assetAuditQueryService;
 
-    @Test
-    void deberiaFiltrarPorOrganizacionYAplicarPaginacion() {
-        Page<AssetAuditEntity> expectedPage = new PageImpl<>(
-                List.of(),
-                org.springframework.data.domain.PageRequest.of(2, 10),
-                21);
+        @Test
+        void deberiaFiltrarPorOrganizacionYAplicarPaginacionPorActivo() {
+                Page<AssetAuditEntity> expectedPage = new PageImpl<>(
+                                List.of(),
+                                org.springframework.data.domain.PageRequest.of(2, 10),
+                                21);
 
-        when(organizationContext.currentOrganizationId()).thenReturn(ORGANIZATION_ID);
-        when(assetAuditRepository.findPageByAssetIdAndOrganizationIdAndFilters(
-                eq(ASSET_ID),
-                eq(ORGANIZATION_ID),
-                eq(AssetAuditAction.ARCHIVED),
-                eq("asset-request-123"),
-                eq("analista"),
-                eq(OCCURRED_FROM),
-                eq(OCCURRED_TO),
-                any(Pageable.class)))
-                .thenReturn(expectedPage);
+                when(organizationContext.currentOrganizationId())
+                                .thenReturn(ORGANIZATION_ID);
 
-        Page<AssetAuditEntity> result = assetAuditQueryService.findPageByAssetId(
-                ASSET_ID,
-                2,
-                10,
-                AssetAuditAction.ARCHIVED,
-                "asset-request-123",
-                "analista",
-                OCCURRED_FROM,
-                OCCURRED_TO);
+                when(assetAuditRepository.findPageByAssetIdAndOrganizationIdAndFilters(
+                                eq(ASSET_ID),
+                                eq(ORGANIZATION_ID),
+                                eq(AssetAuditAction.ARCHIVED),
+                                eq("asset-request-123"),
+                                eq("analista"),
+                                eq(OCCURRED_FROM),
+                                eq(OCCURRED_TO),
+                                any(Pageable.class)))
+                                .thenReturn(expectedPage);
 
-        assertSame(expectedPage, result);
+                Page<AssetAuditEntity> result = assetAuditQueryService.findPageByAssetId(
+                                ASSET_ID,
+                                2,
+                                10,
+                                AssetAuditAction.ARCHIVED,
+                                "asset-request-123",
+                                "analista",
+                                OCCURRED_FROM,
+                                OCCURRED_TO);
 
-        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+                assertSame(expectedPage, result);
 
-        verify(assetAuditRepository).findPageByAssetIdAndOrganizationIdAndFilters(
-                eq(ASSET_ID),
-                eq(ORGANIZATION_ID),
-                eq(AssetAuditAction.ARCHIVED),
-                eq("asset-request-123"),
-                eq("analista"),
-                eq(OCCURRED_FROM),
-                eq(OCCURRED_TO),
-                pageableCaptor.capture());
+                ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
 
-        Pageable pageable = pageableCaptor.getValue();
-        assertEquals(2, pageable.getPageNumber());
-        assertEquals(10, pageable.getPageSize());
-        assertEquals(
-                Sort.by(
-                        Sort.Order.asc("occurredAt"),
-                        Sort.Order.asc("id")),
-                pageable.getSort());
-    }
+                verify(assetAuditRepository)
+                                .findPageByAssetIdAndOrganizationIdAndFilters(
+                                                eq(ASSET_ID),
+                                                eq(ORGANIZATION_ID),
+                                                eq(AssetAuditAction.ARCHIVED),
+                                                eq("asset-request-123"),
+                                                eq("analista"),
+                                                eq(OCCURRED_FROM),
+                                                eq(OCCURRED_TO),
+                                                pageableCaptor.capture());
 
-    @Test
-    void deberiaRechazarUnRangoDeFechasInvertido() {
-        Instant later = Instant.parse("2026-10-31T00:00:00Z");
-        Instant earlier = Instant.parse("2026-10-01T00:00:00Z");
+                assertEquals(2, pageableCaptor.getValue().getPageNumber());
+                assertEquals(10, pageableCaptor.getValue().getPageSize());
+                assertEquals(
+                                Sort.by(
+                                                Sort.Order.asc("occurredAt"),
+                                                Sort.Order.asc("id")),
+                                pageableCaptor.getValue().getSort());
+        }
 
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> assetAuditQueryService.findPageByAssetId(
-                        ASSET_ID,
-                        0,
-                        20,
-                        null,
-                        null,
-                        null,
-                        later,
-                        earlier));
+        @Test
+        void deberiaConsultarLaAuditoriaGlobalDeLaOrganizacionActual() {
+                Page<AssetAuditEntity> expectedPage = new PageImpl<>(
+                                List.of(),
+                                org.springframework.data.domain.PageRequest.of(1, 10),
+                                11);
 
-        verifyNoInteractions(organizationContext, assetAuditRepository);
-    }
+                when(organizationContext.currentOrganizationId())
+                                .thenReturn(ORGANIZATION_ID);
+
+                when(assetAuditRepository.findPageByOrganizationIdAndFilters(
+                                eq(ORGANIZATION_ID),
+                                eq(AssetAuditAction.CREATED),
+                                eq("asset-request-123"),
+                                eq("analista"),
+                                eq(OCCURRED_FROM),
+                                eq(OCCURRED_TO),
+                                any(Pageable.class)))
+                                .thenReturn(expectedPage);
+
+                Page<AssetAuditEntity> result = assetAuditQueryService.findPageByOrganization(
+                                1,
+                                10,
+                                AssetAuditAction.CREATED,
+                                "asset-request-123",
+                                "analista",
+                                OCCURRED_FROM,
+                                OCCURRED_TO);
+
+                assertSame(expectedPage, result);
+
+                ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+
+                verify(assetAuditRepository)
+                                .findPageByOrganizationIdAndFilters(
+                                                eq(ORGANIZATION_ID),
+                                                eq(AssetAuditAction.CREATED),
+                                                eq("asset-request-123"),
+                                                eq("analista"),
+                                                eq(OCCURRED_FROM),
+                                                eq(OCCURRED_TO),
+                                                pageableCaptor.capture());
+
+                assertEquals(1, pageableCaptor.getValue().getPageNumber());
+                assertEquals(10, pageableCaptor.getValue().getPageSize());
+                assertEquals(
+                                Sort.by(
+                                                Sort.Order.asc("occurredAt"),
+                                                Sort.Order.asc("id")),
+                                pageableCaptor.getValue().getSort());
+        }
+
+        @Test
+        void deberiaRechazarUnRangoDeFechasInvertido() {
+                Instant later = Instant.parse("2026-10-31T00:00:00Z");
+                Instant earlier = Instant.parse("2026-10-01T00:00:00Z");
+
+                assertThrows(
+                                IllegalArgumentException.class,
+                                () -> assetAuditQueryService.findPageByOrganization(
+                                                0,
+                                                20,
+                                                null,
+                                                null,
+                                                null,
+                                                later,
+                                                earlier));
+
+                verifyNoInteractions(organizationContext, assetAuditRepository);
+        }
 }

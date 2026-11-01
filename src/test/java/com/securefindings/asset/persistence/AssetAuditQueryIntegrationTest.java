@@ -35,129 +35,176 @@ import com.securefindings.organization.persistence.OrganizationRepository;
 @SpringBootTest
 class AssetAuditQueryIntegrationTest {
 
-    private static final UUID OTHER_ORGANIZATION_ID = UUID.fromString(
-            "00000000-0000-0000-0000-000000000901");
+        private static final UUID OTHER_ORGANIZATION_ID = UUID.fromString(
+                        "00000000-0000-0000-0000-000000000901");
 
-    @SuppressWarnings("resource")
-    @Container
-    static final PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:17-alpine")
-            .withDatabaseName("securefindings_asset_audit_test")
-            .withUsername("securefindings_test")
-            .withPassword("securefindings_test");
+        @SuppressWarnings("resource")
+        @Container
+        static final PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:17-alpine")
+                        .withDatabaseName("securefindings_asset_audit_test")
+                        .withUsername("securefindings_test")
+                        .withPassword("securefindings_test");
 
-    @DynamicPropertySource
-    static void registerPostgresProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", postgres::getJdbcUrl);
-        registry.add("spring.datasource.username", postgres::getUsername);
-        registry.add("spring.datasource.password", postgres::getPassword);
-    }
+        @DynamicPropertySource
+        static void registerPostgresProperties(DynamicPropertyRegistry registry) {
+                registry.add("spring.datasource.url", postgres::getJdbcUrl);
+                registry.add("spring.datasource.username", postgres::getUsername);
+                registry.add("spring.datasource.password", postgres::getPassword);
+        }
 
-    @Autowired
-    private AssetService assetService;
+        @Autowired
+        private AssetService assetService;
 
-    @Autowired
-    private AssetRepository assetRepository;
+        @Autowired
+        private AssetRepository assetRepository;
 
-    @Autowired
-    private AssetAuditRepository assetAuditRepository;
+        @Autowired
+        private AssetAuditRepository assetAuditRepository;
 
-    @Autowired
-    private AssetAuditQueryService assetAuditQueryService;
+        @Autowired
+        private AssetAuditQueryService assetAuditQueryService;
 
-    @Autowired
-    private OrganizationRepository organizationRepository;
+        @Autowired
+        private OrganizationRepository organizationRepository;
 
-    @BeforeEach
-    void limpiarDatos() {
-        assetAuditRepository.deleteAll();
-        assetRepository.deleteAll();
-        organizationRepository.deleteById(OTHER_ORGANIZATION_ID);
-    }
+        @BeforeEach
+        void limpiarDatos() {
+                assetAuditRepository.deleteAll();
+                assetRepository.deleteAll();
+                organizationRepository.deleteById(OTHER_ORGANIZATION_ID);
+        }
 
-    @Test
-    void deberiaConsultarElHistorialAunqueElActivoEsteEliminado() {
-        Asset asset = assetService.create(
-                "API de pagos",
-                "payments-audit-test",
-                AssetType.API,
-                AssetEnvironment.PRODUCTION,
-                AssetCriticality.HIGH);
+        @Test
+        void deberiaConsultarElHistorialAunqueElActivoEsteEliminado() {
+                Asset asset = assetService.create(
+                                "API de pagos",
+                                "payments-audit-test",
+                                AssetType.API,
+                                AssetEnvironment.PRODUCTION,
+                                AssetCriticality.HIGH);
 
-        assetService.update(
-                asset.id(),
-                null,
-                null,
-                null,
-                null,
-                null,
-                AssetStatus.ARCHIVED);
+                assetService.update(
+                                asset.id(),
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                AssetStatus.ARCHIVED);
 
-        assetService.delete(asset.id());
+                assetService.delete(asset.id());
 
-        var page = assetAuditQueryService.findPageByAssetId(
-                asset.id(),
-                0,
-                20,
-                null,
-                null,
-                null,
-                null,
-                null);
+                var page = assetAuditQueryService.findPageByAssetId(
+                                asset.id(),
+                                0,
+                                20,
+                                null,
+                                null,
+                                null,
+                                null,
+                                null);
 
-        Set<AssetAuditAction> actions = Set.copyOf(
-                page.getContent()
-                        .stream()
-                        .map(event -> Objects.requireNonNull(
-                                event,
-                                "El repositorio devolvió un evento nulo")
-                                .getAction())
-                        .toList());
+                Set<AssetAuditAction> actions = Set.copyOf(
+                                page.getContent()
+                                                .stream()
+                                                .map(event -> Objects.requireNonNull(
+                                                                event,
+                                                                "El repositorio devolvió un evento nulo")
+                                                                .getAction())
+                                                .toList());
 
-        assertEquals(3L, page.getTotalElements());
-        assertEquals(
-                Set.of(
-                        AssetAuditAction.CREATED,
-                        AssetAuditAction.ARCHIVED,
-                        AssetAuditAction.DELETED),
-                actions);
-    }
+                assertEquals(3L, page.getTotalElements());
+                assertEquals(
+                                Set.of(
+                                                AssetAuditAction.CREATED,
+                                                AssetAuditAction.ARCHIVED,
+                                                AssetAuditAction.DELETED),
+                                actions);
+        }
 
-    @Test
-    void noDeberiaDevolverEventosDeOtraOrganizacion() {
-        Organization organization = new Organization(
-                OTHER_ORGANIZATION_ID,
-                "Organización de prueba de auditoría",
-                "auditoria-prueba",
-                Instant.parse("2026-10-01T10:00:00Z"));
+        @Test
+        void noDeberiaDevolverEventosDeOtraOrganizacion() {
+                Organization organization = new Organization(
+                                OTHER_ORGANIZATION_ID,
+                                "Organización de prueba de auditoría",
+                                "auditoria-prueba",
+                                Instant.parse("2026-10-01T10:00:00Z"));
 
-        organizationRepository.saveAndFlush(
-                new OrganizationEntity(organization));
+                organizationRepository.saveAndFlush(
+                                new OrganizationEntity(organization));
 
-        UUID assetId = UUID.randomUUID();
+                UUID assetId = UUID.randomUUID();
 
-        AssetAuditEvent otherOrganizationEvent = new AssetAuditEvent(
-                UUID.randomUUID(),
-                assetId,
-                OTHER_ORGANIZATION_ID,
-                AssetAuditAction.CREATED,
-                "otro-usuario",
-                Instant.parse("2026-10-10T10:00:00Z"),
-                "other-organization-request");
+                AssetAuditEvent otherOrganizationEvent = new AssetAuditEvent(
+                                UUID.randomUUID(),
+                                assetId,
+                                OTHER_ORGANIZATION_ID,
+                                AssetAuditAction.CREATED,
+                                "otro-usuario",
+                                Instant.parse("2026-10-10T10:00:00Z"),
+                                "other-organization-request");
 
-        assetAuditRepository.saveAndFlush(
-                new AssetAuditEntity(otherOrganizationEvent));
+                assetAuditRepository.saveAndFlush(
+                                new AssetAuditEntity(otherOrganizationEvent));
 
-        var page = assetAuditQueryService.findPageByAssetId(
-                assetId,
-                0,
-                20,
-                null,
-                null,
-                null,
-                null,
-                null);
+                var page = assetAuditQueryService.findPageByAssetId(
+                                assetId,
+                                0,
+                                20,
+                                null,
+                                null,
+                                null,
+                                null,
+                                null);
 
-        assertEquals(0L, page.getTotalElements());
-        assertEquals(List.of(), page.getContent());
-    }
+                assertEquals(0L, page.getTotalElements());
+                assertEquals(List.of(), page.getContent());
+        }
+
+        @Test
+        void deberiaListarEventosDeActivosSoloDeLaOrganizacionActual() {
+                Asset currentAsset = assetService.create(
+                                "API de pagos de la organización actual",
+                                "payments-current-organization",
+                                AssetType.API,
+                                AssetEnvironment.PRODUCTION,
+                                AssetCriticality.HIGH);
+
+                Organization otherOrganization = new Organization(
+                                OTHER_ORGANIZATION_ID,
+                                "Organización externa",
+                                "auditoria-externa",
+                                Instant.parse("2026-10-01T10:00:00Z"));
+
+                organizationRepository.saveAndFlush(
+                                new OrganizationEntity(otherOrganization));
+
+                UUID otherAssetId = UUID.randomUUID();
+
+                AssetAuditEvent otherOrganizationEvent = new AssetAuditEvent(
+                                UUID.randomUUID(),
+                                otherAssetId,
+                                OTHER_ORGANIZATION_ID,
+                                AssetAuditAction.CREATED,
+                                "otro-usuario",
+                                Instant.parse("2026-10-10T10:00:00Z"),
+                                "other-organization-request");
+
+                assetAuditRepository.saveAndFlush(
+                                new AssetAuditEntity(otherOrganizationEvent));
+
+                var page = assetAuditQueryService.findPageByOrganization(
+                                0,
+                                20,
+                                null,
+                                null,
+                                null,
+                                null,
+                                null);
+
+                assertEquals(1L, page.getTotalElements());
+                assertEquals(
+                                currentAsset.id(),
+                                page.getContent().getFirst().getAssetId());
+        }
 }
