@@ -20,6 +20,7 @@ import org.springframework.web.method.annotation.HandlerMethodValidationExceptio
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import com.securefindings.asset.application.AssetArchivedException;
+import com.securefindings.asset.application.AssetAuditExportLimitExceededException;
 import com.securefindings.asset.application.AssetExportLimitExceededException;
 import com.securefindings.asset.application.AssetHasFindingsException;
 import com.securefindings.asset.application.AssetIdentifierAlreadyExistsException;
@@ -329,5 +330,16 @@ public class GlobalExceptionHandler {
                                 "ASSET_ARCHIVED",
                                 exception.getMessage(),
                                 Map.of("assetId", exception.assetId().toString()));
+        }
+
+        @ExceptionHandler(AssetAuditExportLimitExceededException.class)
+        @ResponseStatus(HttpStatus.CONTENT_TOO_LARGE)
+        public ApiErrorResponse handleAssetAuditExportLimitExceeded(
+                        AssetAuditExportLimitExceededException exception) {
+
+                return new ApiErrorResponse(
+                                "ASSET_AUDIT_EXPORT_LIMIT_EXCEEDED",
+                                exception.getMessage(),
+                                Map.of("limit", String.valueOf(exception.maximumRows())));
         }
 }

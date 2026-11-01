@@ -199,7 +199,8 @@ public class SecurityConfig {
                                                 .requestMatchers(
                                                                 HttpMethod.GET,
                                                                 "/api/v1/organizations/current/audit",
-                                                                "/api/v1/organizations/current/audit/assets")
+                                                                "/api/v1/organizations/current/audit/assets",
+                                                                "/api/v1/organizations/current/audit/assets/**")
                                                 .hasAnyRole("ANALYST", "ADMIN")
 
                                                 .anyRequest()

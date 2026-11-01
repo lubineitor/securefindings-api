@@ -1,6 +1,7 @@
 package com.securefindings.asset.application;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -19,6 +20,8 @@ import com.securefindings.security.OrganizationContext;
 @Service
 @Transactional(readOnly = true)
 public class AssetAuditQueryService {
+
+        public static final int MAX_EXPORT_ROWS = 1000;
 
         private final AssetAuditRepository assetAuditRepository;
         private final OrganizationContext organizationContext;
@@ -76,6 +79,41 @@ public class AssetAuditQueryService {
                                 occurredFrom,
                                 occurredTo,
                                 createPageable(page, size));
+        }
+
+        public List<AssetAuditEntity> findForOrganizationExport(
+                        AssetAuditAction action,
+                        String requestId,
+                        String actor,
+                        Instant occurredFrom,
+                        Instant occurredTo) {
+
+                validateDateRange(occurredFrom, occurredTo);
+
+                UUID organizationId = organizationContext.currentOrganizationId();
+
+                Pageable pageable = PageRequest.of(
+                                0,
+                                MAX_EXPORT_ROWS + 1,
+                                Sort.by(
+                                                Sort.Order.asc("occurredAt"),
+                                                Sort.Order.asc("id")));
+
+                Page<AssetAuditEntity> auditPage = assetAuditRepository.findPageByOrganizationIdAndFilters(
+                                organizationId,
+                                action,
+                                requestId,
+                                actor,
+                                occurredFrom,
+                                occurredTo,
+                                pageable);
+
+                if (auditPage.getTotalElements() > MAX_EXPORT_ROWS
+                                || auditPage.getContent().size() > MAX_EXPORT_ROWS) {
+                        throw new AssetAuditExportLimitExceededException(MAX_EXPORT_ROWS);
+                }
+
+                return auditPage.getContent();
         }
 
         private Pageable createPageable(int page, int size) {
