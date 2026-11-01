@@ -20,50 +20,79 @@ import com.securefindings.security.OrganizationContext;
 @Transactional(readOnly = true)
 public class AssetAuditQueryService {
 
-    private final AssetAuditRepository assetAuditRepository;
-    private final OrganizationContext organizationContext;
+        private final AssetAuditRepository assetAuditRepository;
+        private final OrganizationContext organizationContext;
 
-    public AssetAuditQueryService(
-            AssetAuditRepository assetAuditRepository,
-            OrganizationContext organizationContext) {
-        this.assetAuditRepository = Objects.requireNonNull(assetAuditRepository);
-        this.organizationContext = Objects.requireNonNull(organizationContext);
-    }
-
-    public Page<AssetAuditEntity> findPageByAssetId(
-            UUID assetId,
-            int page,
-            int size,
-            AssetAuditAction action,
-            String requestId,
-            String actor,
-            Instant occurredFrom,
-            Instant occurredTo) {
-
-        if (occurredFrom != null
-                && occurredTo != null
-                && occurredFrom.isAfter(occurredTo)) {
-            throw new IllegalArgumentException(
-                    "occurredFrom debe ser anterior o igual a occurredTo");
+        public AssetAuditQueryService(
+                        AssetAuditRepository assetAuditRepository,
+                        OrganizationContext organizationContext) {
+                this.assetAuditRepository = Objects.requireNonNull(assetAuditRepository);
+                this.organizationContext = Objects.requireNonNull(organizationContext);
         }
 
-        UUID organizationId = organizationContext.currentOrganizationId();
+        public Page<AssetAuditEntity> findPageByAssetId(
+                        UUID assetId,
+                        int page,
+                        int size,
+                        AssetAuditAction action,
+                        String requestId,
+                        String actor,
+                        Instant occurredFrom,
+                        Instant occurredTo) {
 
-        Pageable pageable = PageRequest.of(
-                page,
-                size,
-                Sort.by(
-                        Sort.Order.asc("occurredAt"),
-                        Sort.Order.asc("id")));
+                validateDateRange(occurredFrom, occurredTo);
 
-        return assetAuditRepository.findPageByAssetIdAndOrganizationIdAndFilters(
-                assetId,
-                organizationId,
-                action,
-                requestId,
-                actor,
-                occurredFrom,
-                occurredTo,
-                pageable);
-    }
+                UUID organizationId = organizationContext.currentOrganizationId();
+
+                return assetAuditRepository.findPageByAssetIdAndOrganizationIdAndFilters(
+                                assetId,
+                                organizationId,
+                                action,
+                                requestId,
+                                actor,
+                                occurredFrom,
+                                occurredTo,
+                                createPageable(page, size));
+        }
+
+        public Page<AssetAuditEntity> findPageByOrganization(
+                        int page,
+                        int size,
+                        AssetAuditAction action,
+                        String requestId,
+                        String actor,
+                        Instant occurredFrom,
+                        Instant occurredTo) {
+
+                validateDateRange(occurredFrom, occurredTo);
+
+                UUID organizationId = organizationContext.currentOrganizationId();
+
+                return assetAuditRepository.findPageByOrganizationIdAndFilters(
+                                organizationId,
+                                action,
+                                requestId,
+                                actor,
+                                occurredFrom,
+                                occurredTo,
+                                createPageable(page, size));
+        }
+
+        private Pageable createPageable(int page, int size) {
+                return PageRequest.of(
+                                page,
+                                size,
+                                Sort.by(
+                                                Sort.Order.asc("occurredAt"),
+                                                Sort.Order.asc("id")));
+        }
+
+        private void validateDateRange(Instant occurredFrom, Instant occurredTo) {
+                if (occurredFrom != null
+                                && occurredTo != null
+                                && occurredFrom.isAfter(occurredTo)) {
+                        throw new IllegalArgumentException(
+                                        "occurredFrom debe ser anterior o igual a occurredTo");
+                }
+        }
 }
