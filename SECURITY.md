@@ -814,6 +814,17 @@ Esto permite relacionar el evento con:
 
 En eventos técnicos o registros históricos puede ser `null`.
 
+### Historial de activos
+
+Los eventos de activos registran las acciones `CREATED`, `UPDATED`, `ARCHIVED`,
+`RESTORED` y `DELETED`. El endpoint
+`GET /api/v1/assets/{id}/audit` requiere autenticación y permite los roles
+`ANALYST` y `ADMIN`.
+
+La consulta siempre combina el UUID del activo con la organización obtenida del
+token. No utiliza un `organizationId` enviado por el cliente. El historial se
+conserva y puede consultarse después de eliminar el activo.
+
 ## Comentarios
 
 Los comentarios pertenecen a una organización y a un hallazgo concreto.

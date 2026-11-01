@@ -38,6 +38,9 @@ en este documento y en `SECURITY.md`.
   la inyección de fórmulas.
 - Registro de auditoría para creación, actualización, archivado, reactivación y
   eliminación de activos, conservado tras eliminar el activo.
+- Consulta paginada del historial de activos, con filtros por acción, actor,
+  `requestId` y fecha, aislada por organización y disponible tras eliminar el
+  activo.
 
 ## Criterios de aceptación del MVP
 

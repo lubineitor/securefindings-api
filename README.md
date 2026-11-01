@@ -453,9 +453,34 @@ Las pruebas públicas devuelven únicamente el estado, sin mostrar componentes n
 | `GET` | `/api/v1/assets` | Lista activos con paginación y filtros | `ANALYST`, `ADMIN` |
 | `GET` | `/api/v1/assets/{id}` | Consulta un activo | `ANALYST`, `ADMIN` |
 | `GET` | `/api/v1/assets/export` | Exporta activos filtrados a CSV | `ANALYST`, `ADMIN` |
+| `GET` | `/api/v1/assets/{id}/audit` | Consulta el historial paginado del activo | `ANALYST`, `ADMIN` |
 | `POST` | `/api/v1/assets` | Crea un activo | `ADMIN` |
 | `PATCH` | `/api/v1/assets/{id}` | Actualiza, archiva o reactiva un activo | `ADMIN` |
 | `DELETE` | `/api/v1/assets/{id}` | Elimina un activo sin hallazgos asociados | `ADMIN` |
+
+#### Auditoría de activos
+
+`GET /api/v1/assets/{id}/audit` devuelve el historial del activo dentro de la
+organización asociada al token. El historial también está disponible después de
+eliminar el activo.
+
+| Parámetro | Descripción |
+|---|---|
+| `page` | Número de página, empezando en `0`. |
+| `size` | Eventos por página, entre `1` y `100`. |
+| `action` | Acción: `CREATED`, `UPDATED`, `ARCHIVED`, `RESTORED` o `DELETED`. |
+| `requestId` | Filtra por el identificador de petición. |
+| `actor` | Filtra por el usuario que realizó la operación. |
+| `occurredFrom` | Fecha inicial inclusiva en formato ISO-8601. |
+| `occurredTo` | Fecha final inclusiva en formato ISO-8601. |
+
+La organización se obtiene del token. No se acepta `organizationId` como filtro
+de autorización.
+
+Ejemplo:
+
+```text
+GET /api/v1/assets/22222222-2222-2222-2222-222222222222/audit?page=0&size=20&action=ARCHIVED
 
 #### Crear un activo
 
