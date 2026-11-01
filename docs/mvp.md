@@ -36,6 +36,8 @@ en este documento y en `SECURITY.md`.
 - Inventario de activos por organización con paginación, búsqueda, filtros,
   archivado, eliminación segura y exportación CSV limitada y protegida frente a
   la inyección de fórmulas.
+- Registro de auditoría para creación, actualización, archivado, reactivación y
+  eliminación de activos, conservado tras eliminar el activo.
 
 ## Criterios de aceptación del MVP
 
@@ -52,7 +54,7 @@ en este documento y en `SECURITY.md`.
 
 ## Pendiente antes de considerar producción
 
-- Configurar paneles y alertas para las métricas Prometheus.
+- Validar en el entorno desplegado la recopilación y entrega de alertas, y ajustar los umbrales para producción.
 - Ampliar la administración de organizaciones y revisar las reglas de
   autorización necesarias.
 - Revisar CORS, TLS, gestión centralizada y rotación de secretos.

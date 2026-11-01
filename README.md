@@ -94,6 +94,11 @@ El CSV incluye la columna `assetId`; queda vacía cuando el hallazgo no tiene un
 activo asociado. Estas operaciones respetan la organización actual y no permiten
 asociar activos archivados.
 
+Las operaciones de alta, actualización, archivado, reactivación y eliminación
+generan eventos de auditoría con acción, actor, organización, fecha y el
+`X-Request-ID` cuando está disponible. Los eventos permanecen almacenados
+aunque se elimine el activo.
+
 ### Ciclo de vida de los hallazgos
 
 Los estados disponibles son:
@@ -1152,7 +1157,7 @@ El proyecto continúa en desarrollo. Algunas líneas futuras son:
 
 - Ampliar las operaciones de administración de organizaciones.
 - Añadir más reglas de autorización.
-- Configurar paneles y alertas para las métricas Prometheus.
+- Validar en el entorno desplegado la recopilación y entrega de alertas, y ajustar los umbrales para producción
 - Mejorar la configuración de producción.
 - Automatizar la configuración de Keycloak.
 - Ampliar las pruebas de seguridad.

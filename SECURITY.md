@@ -97,6 +97,7 @@ Los principales riesgos considerados son:
 | Credenciales | Exposición en el repositorio | `.env` excluido y `.env.example` sin secretos |
 | Dependencias | Vulnerabilidades conocidas | Revisión automatizada y CodeQL |
 | Exportaciones CSV | Inyección de fórmulas al abrir el archivo en una hoja de cálculo | Escape de campos, neutralización de prefijos de fórmula y límite de filas |
+| Activos | Cambios sin trazabilidad | Auditoría persistida por organización con actor, acción, fecha y `requestId`; se conserva tras eliminar el activo |
 
 ## Autenticación
 
