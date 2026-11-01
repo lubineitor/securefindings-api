@@ -41,6 +41,8 @@ en este documento y en `SECURITY.md`.
 - Consulta paginada del historial de activos, con filtros por acción, actor,
   `requestId` y fecha, aislada por organización y disponible tras eliminar el
   activo.
+- Consulta global paginada de los eventos de activos de la organización actual,
+  con filtros por acción, actor, `requestId` y fechas.
 
 ## Criterios de aceptación del MVP
 

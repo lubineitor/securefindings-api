@@ -481,6 +481,7 @@ Ejemplo:
 
 ```text
 GET /api/v1/assets/22222222-2222-2222-2222-222222222222/audit?page=0&size=20&action=ARCHIVED
+```
 
 #### Crear un activo
 
@@ -580,6 +581,7 @@ límite en `errors.limit`:
 | `PATCH` | `/api/v1/organizations/{id}` | Actualiza el nombre visible de una organización | `ADMIN` |
 | `POST` | `/api/v1/organizations` | Crea una organización | `ADMIN` |
 | `GET` | `/api/v1/organizations/current` | Consulta la organización asociada al token | `ANALYST`, `ADMIN` |
+| `GET` | `/api/v1/organizations/current/audit/assets` | Consulta la auditoría de activos de la organización actual | `ANALYST`, `ADMIN` |
 | `PATCH` | `/api/v1/organizations/current` | Actualiza el nombre visible de la organización | `ADMIN` |
 | `DELETE` | `/api/v1/organizations/{id}` | Elimina una organización vacía | `ADMIN` |
 
@@ -734,6 +736,30 @@ GET /api/v1/findings/3bfa1ad2-eee1-4ea5-ba7c-16b47d1da147/audit?action=UPDATED&r
 ```
 
 Los filtros siempre se aplican dentro de la organización asociada al token JWT.
+
+#### Auditoría de activos de la organización
+
+`GET /api/v1/organizations/current/audit/assets` devuelve los eventos de activos
+de la organización asociada al token.
+
+| Parámetro | Descripción |
+|---|---|
+| `page` | Número de página, empezando en `0`. |
+| `size` | Eventos por página, entre `1` y `100`. |
+| `action` | Acción: `CREATED`, `UPDATED`, `ARCHIVED`, `RESTORED` o `DELETED`. |
+| `requestId` | Identificador de petición; máximo 64 caracteres. |
+| `actor` | Usuario responsable; máximo 255 caracteres. |
+| `occurredFrom` | Fecha inicial inclusiva en formato ISO-8601. |
+| `occurredTo` | Fecha final inclusiva en formato ISO-8601. |
+
+La organización se obtiene del token. No se acepta `organizationId` como filtro
+de autorización.
+
+Ejemplo:
+
+```text
+GET /api/v1/organizations/current/audit/assets?page=0&size=20&action=ARCHIVED
+```
 
 ### Endpoints de comentarios
 

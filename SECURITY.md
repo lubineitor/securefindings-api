@@ -825,6 +825,12 @@ La consulta siempre combina el UUID del activo con la organización obtenida del
 token. No utiliza un `organizationId` enviado por el cliente. El historial se
 conserva y puede consultarse después de eliminar el activo.
 
+El endpoint
+`GET /api/v1/organizations/current/audit/assets` permite consultar los eventos
+de activos de toda la organización. La consulta deriva la organización del
+token y aplica ese filtro en el repositorio. El rol `ANALYST` o `ADMIN` es
+necesario para acceder.
+
 ## Comentarios
 
 Los comentarios pertenecen a una organización y a un hallazgo concreto.
