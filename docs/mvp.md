@@ -43,6 +43,8 @@ en este documento y en `SECURITY.md`.
   activo.
 - Consulta global paginada de los eventos de activos de la organización actual,
   con filtros por acción, actor, `requestId` y fechas.
+- Exportación CSV filtrada de auditoría de activos, limitada a 1.000 eventos y
+  protegida frente a la inyección de fórmulas.
 
 ## Criterios de aceptación del MVP
 

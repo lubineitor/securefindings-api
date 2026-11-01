@@ -209,6 +209,13 @@ También se puede consultar el historial completo de la organización actual:
 GET /api/v1/organizations/current/audit
 ```
 
+La exportación acepta los filtros `action`, `requestId`, `actor`, `occurredFrom`
+y `occurredTo`. Genera el archivo UTF-8
+`securefindings-asset-audit.csv`, con `Cache-Control: no-store`, y admite hasta
+1.000 eventos. Si supera ese límite, responde `413
+ASSET_AUDIT_EXPORT_LIMIT_EXCEEDED`. Las celdas se escapan y neutralizan para
+evitar la ejecución de fórmulas en hojas de cálculo.
+
 #### Filtros de auditoría
 
 El historial puede filtrarse por:
@@ -578,10 +585,11 @@ límite en `errors.limit`:
 |---|---|---|---|
 | `GET` | `/api/v1/organizations` | Lista organizaciones de forma paginada | `ADMIN` |
 | `GET` | `/api/v1/organizations/{id}` | Consulta una organización por identificador | `ADMIN` |
-| `PATCH` | `/api/v1/organizations/{id}` | Actualiza el nombre visible de una organización | `ADMIN` |
-| `POST` | `/api/v1/organizations` | Crea una organización | `ADMIN` |
 | `GET` | `/api/v1/organizations/current` | Consulta la organización asociada al token | `ANALYST`, `ADMIN` |
 | `GET` | `/api/v1/organizations/current/audit/assets` | Consulta la auditoría de activos de la organización actual | `ANALYST`, `ADMIN` |
+| `GET` | `/api/v1/organizations/current/audit/assets/export` | Exporta la auditoría filtrada de activos a CSV | `ANALYST`, `ADMIN` |
+| `POST` | `/api/v1/organizations` | Crea una organización | `ADMIN` |
+| `PATCH` | `/api/v1/organizations/{id}` | Actualiza el nombre visible de una organización | `ADMIN` |
 | `PATCH` | `/api/v1/organizations/current` | Actualiza el nombre visible de la organización | `ADMIN` |
 | `DELETE` | `/api/v1/organizations/{id}` | Elimina una organización vacía | `ADMIN` |
 

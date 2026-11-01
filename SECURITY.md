@@ -831,6 +831,10 @@ de activos de toda la organización. La consulta deriva la organización del
 token y aplica ese filtro en el repositorio. El rol `ANALYST` o `ADMIN` es
 necesario para acceder.
 
+La exportación de auditoría aplica los mismos filtros de organización derivados
+del token. El CSV neutraliza valores que podrían ejecutarse como fórmulas y
+limita el resultado a 1.000 eventos.
+
 ## Comentarios
 
 Los comentarios pertenecen a una organización y a un hallazgo concreto.
