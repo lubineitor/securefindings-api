@@ -5,13 +5,17 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Instant;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.junit.jupiter.Container;
@@ -21,8 +25,10 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 import com.securefindings.asset.application.AssetNotFoundException;
 import com.securefindings.asset.application.AssetService;
 import com.securefindings.asset.domain.Asset;
+import com.securefindings.asset.domain.AssetAuditAction;
 import com.securefindings.asset.domain.AssetCriticality;
 import com.securefindings.asset.domain.AssetEnvironment;
+import com.securefindings.asset.domain.AssetStatus;
 import com.securefindings.asset.domain.AssetType;
 import com.securefindings.audit.persistence.FindingAuditRepository;
 import com.securefindings.comment.persistence.FindingCommentRepository;
@@ -37,226 +43,302 @@ import com.securefindings.finding.persistence.FindingRepository;
 import com.securefindings.organization.domain.Organization;
 import com.securefindings.organization.persistence.OrganizationEntity;
 import com.securefindings.organization.persistence.OrganizationRepository;
+import com.securefindings.security.RequestCorrelationFilter;
 
 @Testcontainers
 @SpringBootTest
 class AssetPersistenceIntegrationTest {
 
-    private static final UUID SYSTEM_ORGANIZATION_ID = UUID.fromString(
-            "00000000-0000-0000-0000-000000000001");
+        private static final UUID SYSTEM_ORGANIZATION_ID = UUID.fromString(
+                        "00000000-0000-0000-0000-000000000001");
 
-    private static final UUID OTHER_ORGANIZATION_ID = UUID.fromString(
-            "00000000-0000-0000-0000-000000000901");
+        private static final UUID OTHER_ORGANIZATION_ID = UUID.fromString(
+                        "00000000-0000-0000-0000-000000000901");
 
-    @SuppressWarnings("resource")
-    @Container
-    static final PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:17-alpine")
-            .withDatabaseName("securefindings_assets_test")
-            .withUsername("securefindings_test")
-            .withPassword("securefindings_test");
+        @SuppressWarnings("resource")
+        @Container
+        static final PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:17-alpine")
+                        .withDatabaseName("securefindings_assets_test")
+                        .withUsername("securefindings_test")
+                        .withPassword("securefindings_test");
 
-    @DynamicPropertySource
-    static void registerPostgresProperties(
-            DynamicPropertyRegistry registry) {
+        @DynamicPropertySource
+        static void registerPostgresProperties(
+                        DynamicPropertyRegistry registry) {
 
-        registry.add("spring.datasource.url", postgres::getJdbcUrl);
-        registry.add("spring.datasource.username", postgres::getUsername);
-        registry.add("spring.datasource.password", postgres::getPassword);
-    }
+                registry.add("spring.datasource.url", postgres::getJdbcUrl);
+                registry.add("spring.datasource.username", postgres::getUsername);
+                registry.add("spring.datasource.password", postgres::getPassword);
+        }
 
-    @Autowired
-    private AssetService assetService;
+        @Autowired
+        private AssetService assetService;
 
-    @Autowired
-    private AssetRepository assetRepository;
+        @Autowired
+        private AssetRepository assetRepository;
 
-    @Autowired
-    private FindingService findingService;
+        @Autowired
+        private FindingService findingService;
 
-    @Autowired
-    private FindingRepository findingRepository;
+        @Autowired
+        private FindingRepository findingRepository;
 
-    @Autowired
-    private FindingAuditRepository findingAuditRepository;
+        @Autowired
+        private FindingAuditRepository findingAuditRepository;
 
-    @Autowired
-    private FindingCommentRepository findingCommentRepository;
+        @Autowired
+        private FindingCommentRepository findingCommentRepository;
 
-    @Autowired
-    private OrganizationRepository organizationRepository;
+        @Autowired
+        private OrganizationRepository organizationRepository;
 
-    @BeforeEach
-    void limpiarDatos() {
-        findingAuditRepository.deleteAll();
-        findingCommentRepository.deleteAll();
-        findingRepository.deleteAll();
-        assetRepository.deleteAll();
-        organizationRepository.deleteById(OTHER_ORGANIZATION_ID);
-    }
+        @Autowired
+        private AssetAuditRepository assetAuditRepository;
 
-    @Test
-    void deberiaPersistirActivoAsociarloYFiltrarHallazgosEnPostgres() {
-        Asset asset = assetService.create(
-                "API de pagos",
-                "https://payments.example.test",
-                AssetType.API,
-                AssetEnvironment.PRODUCTION,
-                AssetCriticality.HIGH);
+        @BeforeEach
+        void limpiarDatos() {
+                findingAuditRepository.deleteAll();
+                findingCommentRepository.deleteAll();
+                findingRepository.deleteAll();
+                assetRepository.deleteAll();
+                organizationRepository.deleteById(OTHER_ORGANIZATION_ID);
+                assetAuditRepository.deleteAll();
+        }
 
-        Finding finding = findingService.create(
-                "SQL Injection",
-                "Consulta sin parámetros",
-                FindingSeverity.HIGH,
-                asset.id());
+        @Test
+        void deberiaPersistirActivoAsociarloYFiltrarHallazgosEnPostgres() {
+                Asset asset = assetService.create(
+                                "API de pagos",
+                                "https://payments.example.test",
+                                AssetType.API,
+                                AssetEnvironment.PRODUCTION,
+                                AssetCriticality.HIGH);
 
-        assertEquals(asset.id(), finding.assetId());
-        assertEquals(
-                asset.id(),
-                findingRepository.findByIdAndOrganizationId(
-                        finding.id(),
-                        SYSTEM_ORGANIZATION_ID)
-                        .orElseThrow()
-                        .getAssetId());
+                Finding finding = findingService.create(
+                                "SQL Injection",
+                                "Consulta sin parámetros",
+                                FindingSeverity.HIGH,
+                                asset.id());
 
-        var filtered = findingService.findPage(
-                0,
-                20,
-                null,
-                null,
-                null,
-                FindingSortField.CREATED_AT,
-                FindingSortDirection.DESC,
-                null,
-                null,
-                asset.id());
+                assertEquals(asset.id(), finding.assetId());
+                assertEquals(
+                                asset.id(),
+                                findingRepository.findByIdAndOrganizationId(
+                                                finding.id(),
+                                                SYSTEM_ORGANIZATION_ID)
+                                                .orElseThrow()
+                                                .getAssetId());
 
-        assertEquals(1, filtered.getTotalElements());
-        assertEquals(finding.id(), filtered.getContent().getFirst().id());
-    }
+                var filtered = findingService.findPage(
+                                0,
+                                20,
+                                null,
+                                null,
+                                null,
+                                FindingSortField.CREATED_AT,
+                                FindingSortDirection.DESC,
+                                null,
+                                null,
+                                asset.id());
 
-    @Test
-    void deberiaListarActivosPorFiltrosSinMezclarOrganizaciones() {
-        Asset currentAsset = assetService.create(
-                "API pagos",
-                "payments-api",
-                AssetType.API,
-                AssetEnvironment.PRODUCTION,
-                AssetCriticality.HIGH);
+                assertEquals(1, filtered.getTotalElements());
+                assertEquals(finding.id(), filtered.getContent().getFirst().id());
+        }
 
-        saveOtherOrganization();
+        @Test
+        void deberiaListarActivosPorFiltrosSinMezclarOrganizaciones() {
+                Asset currentAsset = assetService.create(
+                                "API pagos",
+                                "payments-api",
+                                AssetType.API,
+                                AssetEnvironment.PRODUCTION,
+                                AssetCriticality.HIGH);
 
-        Asset otherAsset = Asset.create(
-                "API pagos de otro tenant",
-                "payments-api",
-                AssetType.API,
-                AssetEnvironment.PRODUCTION,
-                AssetCriticality.HIGH);
+                saveOtherOrganization();
 
-        assetRepository.saveAndFlush(
-                new AssetEntity(otherAsset, OTHER_ORGANIZATION_ID));
+                Asset otherAsset = Asset.create(
+                                "API pagos de otro tenant",
+                                "payments-api",
+                                AssetType.API,
+                                AssetEnvironment.PRODUCTION,
+                                AssetCriticality.HIGH);
 
-        var page = assetService.findPage(
-                0,
-                20,
-                "PAYMENTS",
-                AssetType.API,
-                AssetEnvironment.PRODUCTION,
-                AssetCriticality.HIGH,
-                null);
+                assetRepository.saveAndFlush(
+                                new AssetEntity(otherAsset, OTHER_ORGANIZATION_ID));
 
-        assertEquals(1, page.getTotalElements());
-        assertEquals(currentAsset.id(), page.getContent().getFirst().id());
-    }
+                var page = assetService.findPage(
+                                0,
+                                20,
+                                "PAYMENTS",
+                                AssetType.API,
+                                AssetEnvironment.PRODUCTION,
+                                AssetCriticality.HIGH,
+                                null);
 
-    @Test
-    void noDeberiaPermitirAsociarUnActivoDeOtraOrganizacion() {
-        saveOtherOrganization();
+                assertEquals(1, page.getTotalElements());
+                assertEquals(currentAsset.id(), page.getContent().getFirst().id());
+        }
 
-        Asset otherAsset = Asset.create(
-                "API de otra organización",
-                "https://other.example.test",
-                AssetType.API,
-                AssetEnvironment.PRODUCTION,
-                AssetCriticality.HIGH);
+        @Test
+        void noDeberiaPermitirAsociarUnActivoDeOtraOrganizacion() {
+                saveOtherOrganization();
 
-        assetRepository.saveAndFlush(
-                new AssetEntity(otherAsset, OTHER_ORGANIZATION_ID));
+                Asset otherAsset = Asset.create(
+                                "API de otra organización",
+                                "https://other.example.test",
+                                AssetType.API,
+                                AssetEnvironment.PRODUCTION,
+                                AssetCriticality.HIGH);
 
-        assertThrows(
-                AssetNotFoundException.class,
-                () -> findingService.create(
-                        "Hallazgo aislado",
-                        "No debe acceder al activo de otro tenant",
-                        FindingSeverity.HIGH,
-                        otherAsset.id()));
-    }
+                assetRepository.saveAndFlush(
+                                new AssetEntity(otherAsset, OTHER_ORGANIZATION_ID));
 
-    @Test
-    void laBaseDeDatosDebeRechazarUnaRelacionEntreOrganizacionesDistintas() {
-        saveOtherOrganization();
+                assertThrows(
+                                AssetNotFoundException.class,
+                                () -> findingService.create(
+                                                "Hallazgo aislado",
+                                                "No debe acceder al activo de otro tenant",
+                                                FindingSeverity.HIGH,
+                                                otherAsset.id()));
+        }
 
-        Asset otherAsset = Asset.create(
-                "API de otra organización",
-                "https://other-db.example.test",
-                AssetType.API,
-                AssetEnvironment.PRODUCTION,
-                AssetCriticality.HIGH);
+        @Test
+        void laBaseDeDatosDebeRechazarUnaRelacionEntreOrganizacionesDistintas() {
+                saveOtherOrganization();
 
-        assetRepository.saveAndFlush(
-                new AssetEntity(otherAsset, OTHER_ORGANIZATION_ID));
+                Asset otherAsset = Asset.create(
+                                "API de otra organización",
+                                "https://other-db.example.test",
+                                AssetType.API,
+                                AssetEnvironment.PRODUCTION,
+                                AssetCriticality.HIGH);
 
-        Instant now = Instant.parse("2026-10-01T10:00:00Z");
+                assetRepository.saveAndFlush(
+                                new AssetEntity(otherAsset, OTHER_ORGANIZATION_ID));
 
-        Finding invalidFinding = new Finding(
-                UUID.randomUUID(),
-                "Relación inválida",
-                "El activo pertenece a otra organización",
-                FindingSeverity.HIGH,
-                FindingStatus.OPEN,
-                now,
-                now,
-                otherAsset.id());
+                Instant now = Instant.parse("2026-10-01T10:00:00Z");
 
-        assertThrows(
-                DataIntegrityViolationException.class,
-                () -> findingRepository.saveAndFlush(
-                        new FindingEntity(
-                                invalidFinding,
-                                SYSTEM_ORGANIZATION_ID)));
-    }
+                Finding invalidFinding = new Finding(
+                                UUID.randomUUID(),
+                                "Relación inválida",
+                                "El activo pertenece a otra organización",
+                                FindingSeverity.HIGH,
+                                FindingStatus.OPEN,
+                                now,
+                                now,
+                                otherAsset.id());
 
-    @Test
-    void deberiaAplicarLaUnicidadDelIdentificadorSinDistinguirMayusculas() {
-        assetService.create(
-                "API de pagos",
-                "PAYMENTS-API",
-                AssetType.API,
-                AssetEnvironment.PRODUCTION,
-                AssetCriticality.HIGH);
+                assertThrows(
+                                DataIntegrityViolationException.class,
+                                () -> findingRepository.saveAndFlush(
+                                                new FindingEntity(
+                                                                invalidFinding,
+                                                                SYSTEM_ORGANIZATION_ID)));
+        }
 
-        assertTrue(
-                assetRepository.existsByOrganizationIdAndIdentifierIgnoreCase(
-                        SYSTEM_ORGANIZATION_ID,
-                        "payments-api"));
+        @Test
+        void deberiaAplicarLaUnicidadDelIdentificadorSinDistinguirMayusculas() {
+                assetService.create(
+                                "API de pagos",
+                                "PAYMENTS-API",
+                                AssetType.API,
+                                AssetEnvironment.PRODUCTION,
+                                AssetCriticality.HIGH);
 
-        assertThrows(
-                com.securefindings.asset.application.AssetIdentifierAlreadyExistsException.class,
-                () -> assetService.create(
-                        "Otra API de pagos",
-                        "payments-api",
-                        AssetType.API,
-                        AssetEnvironment.STAGING,
-                        AssetCriticality.MEDIUM));
-    }
+                assertTrue(
+                                assetRepository.existsByOrganizationIdAndIdentifierIgnoreCase(
+                                                SYSTEM_ORGANIZATION_ID,
+                                                "payments-api"));
 
-    private void saveOtherOrganization() {
-        Organization organization = new Organization(
-                OTHER_ORGANIZATION_ID,
-                "Organización de prueba de activos",
-                "activos-prueba",
-                Instant.parse("2026-10-01T10:00:00Z"));
+                assertThrows(
+                                com.securefindings.asset.application.AssetIdentifierAlreadyExistsException.class,
+                                () -> assetService.create(
+                                                "Otra API de pagos",
+                                                "payments-api",
+                                                AssetType.API,
+                                                AssetEnvironment.STAGING,
+                                                AssetCriticality.MEDIUM));
+        }
 
-        organizationRepository.saveAndFlush(
-                new OrganizationEntity(organization));
-    }
+        @Test
+        void deberiaConservarLaAuditoriaDelActivoAunqueSeElimine() {
+                MDC.put(RequestCorrelationFilter.MDC_KEY, "asset-audit-test-123");
+
+                try {
+                        Asset asset = assetService.create(
+                                        "API de pagos",
+                                        "https://asset-audit.example.test",
+                                        AssetType.API,
+                                        AssetEnvironment.PRODUCTION,
+                                        AssetCriticality.HIGH);
+
+                        assetService.update(
+                                        asset.id(),
+                                        null,
+                                        null,
+                                        null,
+                                        null,
+                                        null,
+                                        AssetStatus.ARCHIVED);
+
+                        assetService.delete(asset.id());
+
+                        var events = assetAuditRepository
+                                        .findByAssetIdAndOrganizationIdOrderByOccurredAtAscIdAsc(
+                                                        asset.id(),
+                                                        SYSTEM_ORGANIZATION_ID,
+                                                        PageRequest.of(0, 10));
+
+                        Set<AssetAuditAction> actions = Set.copyOf(
+                                        events.getContent()
+                                                        .stream()
+                                                        .map(event -> Objects.requireNonNull(
+                                                                        event,
+                                                                        "El repositorio devolvió un evento nulo")
+                                                                        .getAction())
+                                                        .toList());
+
+                        assertEquals(3L, events.getTotalElements());
+                        assertEquals(
+                                        Set.of(
+                                                        AssetAuditAction.CREATED,
+                                                        AssetAuditAction.ARCHIVED,
+                                                        AssetAuditAction.DELETED),
+                                        actions);
+
+                        for (AssetAuditEntity event : events.getContent()) {
+                                AssetAuditEntity checkedEvent = Objects.requireNonNull(
+                                                event,
+                                                "El repositorio devolvió un evento nulo");
+
+                                assertEquals(SYSTEM_ORGANIZATION_ID, checkedEvent.getOrganizationId());
+                                assertEquals("system", checkedEvent.getActor());
+                                assertEquals("asset-audit-test-123", checkedEvent.getRequestId());
+                        }
+
+                        assertEquals(3, events.getTotalElements());
+                        assertTrue(actions.contains(AssetAuditAction.CREATED));
+                        assertTrue(actions.contains(AssetAuditAction.ARCHIVED));
+                        assertTrue(actions.contains(AssetAuditAction.DELETED));
+
+                        for (AssetAuditEntity event : events.getContent()) {
+                                assertEquals(SYSTEM_ORGANIZATION_ID, event.getOrganizationId());
+                                assertEquals("system", event.getActor());
+                                assertEquals("asset-audit-test-123", event.getRequestId());
+                        }
+                } finally {
+                        MDC.remove(RequestCorrelationFilter.MDC_KEY);
+                }
+        }
+
+        private void saveOtherOrganization() {
+                Organization organization = new Organization(
+                                OTHER_ORGANIZATION_ID,
+                                "Organización de prueba de activos",
+                                "activos-prueba",
+                                Instant.parse("2026-10-01T10:00:00Z"));
+
+                organizationRepository.saveAndFlush(
+                                new OrganizationEntity(organization));
+        }
 }

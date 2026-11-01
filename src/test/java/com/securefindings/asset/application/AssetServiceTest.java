@@ -25,6 +25,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 
 import com.securefindings.asset.domain.Asset;
+import com.securefindings.asset.domain.AssetAuditAction;
 import com.securefindings.asset.domain.AssetCriticality;
 import com.securefindings.asset.domain.AssetEnvironment;
 import com.securefindings.asset.domain.AssetStatus;
@@ -52,6 +53,9 @@ class AssetServiceTest {
         @InjectMocks
         private AssetService assetService;
 
+        @Mock
+        private AssetAuditService assetAuditService;
+
         @BeforeEach
         void configurarOrganizacion() {
                 when(organizationContext.currentOrganizationId()).thenReturn(ORGANIZATION_ID);
@@ -75,6 +79,9 @@ class AssetServiceTest {
 
                 assertEquals("https://payments.example.test", created.identifier());
                 assertEquals(AssetStatus.ACTIVE, created.status());
+                verify(assetAuditService).register(
+                                created.id(),
+                                AssetAuditAction.CREATED);
 
                 ArgumentCaptor<AssetEntity> captor = ArgumentCaptor.forClass(AssetEntity.class);
                 verify(assetRepository).saveAndFlush(captor.capture());
@@ -168,6 +175,9 @@ class AssetServiceTest {
                 assertEquals("payments-api", updated.identifier());
                 assertEquals(AssetType.API, updated.type());
                 assertEquals(AssetStatus.ARCHIVED, updated.status());
+                verify(assetAuditService).register(
+                                current.id(),
+                                AssetAuditAction.ARCHIVED);
         }
 
         @Test
@@ -179,7 +189,9 @@ class AssetServiceTest {
                                 .thenReturn(true);
 
                 assertThrows(AssetHasFindingsException.class, () -> assetService.delete(asset.id()));
-
+                verify(assetAuditService, never()).register(
+                                asset.id(),
+                                AssetAuditAction.DELETED);
                 verify(assetRepository, never()).delete(any(AssetEntity.class));
         }
 
@@ -196,6 +208,9 @@ class AssetServiceTest {
 
                 verify(assetRepository).delete(entity);
                 verify(assetRepository).flush();
+                verify(assetAuditService).register(
+                                asset.id(),
+                                AssetAuditAction.DELETED);
         }
 
         @Test
@@ -270,6 +285,52 @@ class AssetServiceTest {
                                                 null));
 
                 assertEquals(AssetService.MAX_EXPORT_ROWS, exception.maximumRows());
+        }
+
+        @Test
+        void deberiaRegistrarLaReactivacionDeUnActivo() {
+                Asset activeAsset = sampleAsset(UUID.randomUUID(), "payments-api");
+
+                Asset archivedAsset = new Asset(
+                                activeAsset.id(),
+                                activeAsset.name(),
+                                activeAsset.identifier(),
+                                activeAsset.type(),
+                                activeAsset.environment(),
+                                activeAsset.criticality(),
+                                AssetStatus.ARCHIVED,
+                                activeAsset.createdAt(),
+                                activeAsset.updatedAt());
+
+                when(assetRepository.findByIdAndOrganizationId(
+                                archivedAsset.id(),
+                                ORGANIZATION_ID))
+                                .thenReturn(Optional.of(new AssetEntity(
+                                                archivedAsset,
+                                                ORGANIZATION_ID)));
+
+                when(assetRepository.existsByOrganizationIdAndIdentifierIgnoreCaseAndIdNot(
+                                ORGANIZATION_ID,
+                                archivedAsset.identifier(),
+                                archivedAsset.id()))
+                                .thenReturn(false);
+
+                when(assetRepository.saveAndFlush(any(AssetEntity.class)))
+                                .thenAnswer(invocation -> invocation.getArgument(0));
+
+                Asset restored = assetService.update(
+                                archivedAsset.id(),
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                AssetStatus.ACTIVE);
+
+                assertEquals(AssetStatus.ACTIVE, restored.status());
+                verify(assetAuditService).register(
+                                archivedAsset.id(),
+                                AssetAuditAction.RESTORED);
         }
 
         private Asset sampleAsset(UUID id, String identifier) {
