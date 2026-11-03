@@ -174,14 +174,19 @@ public class SecurityConfig {
                                                 .hasAnyRole("ANALYST", "ADMIN")
 
                                                 .requestMatchers(
-                                                                HttpMethod.DELETE,
-                                                                "/api/v1/findings/**")
-                                                .hasRole("ADMIN")
-
-                                                .requestMatchers(
                                                                 HttpMethod.POST,
                                                                 "/api/v1/findings/*/comments")
                                                 .hasAnyRole("ANALYST", "ADMIN")
+
+                                                .requestMatchers(
+                                                                HttpMethod.DELETE,
+                                                                "/api/v1/findings/*/asset")
+                                                .hasAnyRole("ANALYST", "ADMIN")
+
+                                                .requestMatchers(
+                                                                HttpMethod.DELETE,
+                                                                "/api/v1/findings/**")
+                                                .hasRole("ADMIN")
 
                                                 .requestMatchers("/actuator/prometheus")
                                                 .hasAnyRole("ADMIN", "METRICS_READER")
@@ -193,7 +198,9 @@ public class SecurityConfig {
 
                                                 .requestMatchers(
                                                                 HttpMethod.GET,
-                                                                "/api/v1/organizations/current/audit")
+                                                                "/api/v1/organizations/current/audit",
+                                                                "/api/v1/organizations/current/audit/assets",
+                                                                "/api/v1/organizations/current/audit/assets/**")
                                                 .hasAnyRole("ANALYST", "ADMIN")
 
                                                 .anyRequest()

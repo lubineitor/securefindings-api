@@ -12,14 +12,16 @@ en este documento y en `SECURITY.md`.
 
 ## Funcionalidad implementada
 
-- Autenticación JWT con Keycloak, validación de emisor y audiencia.
-- Roles `ANALYST` y `ADMIN` para autorizar operaciones.
-- Aislamiento de hallazgos, comentarios y auditoría por organización.
+- Autenticación JWT con Keycloak y validación de emisor y audiencia.
+- Autorización por roles `ANALYST` y `ADMIN`.
+- Aislamiento de hallazgos, activos, comentarios y auditoría por organización.
 - Consulta, creación, actualización, cambio de estado y eliminación de hallazgos,
   con validación de transiciones.
-- Paginación, filtros y ordenación limitada a campos permitidos.
+- Paginación, filtros disponibles y ordenación limitada a campos permitidos.
 - Consulta y actualización del nombre visible de la organización actual.
-- Listado global paginado de organizaciones, restringido al rol `ADMIN`.
+- Administración global de organizaciones para `ADMIN`: búsqueda y listado
+  paginados, consulta individual, creación, actualización y eliminación segura
+  de organizaciones vacías.
 - Comentarios asociados a hallazgos y eventos de auditoría.
 - Identificador `X-Request-ID` para relacionar peticiones y logs.
 - Rate limiting distribuido mediante Redis, con respuestas `429` y `503` ante
@@ -27,19 +29,22 @@ en este documento y en `SECURITY.md`.
 - Probes de liveness y readiness, y métricas Prometheus protegidas para `ADMIN`.
 - Migraciones PostgreSQL con Flyway, documentación OpenAPI y ejecución local con
   Docker Compose.
-- Resumen de hallazgos agrupados por estado y severidad para la organización actual.
-- Listado global paginado, consulta y actualización por UUID, y creación de
-  organizaciones, restringidos al rol `ADMIN`.
+- Resumen de hallazgos agrupados por estado y severidad, con filtros por fechas
+  y activo para la organización actual.
 - Exportación CSV UTF-8 filtrada por organización, limitada a 1.000 hallazgos y
-  protegida frente a inyección de fórmulas en hojas de cálculo.
-- Listado global paginado, consulta individual y creación de organizaciones,
-  restringidos al rol `ADMIN`.
-- Búsqueda y listado global paginado, consulta y actualización por UUID, y
-  creación de organizaciones, además de eliminación segura de organizaciones
-  vacías, restringidos al rol `ADMIN`.
-  - Aislamiento de activos, hallazgos, comentarios y auditoría por organización.
-- Inventario de activos paginado con búsqueda, filtros, archivado y eliminación
-  segura; asociación de activos a hallazgos y filtro de hallazgos por activo.
+  protegida frente a la inyección de fórmulas en hojas de cálculo.
+- Inventario de activos por organización con paginación, búsqueda, filtros,
+  archivado, eliminación segura y exportación CSV limitada y protegida frente a
+  la inyección de fórmulas.
+- Registro de auditoría para creación, actualización, archivado, reactivación y
+  eliminación de activos, conservado tras eliminar el activo.
+- Consulta paginada del historial de activos, con filtros por acción, actor,
+  `requestId` y fecha, aislada por organización y disponible tras eliminar el
+  activo.
+- Consulta global paginada de los eventos de activos de la organización actual,
+  con filtros por acción, actor, `requestId` y fechas.
+- Exportación CSV filtrada de auditoría de activos, limitada a 1.000 eventos y
+  protegida frente a la inyección de fórmulas.
 
 ## Criterios de aceptación del MVP
 
@@ -56,7 +61,7 @@ en este documento y en `SECURITY.md`.
 
 ## Pendiente antes de considerar producción
 
-- Configurar paneles y alertas para las métricas Prometheus.
+- Validar en el entorno desplegado la recopilación y entrega de alertas, y ajustar los umbrales para producción.
 - Ampliar la administración de organizaciones y revisar las reglas de
   autorización necesarias.
 - Revisar CORS, TLS, gestión centralizada y rotación de secretos.

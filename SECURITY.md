@@ -96,6 +96,8 @@ Los principales riesgos considerados son:
 | Comentarios | Contenido no validado | Validación de longitud y obligatoriedad |
 | Credenciales | Exposición en el repositorio | `.env` excluido y `.env.example` sin secretos |
 | Dependencias | Vulnerabilidades conocidas | Revisión automatizada y CodeQL |
+| Exportaciones CSV | Inyección de fórmulas al abrir el archivo en una hoja de cálculo | Escape de campos, neutralización de prefijos de fórmula y límite de filas |
+| Activos | Cambios sin trazabilidad | Auditoría persistida por organización con actor, acción, fecha y `requestId`; se conserva tras eliminar el activo |
 
 ## Autenticación
 
@@ -812,6 +814,27 @@ Esto permite relacionar el evento con:
 
 En eventos técnicos o registros históricos puede ser `null`.
 
+### Historial de activos
+
+Los eventos de activos registran las acciones `CREATED`, `UPDATED`, `ARCHIVED`,
+`RESTORED` y `DELETED`. El endpoint
+`GET /api/v1/assets/{id}/audit` requiere autenticación y permite los roles
+`ANALYST` y `ADMIN`.
+
+La consulta siempre combina el UUID del activo con la organización obtenida del
+token. No utiliza un `organizationId` enviado por el cliente. El historial se
+conserva y puede consultarse después de eliminar el activo.
+
+El endpoint
+`GET /api/v1/organizations/current/audit/assets` permite consultar los eventos
+de activos de toda la organización. La consulta deriva la organización del
+token y aplica ese filtro en el repositorio. El rol `ANALYST` o `ADMIN` es
+necesario para acceder.
+
+La exportación de auditoría aplica los mismos filtros de organización derivados
+del token. El CSV neutraliza valores que podrían ejecutarse como fórmulas y
+limita el resultado a 1.000 eventos.
+
 ## Comentarios
 
 Los comentarios pertenecen a una organización y a un hallazgo concreto.
@@ -1019,20 +1042,11 @@ El proyecto incluye pruebas para comprobar:
 - Exclusión del endpoint de health check.
 - Integración del filtro con Spring Security.
 - Acceso a las métricas Prometheus sin autenticación, con rol `ANALYST` y con rol `ADMIN`.
-- Listado global de organizaciones reservado a `ADMIN`.
-- Límites y ordenación de la paginación de organizaciones.
 - Consulta individual de organizaciones reservada a `ADMIN`.
 - Creación de organizaciones reservada a `ADMIN`.
-- Validación del nombre y el formato del slug de una organización.
+- Validación del nombre y del formato del slug de una organización.
 - Rechazo de slugs duplicados, incluidos conflictos detectados al guardar.
-- Listado, consulta y actualización globales de organizaciones reservados a `ADMIN`.
-- Límites y ordenación de la paginación de organizaciones.
-- Consulta individual de organizaciones reservada a `ADMIN`.
-- Actualización por UUID reservada a `ADMIN` y conservación del slug y la fecha de creación.
-- Creación de organizaciones reservada a `ADMIN`.
-- Validación del nombre y el formato del slug de una organización.
-- Rechazo de slugs duplicados, incluidos conflictos detectados al guardar.
-- Búsqueda, límites y ordenación de la paginación de organizaciones.
+- Actualización por UUID reservada a `ADMIN`, conservando el slug y la fecha de creación.
 - Búsqueda por nombre y slug con PostgreSQL, sin distinguir mayúsculas.
 - Rechazo de la eliminación de organizaciones con hallazgos, comentarios o auditoría.
 - Eliminación de una organización vacía y protección de la clave foránea ante concurrencia.

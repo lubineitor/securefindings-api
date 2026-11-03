@@ -60,12 +60,20 @@ public class FindingService {
         }
 
         public FindingSummary getSummary() {
-                return getSummary(null, null);
+                return getSummary(null, null, null);
         }
 
         public FindingSummary getSummary(
                         Instant createdFrom,
                         Instant createdTo) {
+
+                return getSummary(createdFrom, createdTo, null);
+        }
+
+        public FindingSummary getSummary(
+                        Instant createdFrom,
+                        Instant createdTo,
+                        UUID assetId) {
 
                 if (createdFrom != null
                                 && createdTo != null
@@ -76,20 +84,37 @@ public class FindingService {
 
                 UUID organizationId = organizationContext.currentOrganizationId();
 
+                List<FindingRepository.StatusCountProjection> statusCounts = assetId == null
+                                ? findingRepository.countStatusesByOrganization(
+                                                organizationId,
+                                                createdFrom,
+                                                createdTo)
+                                : findingRepository.countStatusesByOrganizationAndAssetId(
+                                                organizationId,
+                                                assetId,
+                                                createdFrom,
+                                                createdTo);
+
+                List<FindingRepository.SeverityCountProjection> severityCounts = assetId == null
+                                ? findingRepository.countSeveritiesByOrganization(
+                                                organizationId,
+                                                createdFrom,
+                                                createdTo)
+                                : findingRepository.countSeveritiesByOrganizationAndAssetId(
+                                                organizationId,
+                                                assetId,
+                                                createdFrom,
+                                                createdTo);
+
                 Map<FindingStatus, Long> byStatus = new EnumMap<>(FindingStatus.class);
 
                 for (FindingStatus status : FindingStatus.values()) {
                         byStatus.put(status, 0L);
                 }
 
-                findingRepository
-                                .countStatusesByOrganization(
-                                                organizationId,
-                                                createdFrom,
-                                                createdTo)
-                                .forEach(result -> byStatus.put(
-                                                result.getStatus(),
-                                                result.getTotal()));
+                statusCounts.forEach(result -> byStatus.put(
+                                result.getStatus(),
+                                result.getTotal()));
 
                 Map<FindingSeverity, Long> bySeverity = new EnumMap<>(FindingSeverity.class);
 
@@ -97,14 +122,9 @@ public class FindingService {
                         bySeverity.put(severity, 0L);
                 }
 
-                findingRepository
-                                .countSeveritiesByOrganization(
-                                                organizationId,
-                                                createdFrom,
-                                                createdTo)
-                                .forEach(result -> bySeverity.put(
-                                                result.getSeverity(),
-                                                result.getTotal()));
+                severityCounts.forEach(result -> bySeverity.put(
+                                result.getSeverity(),
+                                result.getTotal()));
 
                 long total = 0L;
 
@@ -283,6 +303,23 @@ public class FindingService {
                         Instant createdFrom,
                         Instant createdTo) {
 
+                return findForExport(
+                                searchTerm,
+                                severity,
+                                status,
+                                createdFrom,
+                                createdTo,
+                                null);
+        }
+
+        public List<Finding> findForExport(
+                        String searchTerm,
+                        FindingSeverity severity,
+                        FindingStatus status,
+                        Instant createdFrom,
+                        Instant createdTo,
+                        UUID assetId) {
+
                 if (createdFrom != null
                                 && createdTo != null
                                 && createdFrom.isAfter(createdTo)) {
@@ -298,14 +335,26 @@ public class FindingService {
                                                 Sort.Order.desc("createdAt"),
                                                 Sort.Order.asc("id")));
 
-                Page<FindingEntity> entities = findingRepository.findPageByFilters(
-                                organizationId,
-                                normalizeSearchTerm(searchTerm),
-                                severity,
-                                status,
-                                createdFrom,
-                                createdTo,
-                                pageable);
+                String normalizedSearchTerm = normalizeSearchTerm(searchTerm);
+
+                Page<FindingEntity> entities = assetId == null
+                                ? findingRepository.findPageByFilters(
+                                                organizationId,
+                                                normalizedSearchTerm,
+                                                severity,
+                                                status,
+                                                createdFrom,
+                                                createdTo,
+                                                pageable)
+                                : findingRepository.findPageByFiltersAndAssetId(
+                                                organizationId,
+                                                normalizedSearchTerm,
+                                                severity,
+                                                status,
+                                                createdFrom,
+                                                createdTo,
+                                                assetId,
+                                                pageable);
 
                 if (entities.getTotalElements() > MAX_EXPORT_ROWS) {
                         throw new FindingExportLimitExceededException(MAX_EXPORT_ROWS);
@@ -521,5 +570,27 @@ public class FindingService {
                 if (asset.getStatus() == AssetStatus.ARCHIVED) {
                         throw new AssetArchivedException(assetId);
                 }
+        }
+
+        @Transactional
+        public Finding updateAsset(UUID id, UUID assetId) {
+                UUID organizationId = organizationContext.currentOrganizationId();
+                Finding currentFinding = getById(id);
+
+                if (Objects.equals(currentFinding.assetId(), assetId)) {
+                        return currentFinding;
+                }
+
+                ensureAssetCanBeLinked(assetId, organizationId);
+
+                Finding updatedFinding = currentFinding.withAssetId(assetId);
+                Finding savedFinding = save(updatedFinding, organizationId);
+
+                auditService.register(
+                                savedFinding.id(),
+                                AuditAction.UPDATED,
+                                currentActor());
+
+                return savedFinding;
         }
 }

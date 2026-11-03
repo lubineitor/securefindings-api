@@ -109,7 +109,8 @@ class FindingControllerTest {
                 when(findingService.create(
                                 "SQL Injection",
                                 "Entrada de usuario sin validar",
-                                FindingSeverity.HIGH))
+                                FindingSeverity.HIGH,
+                                null))
                                 .thenReturn(finding);
 
                 mockMvc.perform(post("/api/v1/findings")
@@ -124,14 +125,56 @@ class FindingControllerTest {
                                 .andExpect(status().isCreated())
                                 .andExpect(jsonPath("$.id")
                                                 .value(finding.id().toString()))
-                                .andExpect(jsonPath("$.title")
-                                                .value("SQL Injection"))
+                                .andExpect(jsonPath("$.title").value("SQL Injection"))
                                 .andExpect(jsonPath("$.description")
                                                 .value("Entrada de usuario sin validar"))
-                                .andExpect(jsonPath("$.severity")
-                                                .value("HIGH"))
-                                .andExpect(jsonPath("$.status")
-                                                .value("OPEN"));
+                                .andExpect(jsonPath("$.severity").value("HIGH"))
+                                .andExpect(jsonPath("$.status").value("OPEN"));
+
+                verify(findingService).create(
+                                "SQL Injection",
+                                "Entrada de usuario sin validar",
+                                FindingSeverity.HIGH,
+                                null);
+        }
+
+        @Test
+        void deberiaCrearUnHallazgoAsociadoAUnActivo() throws Exception {
+                UUID assetId = UUID.fromString(
+                                "22222222-2222-2222-2222-222222222222");
+
+                Finding finding = Finding.create(
+                                "SQL Injection",
+                                "Entrada de usuario sin validar",
+                                FindingSeverity.HIGH,
+                                assetId);
+
+                when(findingService.create(
+                                "SQL Injection",
+                                "Entrada de usuario sin validar",
+                                FindingSeverity.HIGH,
+                                assetId))
+                                .thenReturn(finding);
+
+                mockMvc.perform(post("/api/v1/findings")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                                {
+                                                    "title": "SQL Injection",
+                                                    "description": "Entrada de usuario sin validar",
+                                                    "severity": "HIGH",
+                                                    "assetId": "22222222-2222-2222-2222-222222222222"
+                                                }
+                                                """))
+                                .andExpect(status().isCreated())
+                                .andExpect(jsonPath("$.assetId")
+                                                .value(assetId.toString()));
+
+                verify(findingService).create(
+                                "SQL Injection",
+                                "Entrada de usuario sin validar",
+                                FindingSeverity.HIGH,
+                                assetId);
         }
 
         @Test
@@ -761,7 +804,7 @@ class FindingControllerTest {
                                                 FindingSeverity.HIGH, 1L,
                                                 FindingSeverity.CRITICAL, 0L));
 
-                when(findingService.getSummary(null, null)).thenReturn(summary);
+                when(findingService.getSummary(null, null, null)).thenReturn(summary);
 
                 mockMvc.perform(get("/api/v1/findings/summary"))
                                 .andExpect(status().isOk())
@@ -771,7 +814,7 @@ class FindingControllerTest {
                                 .andExpect(jsonPath("$.bySeverity.MEDIUM").value(1))
                                 .andExpect(jsonPath("$.bySeverity.HIGH").value(1));
 
-                verify(findingService).getSummary(null, null);
+                verify(findingService).getSummary(null, null, null);
         }
 
         @Test
@@ -780,7 +823,7 @@ class FindingControllerTest {
                 Instant createdTo = Instant.parse("2026-10-19T23:59:59Z");
                 FindingSummary summary = new FindingSummary(0L, Map.of(), Map.of());
 
-                when(findingService.getSummary(createdFrom, createdTo))
+                when(findingService.getSummary(createdFrom, createdTo, null))
                                 .thenReturn(summary);
 
                 mockMvc.perform(get("/api/v1/findings/summary")
@@ -789,7 +832,7 @@ class FindingControllerTest {
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.total").value(0));
 
-                verify(findingService).getSummary(createdFrom, createdTo);
+                verify(findingService).getSummary(createdFrom, createdTo, null);
         }
 
         @Test
@@ -808,7 +851,8 @@ class FindingControllerTest {
                                 FindingSeverity.HIGH,
                                 FindingStatus.OPEN,
                                 createdFrom,
-                                createdTo))
+                                createdTo,
+                                null))
                                 .thenReturn(findings);
                 when(findingCsvExporter.toCsv(findings)).thenReturn(csv);
 
@@ -831,12 +875,14 @@ class FindingControllerTest {
                                 FindingSeverity.HIGH,
                                 FindingStatus.OPEN,
                                 createdFrom,
-                                createdTo);
+                                createdTo,
+                                null);
         }
 
         @Test
         void deberiaDevolver413SiLaExportacionSuperaElLimite() throws Exception {
                 when(findingService.findForExport(
+                                null,
                                 null,
                                 null,
                                 null,
@@ -850,5 +896,165 @@ class FindingControllerTest {
                                 .andExpect(jsonPath("$.code").value("EXPORT_LIMIT_EXCEEDED"))
                                 .andExpect(jsonPath("$.errors.limit")
                                                 .value(String.valueOf(FindingService.MAX_EXPORT_ROWS)));
+        }
+
+        @Test
+        void deberiaFiltrarLosHallazgosPorActivo() throws Exception {
+                UUID assetId = UUID.fromString(
+                                "22222222-2222-2222-2222-222222222222");
+                Finding finding = Finding.create(
+                                "SQL Injection",
+                                "Entrada de usuario sin validar",
+                                FindingSeverity.HIGH,
+                                assetId);
+
+                when(findingService.findPage(
+                                0,
+                                20,
+                                null,
+                                null,
+                                null,
+                                FindingSortField.CREATED_AT,
+                                FindingSortDirection.DESC,
+                                null,
+                                null,
+                                assetId))
+                                .thenReturn(new PageImpl<>(List.of(finding)));
+
+                mockMvc.perform(get("/api/v1/findings")
+                                .param("assetId", assetId.toString()))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.content[0].id")
+                                                .value(finding.id().toString()))
+                                .andExpect(jsonPath("$.content[0].assetId")
+                                                .value(assetId.toString()));
+
+                verify(findingService).findPage(
+                                0,
+                                20,
+                                null,
+                                null,
+                                null,
+                                FindingSortField.CREATED_AT,
+                                FindingSortDirection.DESC,
+                                null,
+                                null,
+                                assetId);
+        }
+
+        @Test
+        void deberiaAsociarUnActivoAUnHallazgo() throws Exception {
+                UUID assetId = UUID.fromString(
+                                "22222222-2222-2222-2222-222222222222");
+                Finding finding = Finding.create(
+                                "SQL Injection",
+                                "Entrada de usuario sin validar",
+                                FindingSeverity.HIGH,
+                                assetId);
+
+                when(findingService.updateAsset(finding.id(), assetId))
+                                .thenReturn(finding);
+
+                mockMvc.perform(patch(
+                                "/api/v1/findings/{id}/asset",
+                                finding.id())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                                {
+                                                    "assetId": "22222222-2222-2222-2222-222222222222"
+                                                }
+                                                """))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.id")
+                                                .value(finding.id().toString()))
+                                .andExpect(jsonPath("$.assetId")
+                                                .value(assetId.toString()));
+
+                verify(findingService).updateAsset(finding.id(), assetId);
+        }
+
+        @Test
+        void deberiaDesvincularUnActivoDeUnHallazgoComoAnalista() throws Exception {
+                UUID assetId = UUID.fromString(
+                                "22222222-2222-2222-2222-222222222222");
+                Finding finding = Finding.create(
+                                "SQL Injection",
+                                "Entrada de usuario sin validar",
+                                FindingSeverity.HIGH,
+                                assetId);
+
+                when(findingService.updateAsset(finding.id(), null))
+                                .thenReturn(finding.withAssetId(null));
+
+                mockMvc.perform(delete(
+                                "/api/v1/findings/{id}/asset",
+                                finding.id()))
+                                .andExpect(status().isNoContent());
+
+                verify(findingService).updateAsset(finding.id(), null);
+        }
+
+        @Test
+        void deberiaExportarHallazgosFiltradosPorActivo() throws Exception {
+                UUID assetId = UUID.fromString(
+                                "22222222-2222-2222-2222-222222222222");
+
+                Finding finding = Finding.create(
+                                "SQL Injection",
+                                "Entrada sin validar",
+                                FindingSeverity.HIGH,
+                                assetId);
+
+                List<Finding> findings = List.of(finding);
+                String csv = "\"id\",\"assetId\"\r\n";
+
+                when(findingService.findForExport(
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                assetId))
+                                .thenReturn(findings);
+
+                when(findingCsvExporter.toCsv(findings))
+                                .thenReturn(csv);
+
+                mockMvc.perform(get("/api/v1/findings/export")
+                                .param("assetId", assetId.toString()))
+                                .andExpect(status().isOk())
+                                .andExpect(content().contentTypeCompatibleWith("text/csv"))
+                                .andExpect(content().string(csv));
+
+                verify(findingService).findForExport(
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                assetId);
+        }
+
+        @Test
+        void deberiaFiltrarElResumenPorActivo() throws Exception {
+                UUID assetId = UUID.fromString(
+                                "22222222-2222-2222-2222-222222222222");
+
+                FindingSummary summary = new FindingSummary(
+                                1L,
+                                Map.of(FindingStatus.OPEN, 1L),
+                                Map.of(FindingSeverity.HIGH, 1L));
+
+                when(findingService.getSummary(null, null, assetId))
+                                .thenReturn(summary);
+
+                mockMvc.perform(get("/api/v1/findings/summary")
+                                .param("assetId", assetId.toString()))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.total").value(1))
+                                .andExpect(jsonPath("$.byStatus.OPEN").value(1))
+                                .andExpect(jsonPath("$.bySeverity.HIGH").value(1));
+
+                verify(findingService).getSummary(null, null, assetId);
         }
 }

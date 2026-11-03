@@ -32,8 +32,8 @@ class FindingCsvExporterTest {
 
         String csv = exporter.toCsv(List.of(finding));
 
-        String expected = "\"id\",\"title\",\"description\",\"severity\",\"status\",\"createdAt\",\"updatedAt\"\r\n"
-                + "\"11111111-1111-1111-1111-111111111111\",\"Título, con coma\",\"Línea 1\nLínea \"\"2\"\"\",\"HIGH\",\"OPEN\",\"2026-10-19T10:15:30Z\",\"2026-10-19T10:15:30Z\"\r\n";
+        String expected = "\"id\",\"title\",\"description\",\"severity\",\"status\",\"createdAt\",\"updatedAt\",\"assetId\"\r\n"
+                + "\"11111111-1111-1111-1111-111111111111\",\"Título, con coma\",\"Línea 1\nLínea \"\"2\"\"\",\"HIGH\",\"OPEN\",\"2026-10-19T10:15:30Z\",\"2026-10-19T10:15:30Z\",\"\"\r\n";
 
         assertEquals(expected, csv);
     }
@@ -71,5 +71,21 @@ class FindingCsvExporterTest {
         String csv = exporter.toCsv(List.of(finding));
 
         assertTrue(csv.contains("\"'\t=1+1\""));
+    }
+
+    @Test
+    void deberiaIncluirElIdentificadorDelActivoEnCsv() {
+        UUID assetId = UUID.fromString(
+                "22222222-2222-2222-2222-222222222222");
+
+        Finding finding = Finding.create(
+                "SQL Injection",
+                "Entrada sin validar",
+                FindingSeverity.HIGH,
+                assetId);
+
+        String csv = exporter.toCsv(List.of(finding));
+
+        assertTrue(csv.endsWith("\"" + assetId + "\"\r\n"));
     }
 }

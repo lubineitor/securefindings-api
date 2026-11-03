@@ -122,4 +122,34 @@ public interface FindingRepository
                         @Param("createdTo") Instant createdTo,
                         @Param("assetId") UUID assetId,
                         Pageable pageable);
+
+        @Query("""
+                        SELECT finding.status AS status, COUNT(finding.id) AS total
+                        FROM FindingEntity finding
+                        WHERE finding.organizationId = :organizationId
+                          AND finding.assetId = :assetId
+                          AND finding.createdAt >= COALESCE(:createdFrom, finding.createdAt)
+                          AND finding.createdAt <= COALESCE(:createdTo, finding.createdAt)
+                        GROUP BY finding.status
+                        """)
+        List<StatusCountProjection> countStatusesByOrganizationAndAssetId(
+                        @Param("organizationId") UUID organizationId,
+                        @Param("assetId") UUID assetId,
+                        @Param("createdFrom") Instant createdFrom,
+                        @Param("createdTo") Instant createdTo);
+
+        @Query("""
+                        SELECT finding.severity AS severity, COUNT(finding.id) AS total
+                        FROM FindingEntity finding
+                        WHERE finding.organizationId = :organizationId
+                          AND finding.assetId = :assetId
+                          AND finding.createdAt >= COALESCE(:createdFrom, finding.createdAt)
+                          AND finding.createdAt <= COALESCE(:createdTo, finding.createdAt)
+                        GROUP BY finding.severity
+                        """)
+        List<SeverityCountProjection> countSeveritiesByOrganizationAndAssetId(
+                        @Param("organizationId") UUID organizationId,
+                        @Param("assetId") UUID assetId,
+                        @Param("createdFrom") Instant createdFrom,
+                        @Param("createdTo") Instant createdTo);
 }

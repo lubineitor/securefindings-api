@@ -88,10 +88,16 @@ Los activos archivados se conservan para mantener el contexto de los hallazgos,
 pero no se pueden asociar a hallazgos nuevos. Solo se pueden eliminar si no
 tienen hallazgos asociados.
 
-Se puede indicar el activo al crear un hallazgo o asociarlo después con
-`PATCH /api/v1/findings/{id}/asset`. Para quitar la asociación se utiliza
-`DELETE /api/v1/findings/{id}/asset`. La API verifica que el activo pertenezca
-a la organización del hallazgo.
+La API permite asociar activos al crear hallazgos, filtrar el listado y la
+exportación por `assetId`, y vincular o desvincular activos posteriormente.
+El CSV incluye la columna `assetId`; queda vacía cuando el hallazgo no tiene un
+activo asociado. Estas operaciones respetan la organización actual y no permiten
+asociar activos archivados.
+
+Las operaciones de alta, actualización, archivado, reactivación y eliminación
+generan eventos de auditoría con acción, actor, organización, fecha y el
+`X-Request-ID` cuando está disponible. Los eventos permanecen almacenados
+aunque se elimine el activo.
 
 ### Ciclo de vida de los hallazgos
 
@@ -134,7 +140,6 @@ El listado permite combinar:
 - Búsqueda textual en título y descripción mediante `q`.
 - Filtro por severidad.
 - Filtro por estado.
-- Filtro por `assetId`.
 - Rango de fechas de creación mediante `createdFrom` y `createdTo`.
 - Paginación.
 - Ordenación ascendente o descendente.
@@ -202,6 +207,14 @@ También se puede consultar el historial completo de la organización actual:
 
 ```text
 GET /api/v1/organizations/current/audit
+```
+
+La exportación acepta los filtros `action`, `requestId`, `actor`, `occurredFrom`
+y `occurredTo`. Genera el archivo UTF-8
+`securefindings-asset-audit.csv`, con `Cache-Control: no-store`, y admite hasta
+1.000 eventos. Si supera ese límite, responde `413
+ASSET_AUDIT_EXPORT_LIMIT_EXCEEDED`. Las celdas se escapan y neutralizan para
+evitar la ejecución de fórmulas en hojas de cálculo.
 
 #### Filtros de auditoría
 
@@ -439,8 +452,6 @@ Las pruebas públicas devuelven únicamente el estado, sin mostrar componentes n
 | `DELETE` | `/api/v1/findings/{id}` | Elimina un hallazgo | `ADMIN` |
 | `GET` | `/api/v1/findings/summary` | Resume hallazgos por estado y severidad | `ANALYST`, `ADMIN` |
 | `GET` | `/api/v1/findings/export` | Exporta hallazgos filtrados a CSV | `ANALYST`, `ADMIN` |
-| `PATCH` | `/api/v1/findings/{id}/asset` | Asocia un activo | `ANALYST`, `ADMIN` |
-| `DELETE` | `/api/v1/findings/{id}/asset` | Desvincula el activo | `ANALYST`, `ADMIN` |
 
 ### Activos
 
@@ -448,9 +459,36 @@ Las pruebas públicas devuelven únicamente el estado, sin mostrar componentes n
 |---|---|---|---|
 | `GET` | `/api/v1/assets` | Lista activos con paginación y filtros | `ANALYST`, `ADMIN` |
 | `GET` | `/api/v1/assets/{id}` | Consulta un activo | `ANALYST`, `ADMIN` |
+| `GET` | `/api/v1/assets/export` | Exporta activos filtrados a CSV | `ANALYST`, `ADMIN` |
+| `GET` | `/api/v1/assets/{id}/audit` | Consulta el historial paginado del activo | `ANALYST`, `ADMIN` |
 | `POST` | `/api/v1/assets` | Crea un activo | `ADMIN` |
 | `PATCH` | `/api/v1/assets/{id}` | Actualiza, archiva o reactiva un activo | `ADMIN` |
 | `DELETE` | `/api/v1/assets/{id}` | Elimina un activo sin hallazgos asociados | `ADMIN` |
+
+#### Auditoría de activos
+
+`GET /api/v1/assets/{id}/audit` devuelve el historial del activo dentro de la
+organización asociada al token. El historial también está disponible después de
+eliminar el activo.
+
+| Parámetro | Descripción |
+|---|---|
+| `page` | Número de página, empezando en `0`. |
+| `size` | Eventos por página, entre `1` y `100`. |
+| `action` | Acción: `CREATED`, `UPDATED`, `ARCHIVED`, `RESTORED` o `DELETED`. |
+| `requestId` | Filtra por el identificador de petición. |
+| `actor` | Filtra por el usuario que realizó la operación. |
+| `occurredFrom` | Fecha inicial inclusiva en formato ISO-8601. |
+| `occurredTo` | Fecha final inclusiva en formato ISO-8601. |
+
+La organización se obtiene del token. No se acepta `organizationId` como filtro
+de autorización.
+
+Ejemplo:
+
+```text
+GET /api/v1/assets/22222222-2222-2222-2222-222222222222/audit?page=0&size=20&action=ARCHIVED
+```
 
 #### Crear un activo
 
@@ -464,38 +502,72 @@ Las pruebas públicas devuelven únicamente el estado, sin mostrar componentes n
   "environment": "PRODUCTION",
   "criticality": "HIGH"
 }
+```
+
+#### Exportar activos a CSV
+
+`GET /api/v1/assets/export` descarga `securefindings-assets.csv` con los activos
+de la organización actual. Acepta filtros opcionales:
+
+| Parámetro | Descripción |
+|---|---|
+| `q` | Busca por nombre o identificador; máximo 100 caracteres. |
+| `type` | Tipo del activo. |
+| `environment` | Entorno del activo. |
+| `criticality` | Criticidad del activo. |
+| `status` | Estado `ACTIVE` o `ARCHIVED`. |
+
+El resultado se ordena por `name ASC` e `id ASC`. El archivo UTF-8 contiene las
+columnas `id`, `name`, `identifier`, `type`, `environment`, `criticality`,
+`status`, `createdAt` y `updatedAt`. Las celdas se escapan y neutralizan para
+evitar la inyección de fórmulas en hojas de cálculo. La respuesta incluye
+`Cache-Control: no-store`.
+
+La exportación admite hasta 1.000 activos. Si hay más, responde `413`:
+
+```json
+{
+  "code": "ASSET_EXPORT_LIMIT_EXCEEDED",
+  "message": "La exportación supera el máximo de 1000 activos",
+  "errors": {
+    "limit": "1000"
+  }
+}
+```
 
 #### Resumen de hallazgos
 
-`GET /api/v1/findings/summary` devuelve los recuentos de hallazgos de la
-organización asociada al token, agrupados por estado y severidad. Las categorías
-sin hallazgos aparecen con valor `0`.
-
-La consulta requiere un token con rol `ANALYST` o `ADMIN`.
-
-Parámetros opcionales:
+`GET /api/v1/findings/summary` la consulta devuelve los recuentos de hallazgos agrupados por estado y severidad
+para la organización del token. Admite filtros opcionales por fechas y por activo.
+Los hallazgos de otras organizaciones no aparecen en el resultado.
 
 | Parámetro | Descripción |
 |---|---|
 | `createdFrom` | Fecha de creación inicial inclusiva, en formato ISO-8601. |
 | `createdTo` | Fecha de creación final inclusiva, en formato ISO-8601. |
+| `assetId` | UUID del activo por el que filtrar. |
 
-Si se envían ambos, `createdFrom` debe ser anterior o igual a `createdTo`.
+Ejemplo:
+
+```text
+GET /api/v1/findings/summary?assetId=22222222-2222-2222-2222-222222222222
+```
 
 #### Exportación CSV
 
 `GET /api/v1/findings/export` descarga los hallazgos de la organización actual
 como `securefindings.csv`. Acepta los filtros `q`, `severity`, `status`,
-`createdFrom` y `createdTo`, con el mismo comportamiento que el listado. El orden
-es `createdAt DESC` e `id ASC`. Las fechas son inclusivas y `q` admite hasta 100
-caracteres.
+`createdFrom`, `createdTo` y `assetId`. El orden es `createdAt DESC` e `id ASC`.
 
-El archivo contiene las columnas `id`, `title`, `description`, `severity`,
-`status`, `createdAt` y `updatedAt`. Se descarga como `text/csv; charset=UTF-8`,
-con nombre `securefindings.csv` y la cabecera `Cache-Control: no-store`. La
-exportación admite hasta 1.000 filas; si los filtros coinciden con más resultados,
-la API devuelve `413` con el código
-`EXPORT_LIMIT_EXCEEDED` y el límite en `errors.limit`:
+El archivo incluye las columnas `id`, `title`, `description`, `severity`,
+`status`, `createdAt`, `updatedAt` y `assetId`. La columna `assetId` queda vacía
+si el hallazgo no tiene activo asociado. Se descarga como
+`text/csv; charset=UTF-8`, con nombre `securefindings.csv` y la cabecera
+`Cache-Control: no-store`.
+
+La exportación admite hasta 1.000 filas. Si los filtros coinciden con más
+resultados, la API devuelve `413` con el código `EXPORT_LIMIT_EXCEEDED` y el
+límite en `errors.limit`:
 
 ```json
 {
@@ -513,9 +585,11 @@ la API devuelve `413` con el código
 |---|---|---|---|
 | `GET` | `/api/v1/organizations` | Lista organizaciones de forma paginada | `ADMIN` |
 | `GET` | `/api/v1/organizations/{id}` | Consulta una organización por identificador | `ADMIN` |
-| `PATCH` | `/api/v1/organizations/{id}` | Actualiza el nombre visible de una organización | `ADMIN` |
-| `POST` | `/api/v1/organizations` | Crea una organización | `ADMIN` |
 | `GET` | `/api/v1/organizations/current` | Consulta la organización asociada al token | `ANALYST`, `ADMIN` |
+| `GET` | `/api/v1/organizations/current/audit/assets` | Consulta la auditoría de activos de la organización actual | `ANALYST`, `ADMIN` |
+| `GET` | `/api/v1/organizations/current/audit/assets/export` | Exporta la auditoría filtrada de activos a CSV | `ANALYST`, `ADMIN` |
+| `POST` | `/api/v1/organizations` | Crea una organización | `ADMIN` |
+| `PATCH` | `/api/v1/organizations/{id}` | Actualiza el nombre visible de una organización | `ADMIN` |
 | `PATCH` | `/api/v1/organizations/current` | Actualiza el nombre visible de la organización | `ADMIN` |
 | `DELETE` | `/api/v1/organizations/{id}` | Elimina una organización vacía | `ADMIN` |
 
@@ -635,7 +709,7 @@ La respuesta paginada contiene:
 }
 ```
 
-### Auditoría
+### Endpoints de auditoría
 
 Endpoint:
 
@@ -671,7 +745,31 @@ GET /api/v1/findings/3bfa1ad2-eee1-4ea5-ba7c-16b47d1da147/audit?action=UPDATED&r
 
 Los filtros siempre se aplican dentro de la organización asociada al token JWT.
 
-### Comentarios
+#### Auditoría de activos de la organización
+
+`GET /api/v1/organizations/current/audit/assets` devuelve los eventos de activos
+de la organización asociada al token.
+
+| Parámetro | Descripción |
+|---|---|
+| `page` | Número de página, empezando en `0`. |
+| `size` | Eventos por página, entre `1` y `100`. |
+| `action` | Acción: `CREATED`, `UPDATED`, `ARCHIVED`, `RESTORED` o `DELETED`. |
+| `requestId` | Identificador de petición; máximo 64 caracteres. |
+| `actor` | Usuario responsable; máximo 255 caracteres. |
+| `occurredFrom` | Fecha inicial inclusiva en formato ISO-8601. |
+| `occurredTo` | Fecha final inclusiva en formato ISO-8601. |
+
+La organización se obtiene del token. No se acepta `organizationId` como filtro
+de autorización.
+
+Ejemplo:
+
+```text
+GET /api/v1/organizations/current/audit/assets?page=0&size=20&action=ARCHIVED
+```
+
+### Endpoints de comentarios
 
 Crear un comentario:
 
@@ -1043,6 +1141,7 @@ Las pruebas cubren:
 - Limpieza del contexto MDC.
 - Integración del filtro en Spring Security.
 - Persistencia y recuperación del `requestId` en auditoría.
+- Exportación CSV de activos, límite de filas y neutralización de fórmulas.
 
 ## Integración continua
 
@@ -1117,7 +1216,7 @@ El proyecto continúa en desarrollo. Algunas líneas futuras son:
 
 - Ampliar las operaciones de administración de organizaciones.
 - Añadir más reglas de autorización.
-- Configurar paneles y alertas para las métricas Prometheus.
+- Validar en el entorno desplegado la recopilación y entrega de alertas, y ajustar los umbrales para producción
 - Mejorar la configuración de producción.
 - Automatizar la configuración de Keycloak.
 - Ampliar las pruebas de seguridad.

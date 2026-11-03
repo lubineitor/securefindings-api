@@ -1,10 +1,14 @@
 package com.securefindings.asset.api;
 
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.data.domain.Page;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -43,105 +47,145 @@ import jakarta.validation.constraints.Size;
 @SecurityRequirement(name = "bearerAuth")
 public class AssetController {
 
-    private final AssetService assetService;
+        private final AssetService assetService;
+        private final AssetCsvExporter assetCsvExporter;
 
-    public AssetController(AssetService assetService) {
-        this.assetService = assetService;
-    }
+        public AssetController(
+                        AssetService assetService,
+                        AssetCsvExporter assetCsvExporter) {
+                this.assetService = assetService;
+                this.assetCsvExporter = assetCsvExporter;
+        }
 
-    @GetMapping
-    @Operation(summary = "Listar activos", description = "Devuelve los activos de la organización actual de forma paginada")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Activos recuperados correctamente"),
-            @ApiResponse(responseCode = "400", description = "Los filtros o parámetros no son válidos")
-    })
-    public AssetPageResponse findAll(
-            @Parameter(description = "Número de página. Empieza en 0", in = ParameterIn.QUERY) @RequestParam(name = "page", defaultValue = "0") @Min(0) int page,
-            @Parameter(description = "Elementos por página. Entre 1 y 100", in = ParameterIn.QUERY) @RequestParam(name = "size", defaultValue = "20") @Min(1) @Max(100) int size,
-            @Parameter(description = "Busca por nombre o identificador", in = ParameterIn.QUERY) @RequestParam(name = "q", required = false) @Size(max = 100) String searchTerm,
-            @RequestParam(name = "type", required = false) AssetType type,
-            @RequestParam(name = "environment", required = false) AssetEnvironment environment,
-            @RequestParam(name = "criticality", required = false) AssetCriticality criticality,
-            @RequestParam(name = "status", required = false) AssetStatus status) {
+        @GetMapping
+        @Operation(summary = "Listar activos", description = "Devuelve los activos de la organización actual de forma paginada")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "200", description = "Activos recuperados correctamente"),
+                        @ApiResponse(responseCode = "400", description = "Los filtros o parámetros no son válidos")
+        })
+        public AssetPageResponse findAll(
+                        @Parameter(description = "Número de página. Empieza en 0", in = ParameterIn.QUERY) @RequestParam(name = "page", defaultValue = "0") @Min(0) int page,
+                        @Parameter(description = "Elementos por página. Entre 1 y 100", in = ParameterIn.QUERY) @RequestParam(name = "size", defaultValue = "20") @Min(1) @Max(100) int size,
+                        @Parameter(description = "Busca por nombre o identificador", in = ParameterIn.QUERY) @RequestParam(name = "q", required = false) @Size(max = 100) String searchTerm,
+                        @RequestParam(name = "type", required = false) AssetType type,
+                        @RequestParam(name = "environment", required = false) AssetEnvironment environment,
+                        @RequestParam(name = "criticality", required = false) AssetCriticality criticality,
+                        @RequestParam(name = "status", required = false) AssetStatus status) {
 
-        Page<Asset> assets = assetService.findPage(
-                page,
-                size,
-                searchTerm,
-                type,
-                environment,
-                criticality,
-                status);
+                Page<Asset> assets = assetService.findPage(
+                                page,
+                                size,
+                                searchTerm,
+                                type,
+                                environment,
+                                criticality,
+                                status);
 
-        return AssetPageResponse.from(assets);
-    }
+                return AssetPageResponse.from(assets);
+        }
 
-    @GetMapping("/{id}")
-    @Operation(summary = "Consultar un activo", description = "Busca un activo dentro de la organización actual")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Activo encontrado"),
-            @ApiResponse(responseCode = "404", description = "El activo no existe en la organización actual")
-    })
-    public Asset getById(@PathVariable UUID id) {
-        return assetService.getById(id);
-    }
+        @GetMapping(value = "/export", produces = "text/csv")
+        @Operation(summary = "Exportar activos a CSV", description = "Exporta los activos de la organización actual aplicando los filtros disponibles")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "200", description = "Archivo CSV generado"),
+                        @ApiResponse(responseCode = "413", description = "La exportación supera el límite de filas")
+        })
+        public ResponseEntity<byte[]> exportCsv(
+                        @Parameter(description = "Busca por nombre o identificador", in = ParameterIn.QUERY) @RequestParam(name = "q", required = false) @Size(max = 100) String searchTerm,
 
-    @PostMapping
-    @Operation(summary = "Crear un activo", description = "Crea un activo en la organización actual")
-    @ApiResponses({
-            @ApiResponse(responseCode = "201", description = "Activo creado"),
-            @ApiResponse(responseCode = "400", description = "Los datos enviados no son válidos"),
-            @ApiResponse(responseCode = "409", description = "Ya existe un activo con ese identificador")
-    })
-    public ResponseEntity<Asset> create(
-            @Valid @RequestBody CreateAssetRequest request,
-            UriComponentsBuilder uriBuilder) {
+                        @Parameter(description = "Filtrar por tipo", in = ParameterIn.QUERY) @RequestParam(name = "type", required = false) AssetType type,
 
-        Asset asset = assetService.create(
-                request.name(),
-                request.identifier(),
-                request.type(),
-                request.environment(),
-                request.criticality());
+                        @Parameter(description = "Filtrar por entorno", in = ParameterIn.QUERY) @RequestParam(name = "environment", required = false) AssetEnvironment environment,
 
-        URI location = uriBuilder.path("/api/v1/assets/{id}")
-                .buildAndExpand(asset.id())
-                .toUri();
+                        @Parameter(description = "Filtrar por criticidad", in = ParameterIn.QUERY) @RequestParam(name = "criticality", required = false) AssetCriticality criticality,
 
-        return ResponseEntity.created(location).body(asset);
-    }
+                        @Parameter(description = "Filtrar por estado", in = ParameterIn.QUERY) @RequestParam(name = "status", required = false) AssetStatus status) {
 
-    @PatchMapping("/{id}")
-    @Operation(summary = "Actualizar un activo", description = "Actualiza los datos y el estado del activo")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Activo actualizado"),
-            @ApiResponse(responseCode = "400", description = "Los datos enviados no son válidos"),
-            @ApiResponse(responseCode = "404", description = "El activo no existe en la organización actual"),
-            @ApiResponse(responseCode = "409", description = "Ya existe un activo con ese identificador")
-    })
-    public Asset update(
-            @PathVariable UUID id,
-            @Valid @RequestBody UpdateAssetRequest request) {
+                List<Asset> assets = assetService.findForExport(
+                                searchTerm,
+                                type,
+                                environment,
+                                criticality,
+                                status);
 
-        return assetService.update(
-                id,
-                request.name(),
-                request.identifier(),
-                request.type(),
-                request.environment(),
-                request.criticality(),
-                request.status());
-    }
+                byte[] csv = assetCsvExporter.toCsv(assets)
+                                .getBytes(StandardCharsets.UTF_8);
 
-    @DeleteMapping("/{id}")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    @Operation(summary = "Eliminar un activo sin hallazgos", description = "Solo permite eliminar activos que no estén asociados a hallazgos")
-    @ApiResponses({
-            @ApiResponse(responseCode = "204", description = "Activo eliminado"),
-            @ApiResponse(responseCode = "404", description = "El activo no existe en la organización actual"),
-            @ApiResponse(responseCode = "409", description = "El activo está asociado a hallazgos")
-    })
-    public void delete(@PathVariable UUID id) {
-        assetService.delete(id);
-    }
+                return ResponseEntity.ok()
+                                .contentType(MediaType.parseMediaType("text/csv; charset=UTF-8"))
+                                .header(
+                                                HttpHeaders.CONTENT_DISPOSITION,
+                                                "attachment; filename=\"securefindings-assets.csv\"")
+                                .header(HttpHeaders.CACHE_CONTROL, "no-store")
+                                .body(csv);
+        }
+
+        @GetMapping("/{id}")
+        @Operation(summary = "Consultar un activo", description = "Busca un activo dentro de la organización actual")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "200", description = "Activo encontrado"),
+                        @ApiResponse(responseCode = "404", description = "El activo no existe en la organización actual")
+        })
+        public Asset getById(@PathVariable UUID id) {
+                return assetService.getById(id);
+        }
+
+        @PostMapping
+        @Operation(summary = "Crear un activo", description = "Crea un activo en la organización actual")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "201", description = "Activo creado"),
+                        @ApiResponse(responseCode = "400", description = "Los datos enviados no son válidos"),
+                        @ApiResponse(responseCode = "409", description = "Ya existe un activo con ese identificador")
+        })
+        public ResponseEntity<Asset> create(
+                        @Valid @RequestBody CreateAssetRequest request,
+                        UriComponentsBuilder uriBuilder) {
+
+                Asset asset = assetService.create(
+                                request.name(),
+                                request.identifier(),
+                                request.type(),
+                                request.environment(),
+                                request.criticality());
+
+                URI location = uriBuilder.path("/api/v1/assets/{id}")
+                                .buildAndExpand(asset.id())
+                                .toUri();
+
+                return ResponseEntity.created(location).body(asset);
+        }
+
+        @PatchMapping("/{id}")
+        @Operation(summary = "Actualizar un activo", description = "Actualiza los datos y el estado del activo")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "200", description = "Activo actualizado"),
+                        @ApiResponse(responseCode = "400", description = "Los datos enviados no son válidos"),
+                        @ApiResponse(responseCode = "404", description = "El activo no existe en la organización actual"),
+                        @ApiResponse(responseCode = "409", description = "Ya existe un activo con ese identificador")
+        })
+        public Asset update(
+                        @PathVariable UUID id,
+                        @Valid @RequestBody UpdateAssetRequest request) {
+
+                return assetService.update(
+                                id,
+                                request.name(),
+                                request.identifier(),
+                                request.type(),
+                                request.environment(),
+                                request.criticality(),
+                                request.status());
+        }
+
+        @DeleteMapping("/{id}")
+        @ResponseStatus(HttpStatus.NO_CONTENT)
+        @Operation(summary = "Eliminar un activo sin hallazgos", description = "Solo permite eliminar activos que no estén asociados a hallazgos")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "204", description = "Activo eliminado"),
+                        @ApiResponse(responseCode = "404", description = "El activo no existe en la organización actual"),
+                        @ApiResponse(responseCode = "409", description = "El activo está asociado a hallazgos")
+        })
+        public void delete(@PathVariable UUID id) {
+                assetService.delete(id);
+        }
 }
