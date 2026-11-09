@@ -25,6 +25,7 @@ import com.securefindings.asset.application.AssetExportLimitExceededException;
 import com.securefindings.asset.application.AssetHasFindingsException;
 import com.securefindings.asset.application.AssetIdentifierAlreadyExistsException;
 import com.securefindings.asset.application.AssetNotFoundException;
+import com.securefindings.audit.application.AuditExportLimitExceededException;
 import com.securefindings.finding.application.FindingExportLimitExceededException;
 import com.securefindings.finding.application.FindingNotFoundException;
 import com.securefindings.finding.application.FindingStatusTransitionException;
@@ -339,6 +340,17 @@ public class GlobalExceptionHandler {
 
                 return new ApiErrorResponse(
                                 "ASSET_AUDIT_EXPORT_LIMIT_EXCEEDED",
+                                exception.getMessage(),
+                                Map.of("limit", String.valueOf(exception.maximumRows())));
+        }
+
+        @ExceptionHandler(AuditExportLimitExceededException.class)
+        @ResponseStatus(HttpStatus.CONTENT_TOO_LARGE)
+        public ApiErrorResponse handleAuditExportLimitExceeded(
+                        AuditExportLimitExceededException exception) {
+
+                return new ApiErrorResponse(
+                                "AUDIT_EXPORT_LIMIT_EXCEEDED",
                                 exception.getMessage(),
                                 Map.of("limit", String.valueOf(exception.maximumRows())));
         }

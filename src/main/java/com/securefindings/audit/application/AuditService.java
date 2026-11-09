@@ -1,6 +1,7 @@
 package com.securefindings.audit.application;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -25,6 +26,8 @@ import jakarta.persistence.criteria.Predicate;
 
 @Service
 public class AuditService {
+
+        public static final int MAX_EXPORT_ROWS = 1000;
 
         private final FindingAuditRepository auditRepository;
         private final FindingRepository findingRepository;
@@ -340,6 +343,47 @@ public class AuditService {
                 };
 
                 return auditRepository.findAll(specification, pageable);
+        }
+
+        @Transactional(readOnly = true)
+        public List<FindingAuditEntity> findForOrganizationExport(
+                        AuditAction action,
+                        String requestId,
+                        String actor,
+                        Instant occurredFrom,
+                        Instant occurredTo) {
+
+                if (occurredFrom != null
+                                && occurredTo != null
+                                && occurredFrom.isAfter(occurredTo)) {
+                        throw new IllegalArgumentException(
+                                        "occurredFrom debe ser anterior o igual a occurredTo");
+                }
+
+                UUID organizationId = organizationContext.currentOrganizationId();
+
+                Pageable pageable = PageRequest.of(
+                                0,
+                                MAX_EXPORT_ROWS + 1,
+                                Sort.by(
+                                                Sort.Order.asc("occurredAt"),
+                                                Sort.Order.asc("id")));
+
+                Page<FindingAuditEntity> auditPage = auditRepository.findPageByOrganizationIdAndFilters(
+                                organizationId,
+                                action,
+                                requestId,
+                                actor,
+                                occurredFrom,
+                                occurredTo,
+                                pageable);
+
+                if (auditPage.getTotalElements() > MAX_EXPORT_ROWS
+                                || auditPage.getContent().size() > MAX_EXPORT_ROWS) {
+                        throw new AuditExportLimitExceededException(MAX_EXPORT_ROWS);
+                }
+
+                return List.copyOf(auditPage.getContent());
         }
 
         @Transactional(readOnly = true)
