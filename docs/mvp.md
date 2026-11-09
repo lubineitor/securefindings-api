@@ -47,6 +47,8 @@ en este documento y en `SECURITY.md`.
   protegida frente a la inyección de fórmulas.
 - Resumen del inventario de activos por estado, tipo, entorno y criticidad, con
   filtros de fechas y aislamiento por organización.
+- Exportación CSV de la auditoría global de hallazgos, filtrada por organización
+  y protegida frente a la inyección de fórmulas.
 
 ## Criterios de aceptación del MVP
 

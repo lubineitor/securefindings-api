@@ -209,12 +209,20 @@ También se puede consultar el historial completo de la organización actual:
 GET /api/v1/organizations/current/audit
 ```
 
-La exportación acepta los filtros `action`, `requestId`, `actor`, `occurredFrom`
-y `occurredTo`. Genera el archivo UTF-8
-`securefindings-asset-audit.csv`, con `Cache-Control: no-store`, y admite hasta
-1.000 eventos. Si supera ese límite, responde `413
-ASSET_AUDIT_EXPORT_LIMIT_EXCEEDED`. Las celdas se escapan y neutralizan para
-evitar la ejecución de fórmulas en hojas de cálculo.
+La auditoría global también puede descargarse en CSV:
+
+```text
+GET /api/v1/organizations/current/audit/export
+```
+
+Acepta los filtros `action`, `requestId`, `actor`, `occurredFrom` y
+`occurredTo`. El archivo UTF-8 `securefindings-finding-audit.csv` incluye las
+columnas `id`, `findingId`, `action`, `actor`, `occurredAt` y `requestId`.
+Las celdas se escapan y neutralizan para evitar fórmulas en hojas de cálculo.
+La respuesta incluye `Cache-Control: no-store`.
+
+La exportación admite hasta 1.000 eventos. Si supera ese límite, responde `413`
+con el código `AUDIT_EXPORT_LIMIT_EXCEEDED` y el límite en `errors.limit`.
 
 #### Filtros de auditoría
 
@@ -477,6 +485,7 @@ ambas, la fecha inicial debe ser anterior o igual a la final.
 
 ```text
 GET /api/v1/assets/summary?createdFrom=2026-10-01T00:00:00Z&createdTo=2026-10-31T23:59:59Z
+```
 
 #### Auditoría de activos
 
@@ -550,7 +559,7 @@ La exportación admite hasta 1.000 activos. Si hay más, responde `413`:
 
 #### Resumen de hallazgos
 
-`GET /api/v1/findings/summary` la consulta devuelve los recuentos de hallazgos agrupados por estado y severidad
+`GET /api/v1/findings/summary` devuelve los recuentos de hallazgos agrupados por estado y severidad
 para la organización del token. Admite filtros opcionales por fechas y por activo.
 Los hallazgos de otras organizaciones no aparecen en el resultado.
 
@@ -601,6 +610,8 @@ límite en `errors.limit`:
 | `GET` | `/api/v1/organizations/current` | Consulta la organización asociada al token | `ANALYST`, `ADMIN` |
 | `GET` | `/api/v1/organizations/current/audit/assets` | Consulta la auditoría de activos de la organización actual | `ANALYST`, `ADMIN` |
 | `GET` | `/api/v1/organizations/current/audit/assets/export` | Exporta la auditoría filtrada de activos a CSV | `ANALYST`, `ADMIN` |
+| `GET` | `/api/v1/organizations/current/audit` | Consulta la auditoría de hallazgos de la organización actual | `ANALYST`, `ADMIN` |
+| `GET` | `/api/v1/organizations/current/audit/export` | Exporta la auditoría de hallazgos filtrada a CSV | `ANALYST`, `ADMIN` |
 | `POST` | `/api/v1/organizations` | Crea una organización | `ADMIN` |
 | `PATCH` | `/api/v1/organizations/{id}` | Actualiza el nombre visible de una organización | `ADMIN` |
 | `PATCH` | `/api/v1/organizations/current` | Actualiza el nombre visible de la organización | `ADMIN` |

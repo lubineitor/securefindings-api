@@ -36,6 +36,7 @@ Esta política cubre:
 - Migraciones de base de datos.
 - Workflows de GitHub Actions.
 - Dependencias del proyecto.
+- Exportación CSV de auditoría global.
 
 ## Cómo informar de una vulnerabilidad
 
