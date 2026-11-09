@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.lenient;
 
 import java.time.Instant;
 import java.util.List;
@@ -29,6 +30,7 @@ import com.securefindings.asset.domain.AssetAuditAction;
 import com.securefindings.asset.domain.AssetCriticality;
 import com.securefindings.asset.domain.AssetEnvironment;
 import com.securefindings.asset.domain.AssetStatus;
+import com.securefindings.asset.domain.AssetSummary;
 import com.securefindings.asset.domain.AssetType;
 import com.securefindings.asset.persistence.AssetEntity;
 import com.securefindings.asset.persistence.AssetRepository;
@@ -58,7 +60,9 @@ class AssetServiceTest {
 
         @BeforeEach
         void configurarOrganizacion() {
-                when(organizationContext.currentOrganizationId()).thenReturn(ORGANIZATION_ID);
+                lenient()
+                                .when(organizationContext.currentOrganizationId())
+                                .thenReturn(ORGANIZATION_ID);
         }
 
         @Test
@@ -138,6 +142,92 @@ class AssetServiceTest {
 
                 assertEquals(List.of(asset), result.getContent());
                 assertEquals(1, result.getTotalElements());
+        }
+
+        @Test
+        void deberiaConstruirElResumenDeActivosConCerosYFiltrosDeFecha() {
+                Instant createdFrom = Instant.parse("2026-10-01T00:00:00Z");
+                Instant createdTo = Instant.parse("2026-10-31T23:59:59Z");
+
+                AssetRepository.StatusCountProjection statusCount = org.mockito.Mockito.mock(
+                                AssetRepository.StatusCountProjection.class);
+                when(statusCount.getStatus()).thenReturn(AssetStatus.ACTIVE);
+                when(statusCount.getTotal()).thenReturn(2L);
+
+                AssetRepository.TypeCountProjection typeCount = org.mockito.Mockito.mock(
+                                AssetRepository.TypeCountProjection.class);
+                when(typeCount.getType()).thenReturn(AssetType.API);
+                when(typeCount.getTotal()).thenReturn(2L);
+
+                AssetRepository.EnvironmentCountProjection environmentCount = org.mockito.Mockito.mock(
+                                AssetRepository.EnvironmentCountProjection.class);
+                when(environmentCount.getEnvironment())
+                                .thenReturn(AssetEnvironment.PRODUCTION);
+                when(environmentCount.getTotal()).thenReturn(2L);
+
+                AssetRepository.CriticalityCountProjection criticalityCount = org.mockito.Mockito.mock(
+                                AssetRepository.CriticalityCountProjection.class);
+                when(criticalityCount.getCriticality())
+                                .thenReturn(AssetCriticality.HIGH);
+                when(criticalityCount.getTotal()).thenReturn(2L);
+
+                when(assetRepository.countStatusesByOrganization(
+                                ORGANIZATION_ID,
+                                createdFrom,
+                                createdTo))
+                                .thenReturn(List.of(statusCount));
+                when(assetRepository.countTypesByOrganization(
+                                ORGANIZATION_ID,
+                                createdFrom,
+                                createdTo))
+                                .thenReturn(List.of(typeCount));
+                when(assetRepository.countEnvironmentsByOrganization(
+                                ORGANIZATION_ID,
+                                createdFrom,
+                                createdTo))
+                                .thenReturn(List.of(environmentCount));
+                when(assetRepository.countCriticalitiesByOrganization(
+                                ORGANIZATION_ID,
+                                createdFrom,
+                                createdTo))
+                                .thenReturn(List.of(criticalityCount));
+
+                AssetSummary summary = assetService.getSummary(createdFrom, createdTo);
+
+                assertEquals(2L, summary.total());
+                assertEquals(2L, summary.byStatus().get(AssetStatus.ACTIVE));
+                assertEquals(0L, summary.byStatus().get(AssetStatus.ARCHIVED));
+                assertEquals(2L, summary.byType().get(AssetType.API));
+                assertEquals(0L, summary.byType().get(AssetType.SERVER));
+                assertEquals(2L, summary.byEnvironment().get(AssetEnvironment.PRODUCTION));
+                assertEquals(2L, summary.byCriticality().get(AssetCriticality.HIGH));
+
+                verify(assetRepository).countStatusesByOrganization(
+                                ORGANIZATION_ID,
+                                createdFrom,
+                                createdTo);
+                verify(assetRepository).countTypesByOrganization(
+                                ORGANIZATION_ID,
+                                createdFrom,
+                                createdTo);
+                verify(assetRepository).countEnvironmentsByOrganization(
+                                ORGANIZATION_ID,
+                                createdFrom,
+                                createdTo);
+                verify(assetRepository).countCriticalitiesByOrganization(
+                                ORGANIZATION_ID,
+                                createdFrom,
+                                createdTo);
+        }
+
+        @Test
+        void deberiaRechazarUnRangoDeFechasInvertidoEnElResumen() {
+                Instant createdFrom = Instant.parse("2026-10-31T23:59:59Z");
+                Instant createdTo = Instant.parse("2026-10-01T00:00:00Z");
+
+                assertThrows(
+                                IllegalArgumentException.class,
+                                () -> assetService.getSummary(createdFrom, createdTo));
         }
 
         @Test

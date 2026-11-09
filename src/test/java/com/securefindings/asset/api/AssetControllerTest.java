@@ -16,6 +16,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -41,6 +42,7 @@ import com.securefindings.asset.domain.Asset;
 import com.securefindings.asset.domain.AssetCriticality;
 import com.securefindings.asset.domain.AssetEnvironment;
 import com.securefindings.asset.domain.AssetStatus;
+import com.securefindings.asset.domain.AssetSummary;
 import com.securefindings.asset.domain.AssetType;
 import com.securefindings.security.SecurityConfig;
 
@@ -65,6 +67,36 @@ class AssetControllerTest {
                 mockMvc = MockMvcBuilders.webAppContextSetup(context)
                                 .apply(springSecurity())
                                 .build();
+        }
+
+        @Test
+        void deberiaDevolverResumenDeActivosConRangoDeFechas() throws Exception {
+                Instant createdFrom = Instant.parse("2026-10-01T00:00:00Z");
+                Instant createdTo = Instant.parse("2026-10-31T23:59:59Z");
+
+                AssetSummary summary = new AssetSummary(
+                                2L,
+                                Map.of(
+                                                AssetStatus.ACTIVE, 1L,
+                                                AssetStatus.ARCHIVED, 1L),
+                                Map.of(AssetType.API, 2L),
+                                Map.of(AssetEnvironment.PRODUCTION, 2L),
+                                Map.of(AssetCriticality.HIGH, 2L));
+
+                when(assetService.getSummary(createdFrom, createdTo)).thenReturn(summary);
+
+                mockMvc.perform(get("/api/v1/assets/summary")
+                                .param("createdFrom", "2026-10-01T00:00:00Z")
+                                .param("createdTo", "2026-10-31T23:59:59Z"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.total").value(2))
+                                .andExpect(jsonPath("$.byStatus.ACTIVE").value(1))
+                                .andExpect(jsonPath("$.byStatus.ARCHIVED").value(1))
+                                .andExpect(jsonPath("$.byType.API").value(2))
+                                .andExpect(jsonPath("$.byEnvironment.PRODUCTION").value(2))
+                                .andExpect(jsonPath("$.byCriticality.HIGH").value(2));
+
+                verify(assetService).getSummary(createdFrom, createdTo);
         }
 
         @Test
