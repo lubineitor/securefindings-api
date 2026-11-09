@@ -2,10 +2,12 @@ package com.securefindings.asset.api;
 
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
 import org.springframework.data.domain.Page;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -27,6 +29,7 @@ import com.securefindings.asset.domain.Asset;
 import com.securefindings.asset.domain.AssetCriticality;
 import com.securefindings.asset.domain.AssetEnvironment;
 import com.securefindings.asset.domain.AssetStatus;
+import com.securefindings.asset.domain.AssetSummary;
 import com.securefindings.asset.domain.AssetType;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -82,6 +85,20 @@ public class AssetController {
                                 status);
 
                 return AssetPageResponse.from(assets);
+        }
+
+        @GetMapping("/summary")
+        @Operation(summary = "Consultar el resumen de activos", description = "Agrupa los activos de la organización actual por estado, tipo, entorno y criticidad")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "200", description = "Resumen recuperado correctamente"),
+                        @ApiResponse(responseCode = "400", description = "El rango de fechas no es válido")
+        })
+        public AssetSummary getSummary(
+                        @Parameter(description = "Fecha de creación inicial inclusiva en formato ISO-8601", in = ParameterIn.QUERY) @RequestParam(name = "createdFrom", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant createdFrom,
+
+                        @Parameter(description = "Fecha de creación final inclusiva en formato ISO-8601", in = ParameterIn.QUERY) @RequestParam(name = "createdTo", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant createdTo) {
+
+                return assetService.getSummary(createdFrom, createdTo);
         }
 
         @GetMapping(value = "/export", produces = "text/csv")
