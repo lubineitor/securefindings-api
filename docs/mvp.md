@@ -45,6 +45,8 @@ en este documento y en `SECURITY.md`.
   con filtros por acción, actor, `requestId` y fechas.
 - Exportación CSV filtrada de auditoría de activos, limitada a 1.000 eventos y
   protegida frente a la inyección de fórmulas.
+- Resumen del inventario de activos por estado, tipo, entorno y criticidad, con
+  filtros de fechas y aislamiento por organización.
 
 ## Criterios de aceptación del MVP
 

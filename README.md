@@ -461,9 +461,22 @@ Las pruebas públicas devuelven únicamente el estado, sin mostrar componentes n
 | `GET` | `/api/v1/assets/{id}` | Consulta un activo | `ANALYST`, `ADMIN` |
 | `GET` | `/api/v1/assets/export` | Exporta activos filtrados a CSV | `ANALYST`, `ADMIN` |
 | `GET` | `/api/v1/assets/{id}/audit` | Consulta el historial paginado del activo | `ANALYST`, `ADMIN` |
+| `GET` | `/api/v1/assets/summary` | Resume activos por estado, tipo, entorno y criticidad | `ANALYST`, `ADMIN` |
 | `POST` | `/api/v1/assets` | Crea un activo | `ADMIN` |
 | `PATCH` | `/api/v1/assets/{id}` | Actualiza, archiva o reactiva un activo | `ADMIN` |
 | `DELETE` | `/api/v1/assets/{id}` | Elimina un activo sin hallazgos asociados | `ADMIN` |
+
+#### Resumen del inventario
+
+`GET /api/v1/assets/summary` devuelve el total y los recuentos agrupados por
+estado, tipo, entorno y criticidad para la organización actual. Cada grupo
+incluye todos los valores posibles, también los que tienen recuento cero.
+
+Acepta `createdFrom` y `createdTo` como fechas ISO-8601 inclusivas. Si se envían
+ambas, la fecha inicial debe ser anterior o igual a la final.
+
+```text
+GET /api/v1/assets/summary?createdFrom=2026-10-01T00:00:00Z&createdTo=2026-10-31T23:59:59Z
 
 #### Auditoría de activos
 
