@@ -589,4 +589,111 @@ class AuditServiceTest {
                                 findingRepository,
                                 auditRepository);
         }
+
+        @Test
+        void deberiaExportarLaAuditoriaGlobalAplicandoFiltrosYLimite() {
+                Instant occurredFrom = Instant.parse("2026-10-01T00:00:00Z");
+                Instant occurredTo = Instant.parse("2026-10-31T23:59:59Z");
+
+                FindingAuditEntity event = new FindingAuditEntity(
+                                UUID.randomUUID(),
+                                UUID.randomUUID(),
+                                ORGANIZATION_ID,
+                                AuditAction.UPDATED,
+                                "analista",
+                                Instant.parse("2026-10-10T08:00:00Z"),
+                                "audit-request-123");
+
+                Page<FindingAuditEntity> auditPage = new PageImpl<>(
+                                List.of(event),
+                                PageRequest.of(0, AuditService.MAX_EXPORT_ROWS + 1),
+                                1);
+
+                when(organizationContext.currentOrganizationId())
+                                .thenReturn(ORGANIZATION_ID);
+                when(auditRepository.findPageByOrganizationIdAndFilters(
+                                eq(ORGANIZATION_ID),
+                                eq(AuditAction.UPDATED),
+                                eq("audit-request-123"),
+                                eq("analista"),
+                                eq(occurredFrom),
+                                eq(occurredTo),
+                                any(Pageable.class)))
+                                .thenReturn(auditPage);
+
+                List<FindingAuditEntity> result = auditService.findForOrganizationExport(
+                                AuditAction.UPDATED,
+                                "audit-request-123",
+                                "analista",
+                                occurredFrom,
+                                occurredTo);
+
+                assertEquals(List.of(event), result);
+
+                ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+                verify(auditRepository).findPageByOrganizationIdAndFilters(
+                                eq(ORGANIZATION_ID),
+                                eq(AuditAction.UPDATED),
+                                eq("audit-request-123"),
+                                eq("analista"),
+                                eq(occurredFrom),
+                                eq(occurredTo),
+                                pageableCaptor.capture());
+
+                assertEquals(0, pageableCaptor.getValue().getPageNumber());
+                assertEquals(
+                                AuditService.MAX_EXPORT_ROWS + 1,
+                                pageableCaptor.getValue().getPageSize());
+        }
+
+        @Test
+        void deberiaRechazarLaExportacionSiSuperaElLimite() {
+                FindingAuditEntity event = crearEvento(
+                                UUID.randomUUID(),
+                                AuditAction.UPDATED,
+                                "audit-request-123");
+
+                Page<FindingAuditEntity> auditPage = new PageImpl<>(
+                                List.of(event),
+                                PageRequest.of(0, AuditService.MAX_EXPORT_ROWS + 1),
+                                AuditService.MAX_EXPORT_ROWS + 1L);
+
+                when(organizationContext.currentOrganizationId())
+                                .thenReturn(ORGANIZATION_ID);
+                when(auditRepository.findPageByOrganizationIdAndFilters(
+                                eq(ORGANIZATION_ID),
+                                eq(null),
+                                eq(null),
+                                eq(null),
+                                eq(null),
+                                eq(null),
+                                any(Pageable.class)))
+                                .thenReturn(auditPage);
+
+                assertThrows(
+                                AuditExportLimitExceededException.class,
+                                () -> auditService.findForOrganizationExport(
+                                                null,
+                                                null,
+                                                null,
+                                                null,
+                                                null));
+        }
+
+        @Test
+        void deberiaRechazarUnRangoDeFechasInvertidoEnLaExportacion() {
+                Instant occurredFrom = Instant.parse("2026-10-31T23:59:59Z");
+                Instant occurredTo = Instant.parse("2026-10-01T00:00:00Z");
+
+                assertThrows(
+                                IllegalArgumentException.class,
+                                () -> auditService.findForOrganizationExport(
+                                                null,
+                                                null,
+                                                null,
+                                                occurredFrom,
+                                                occurredTo));
+
+                verifyNoInteractions(organizationContext, auditRepository);
+        }
 }
