@@ -737,4 +737,27 @@ class FindingPersistenceIntegrationTest {
                 assertEquals(1L, summary.bySeverity().get(FindingSeverity.MEDIUM));
                 assertEquals(0L, summary.bySeverity().get(FindingSeverity.CRITICAL));
         }
+
+        @Test
+        void deberiaPersistirYRecuperarLaFechaLimiteDeUnHallazgo() {
+                Instant dueAt = Instant.parse("2026-12-01T09:00:00Z");
+
+                Finding finding = Finding.create(
+                                "Hallazgo con fecha límite",
+                                "Descripción de prueba",
+                                FindingSeverity.HIGH,
+                                null,
+                                dueAt);
+
+                FindingEntity savedEntity = findingRepository.saveAndFlush(
+                                new FindingEntity(finding, ORGANIZATION_ID));
+
+                FindingEntity recoveredEntity = findingRepository
+                                .findByIdAndOrganizationId(
+                                                savedEntity.getId(),
+                                                ORGANIZATION_ID)
+                                .orElseThrow();
+
+                assertEquals(dueAt, recoveredEntity.toDomain().dueAt());
+        }
 }
