@@ -51,6 +51,9 @@ public class FindingEntity {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    @Column(name = "due_at")
+    private Instant dueAt;
+
     protected FindingEntity() {
     }
 
@@ -58,9 +61,7 @@ public class FindingEntity {
         this(finding, SYSTEM_ORGANIZATION_ID);
     }
 
-    public FindingEntity(
-            Finding finding,
-            UUID organizationId) {
+    public FindingEntity(Finding finding, UUID organizationId) {
         this.id = finding.id();
         this.organizationId = organizationId;
         this.assetId = finding.assetId();
@@ -70,6 +71,7 @@ public class FindingEntity {
         this.status = finding.status();
         this.createdAt = finding.createdAt();
         this.updatedAt = finding.updatedAt();
+        this.dueAt = finding.dueAt();
     }
 
     public Finding toDomain() {
@@ -81,7 +83,8 @@ public class FindingEntity {
                 status,
                 createdAt,
                 updatedAt,
-                assetId);
+                assetId,
+                dueAt);
     }
 
     public UUID getId() {
@@ -118,5 +121,9 @@ public class FindingEntity {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    public Instant getDueAt() {
+        return dueAt;
     }
 }

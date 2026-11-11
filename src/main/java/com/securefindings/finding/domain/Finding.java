@@ -12,7 +12,8 @@ public record Finding(
         FindingStatus status,
         Instant createdAt,
         Instant updatedAt,
-        UUID assetId) {
+        UUID assetId,
+        Instant dueAt) {
 
     public Finding(
             UUID id,
@@ -22,7 +23,37 @@ public record Finding(
             FindingStatus status,
             Instant createdAt,
             Instant updatedAt) {
-        this(id, title, description, severity, status, createdAt, updatedAt, null);
+        this(
+                id,
+                title,
+                description,
+                severity,
+                status,
+                createdAt,
+                updatedAt,
+                null,
+                null);
+    }
+
+    public Finding(
+            UUID id,
+            String title,
+            String description,
+            FindingSeverity severity,
+            FindingStatus status,
+            Instant createdAt,
+            Instant updatedAt,
+            UUID assetId) {
+        this(
+                id,
+                title,
+                description,
+                severity,
+                status,
+                createdAt,
+                updatedAt,
+                assetId,
+                null);
     }
 
     public Finding {
@@ -45,7 +76,7 @@ public record Finding(
             String title,
             String description,
             FindingSeverity severity) {
-        return create(title, description, severity, null);
+        return create(title, description, severity, null, null);
     }
 
     public static Finding create(
@@ -53,6 +84,15 @@ public record Finding(
             String description,
             FindingSeverity severity,
             UUID assetId) {
+        return create(title, description, severity, assetId, null);
+    }
+
+    public static Finding create(
+            String title,
+            String description,
+            FindingSeverity severity,
+            UUID assetId,
+            Instant dueAt) {
         Instant now = Instant.now();
 
         return new Finding(
@@ -63,7 +103,8 @@ public record Finding(
                 FindingStatus.OPEN,
                 now,
                 now,
-                assetId);
+                assetId,
+                dueAt);
     }
 
     public Finding withStatus(FindingStatus newStatus) {
@@ -75,7 +116,8 @@ public record Finding(
                 newStatus,
                 createdAt,
                 Instant.now(),
-                assetId);
+                assetId,
+                dueAt);
     }
 
     public Finding withDetails(
@@ -90,7 +132,8 @@ public record Finding(
                 status,
                 createdAt,
                 Instant.now(),
-                assetId);
+                assetId,
+                dueAt);
     }
 
     public Finding withAssetId(UUID newAssetId) {
@@ -102,6 +145,20 @@ public record Finding(
                 status,
                 createdAt,
                 Instant.now(),
-                newAssetId);
+                newAssetId,
+                dueAt);
+    }
+
+    public Finding withDueAt(Instant newDueAt) {
+        return new Finding(
+                id,
+                title,
+                description,
+                severity,
+                status,
+                createdAt,
+                Instant.now(),
+                assetId,
+                newDueAt);
     }
 }
