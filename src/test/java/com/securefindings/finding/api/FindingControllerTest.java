@@ -110,6 +110,7 @@ class FindingControllerTest {
                                 "SQL Injection",
                                 "Entrada de usuario sin validar",
                                 FindingSeverity.HIGH,
+                                null,
                                 null))
                                 .thenReturn(finding);
 
@@ -135,6 +136,7 @@ class FindingControllerTest {
                                 "SQL Injection",
                                 "Entrada de usuario sin validar",
                                 FindingSeverity.HIGH,
+                                null,
                                 null);
         }
 
@@ -153,7 +155,8 @@ class FindingControllerTest {
                                 "SQL Injection",
                                 "Entrada de usuario sin validar",
                                 FindingSeverity.HIGH,
-                                assetId))
+                                assetId,
+                                null))
                                 .thenReturn(finding);
 
                 mockMvc.perform(post("/api/v1/findings")
@@ -174,7 +177,8 @@ class FindingControllerTest {
                                 "SQL Injection",
                                 "Entrada de usuario sin validar",
                                 FindingSeverity.HIGH,
-                                assetId);
+                                assetId,
+                                null);
         }
 
         @Test
@@ -564,7 +568,8 @@ class FindingControllerTest {
                                 finding.id(),
                                 "SQL Injection corregida",
                                 "Entrada validada correctamente",
-                                FindingSeverity.CRITICAL))
+                                FindingSeverity.CRITICAL,
+                                null))
                                 .thenReturn(updatedFinding);
 
                 mockMvc.perform(put(

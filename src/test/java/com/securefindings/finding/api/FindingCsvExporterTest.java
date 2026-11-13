@@ -15,77 +15,96 @@ import com.securefindings.finding.domain.FindingStatus;
 
 class FindingCsvExporterTest {
 
-    private final FindingCsvExporter exporter = new FindingCsvExporter();
+        private final FindingCsvExporter exporter = new FindingCsvExporter();
 
-    @Test
-    void deberiaGenerarCsvConCabeceraYEscaparComasComillasYSaltosDeLinea() {
-        UUID id = UUID.fromString("11111111-1111-1111-1111-111111111111");
-        Instant timestamp = Instant.parse("2026-10-19T10:15:30Z");
-        Finding finding = new Finding(
-                id,
-                "Título, con coma",
-                "Línea 1\nLínea \"2\"",
-                FindingSeverity.HIGH,
-                FindingStatus.OPEN,
-                timestamp,
-                timestamp);
+        @Test
+        void deberiaGenerarCsvConCabeceraYEscaparComasComillasYSaltosDeLinea() {
+                UUID id = UUID.fromString("11111111-1111-1111-1111-111111111111");
+                Instant timestamp = Instant.parse("2026-10-19T10:15:30Z");
 
-        String csv = exporter.toCsv(List.of(finding));
+                Finding finding = new Finding(
+                                id,
+                                "Título, con coma",
+                                "Línea 1\nLínea \"2\"",
+                                FindingSeverity.HIGH,
+                                FindingStatus.OPEN,
+                                timestamp,
+                                timestamp);
 
-        String expected = "\"id\",\"title\",\"description\",\"severity\",\"status\",\"createdAt\",\"updatedAt\",\"assetId\"\r\n"
-                + "\"11111111-1111-1111-1111-111111111111\",\"Título, con coma\",\"Línea 1\nLínea \"\"2\"\"\",\"HIGH\",\"OPEN\",\"2026-10-19T10:15:30Z\",\"2026-10-19T10:15:30Z\",\"\"\r\n";
+                String csv = exporter.toCsv(List.of(finding));
 
-        assertEquals(expected, csv);
-    }
+                String expected = "\"id\",\"title\",\"description\",\"severity\",\"status\",\"createdAt\",\"updatedAt\",\"assetId\",\"dueAt\"\r\n"
+                                + "\"11111111-1111-1111-1111-111111111111\",\"Título, con coma\",\"Línea 1\nLínea \"\"2\"\"\",\"HIGH\",\"OPEN\",\"2026-10-19T10:15:30Z\",\"2026-10-19T10:15:30Z\",\"\",\"\"\r\n";
 
-    @Test
-    void deberiaNeutralizarCeldasQuePodrianEjecutarseComoFormulas() {
-        Instant timestamp = Instant.parse("2026-10-19T10:15:30Z");
-        Finding finding = new Finding(
-                UUID.randomUUID(),
-                "  =1+1",
-                "@SUM(1,1)",
-                FindingSeverity.MEDIUM,
-                FindingStatus.OPEN,
-                timestamp,
-                timestamp);
+                assertEquals(expected, csv);
+        }
 
-        String csv = exporter.toCsv(List.of(finding));
+        @Test
+        void deberiaIncluirLaFechaLimiteEnElCsv() {
+                Instant dueAt = Instant.parse("2026-12-01T09:00:00Z");
 
-        assertTrue(csv.contains("\"'  =1+1\""));
-        assertTrue(csv.contains("\"'@SUM(1,1)\""));
-    }
+                Finding finding = Finding.create(
+                                "SQL Injection",
+                                "Entrada sin validar",
+                                FindingSeverity.HIGH,
+                                null,
+                                dueAt);
 
-    @Test
-    void deberiaNeutralizarFormulasPrecedidasPorTabuladores() {
-        Instant timestamp = Instant.parse("2026-10-19T10:15:30Z");
-        Finding finding = new Finding(
-                UUID.randomUUID(),
-                "\t=1+1",
-                "Descripción normal",
-                FindingSeverity.LOW,
-                FindingStatus.OPEN,
-                timestamp,
-                timestamp);
+                String csv = exporter.toCsv(List.of(finding));
 
-        String csv = exporter.toCsv(List.of(finding));
+                assertTrue(csv.endsWith("\"\",\"" + dueAt + "\"\r\n"));
+        }
 
-        assertTrue(csv.contains("\"'\t=1+1\""));
-    }
+        @Test
+        void deberiaNeutralizarCeldasQuePodrianEjecutarseComoFormulas() {
+                Instant timestamp = Instant.parse("2026-10-19T10:15:30Z");
 
-    @Test
-    void deberiaIncluirElIdentificadorDelActivoEnCsv() {
-        UUID assetId = UUID.fromString(
-                "22222222-2222-2222-2222-222222222222");
+                Finding finding = new Finding(
+                                UUID.randomUUID(),
+                                "  =1+1",
+                                "@SUM(1,1)",
+                                FindingSeverity.MEDIUM,
+                                FindingStatus.OPEN,
+                                timestamp,
+                                timestamp);
 
-        Finding finding = Finding.create(
-                "SQL Injection",
-                "Entrada sin validar",
-                FindingSeverity.HIGH,
-                assetId);
+                String csv = exporter.toCsv(List.of(finding));
 
-        String csv = exporter.toCsv(List.of(finding));
+                assertTrue(csv.contains("\"'  =1+1\""));
+                assertTrue(csv.contains("\"'@SUM(1,1)\""));
+        }
 
-        assertTrue(csv.endsWith("\"" + assetId + "\"\r\n"));
-    }
+        @Test
+        void deberiaNeutralizarFormulasPrecedidasPorTabuladores() {
+                Instant timestamp = Instant.parse("2026-10-19T10:15:30Z");
+
+                Finding finding = new Finding(
+                                UUID.randomUUID(),
+                                "\t=1+1",
+                                "Descripción normal",
+                                FindingSeverity.LOW,
+                                FindingStatus.OPEN,
+                                timestamp,
+                                timestamp);
+
+                String csv = exporter.toCsv(List.of(finding));
+
+                assertTrue(csv.contains("\"'\t=1+1\""));
+        }
+
+        @Test
+        void deberiaIncluirElIdentificadorDelActivoEnCsv() {
+                UUID assetId = UUID.fromString(
+                                "22222222-2222-2222-2222-222222222222");
+
+                Finding finding = Finding.create(
+                                "SQL Injection",
+                                "Entrada sin validar",
+                                FindingSeverity.HIGH,
+                                assetId);
+
+                String csv = exporter.toCsv(List.of(finding));
+
+                assertTrue(csv.contains("\"" + assetId + "\",\"\"\r\n"));
+        }
 }
