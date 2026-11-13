@@ -474,6 +474,7 @@ Las pruebas públicas devuelven únicamente el estado, sin mostrar componentes n
 | `GET` | `/api/v1/findings/summary` | Resume hallazgos por estado y severidad | `ANALYST`, `ADMIN` |
 | `GET` | `/api/v1/findings/export` | Exporta hallazgos filtrados a CSV | `ANALYST`, `ADMIN` |
 | `GET` | `/api/v1/findings/overdue` | Lista hallazgos vencidos abiertos o en curso | `ANALYST`, `ADMIN` |
+| `GET` | `/api/v1/findings/overdue/summary` | Resume hallazgos vencidos por estado y severidad | `ANALYST`, `ADMIN` |
 | `POST` | `/api/v1/findings` | Crea un hallazgo; admite la fecha límite opcional `dueAt` | `ANALYST`, `ADMIN` |
 | `PUT` | `/api/v1/findings/{id}` | Actualiza los datos y la fecha límite del hallazgo | `ANALYST`, `ADMIN` |
 | `PATCH` | `/api/v1/findings/{id}/status` | Actualiza el estado | `ANALYST`, `ADMIN` |
@@ -489,6 +490,12 @@ Admite `page` desde `0` y `size` entre `1` y `100`.
 
 ```text
 GET /api/v1/findings/overdue?page=0&size=20
+```
+
+`GET /api/v1/findings/overdue/summary` devuelve el total de hallazgos vencidos
+y los recuentos agrupados por estado y severidad. Incluye `asOf`, la hora en UTC
+en que se calculó el resumen. Los estados y severidades sin resultados aparecen
+con recuento `0`.
 
 ### Activos
 
