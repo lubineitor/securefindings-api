@@ -473,11 +473,22 @@ Las pruebas públicas devuelven únicamente el estado, sin mostrar componentes n
 | `GET` | `/api/v1/findings/{id}` | Obtiene un hallazgo | `ANALYST`, `ADMIN` |
 | `GET` | `/api/v1/findings/summary` | Resume hallazgos por estado y severidad | `ANALYST`, `ADMIN` |
 | `GET` | `/api/v1/findings/export` | Exporta hallazgos filtrados a CSV | `ANALYST`, `ADMIN` |
+| `GET` | `/api/v1/findings/overdue` | Lista hallazgos vencidos abiertos o en curso | `ANALYST`, `ADMIN` |
 | `POST` | `/api/v1/findings` | Crea un hallazgo; admite la fecha límite opcional `dueAt` | `ANALYST`, `ADMIN` |
 | `PUT` | `/api/v1/findings/{id}` | Actualiza los datos y la fecha límite del hallazgo | `ANALYST`, `ADMIN` |
 | `PATCH` | `/api/v1/findings/{id}/status` | Actualiza el estado | `ANALYST`, `ADMIN` |
 | `DELETE` | `/api/v1/findings/{id}` | Elimina un hallazgo | `ADMIN` |
 
+#### Hallazgos vencidos
+
+`GET /api/v1/findings/overdue` devuelve hallazgos de la organización actual cuya
+fecha `dueAt` es anterior o igual a la hora actual. Solo incluye los estados
+`OPEN` e `IN_PROGRESS`. Se ordena por `dueAt ASC` e `id ASC`.
+
+Admite `page` desde `0` y `size` entre `1` y `100`.
+
+```text
+GET /api/v1/findings/overdue?page=0&size=20
 
 ### Activos
 

@@ -50,6 +50,7 @@ en este documento y en `SECURITY.md`.
 - Exportación CSV de la auditoría global de hallazgos, filtrada por organización
   y protegida frente a la inyección de fórmulas.
 - Fecha límite opcional para hallazgos, disponible en creación, actualización y exportación CSV.
+- Consulta paginada de hallazgos vencidos, limitada a estados abiertos y en curso y aislada por organización.
 
 ## Criterios de aceptación del MVP
 
