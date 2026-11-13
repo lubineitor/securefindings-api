@@ -28,6 +28,7 @@ import com.securefindings.audit.domain.AuditAction;
 import com.securefindings.finding.api.FindingSortDirection;
 import com.securefindings.finding.api.FindingSortField;
 import com.securefindings.finding.domain.Finding;
+import com.securefindings.finding.domain.FindingOverdueSummary;
 import com.securefindings.finding.domain.FindingSeverity;
 import com.securefindings.finding.domain.FindingStatus;
 import com.securefindings.finding.domain.FindingSummary;
@@ -658,5 +659,59 @@ public class FindingService {
                                                 pageable);
 
                 return toDomainPage(entities);
+        }
+
+        public FindingOverdueSummary getOverdueSummary() {
+                UUID organizationId = organizationContext.currentOrganizationId();
+                Instant asOf = Instant.now();
+
+                List<FindingRepository.OverdueCountProjection> counts = findingRepository
+                                .countOverdueByOrganizationAndStatuses(
+                                                organizationId,
+                                                asOf,
+                                                List.of(
+                                                                FindingStatus.OPEN,
+                                                                FindingStatus.IN_PROGRESS));
+
+                Map<FindingStatus, Long> byStatus = new EnumMap<>(FindingStatus.class);
+
+                for (FindingStatus status : FindingStatus.values()) {
+                        byStatus.put(status, 0L);
+                }
+
+                Map<FindingSeverity, Long> bySeverity = new EnumMap<>(FindingSeverity.class);
+
+                for (FindingSeverity severity : FindingSeverity.values()) {
+                        bySeverity.put(severity, 0L);
+                }
+
+                for (FindingRepository.OverdueCountProjection count : counts) {
+                        FindingStatus status = Objects.requireNonNull(
+                                        count.getStatus(),
+                                        "El estado del recuento no puede ser nulo");
+
+                        FindingSeverity severity = Objects.requireNonNull(
+                                        count.getSeverity(),
+                                        "La severidad del recuento no puede ser nula");
+
+                        Long value = Objects.requireNonNull(
+                                        count.getTotal(),
+                                        "El recuento no puede ser nulo");
+
+                        byStatus.put(status, byStatus.get(status) + value);
+                        bySeverity.put(severity, bySeverity.get(severity) + value);
+                }
+
+                long total = 0L;
+
+                for (Long count : byStatus.values()) {
+                        total += count;
+                }
+
+                return new FindingOverdueSummary(
+                                asOf,
+                                total,
+                                byStatus,
+                                bySeverity);
         }
 }

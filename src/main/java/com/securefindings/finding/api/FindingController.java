@@ -27,6 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.securefindings.api.error.GlobalExceptionHandler.ApiErrorResponse;
 import com.securefindings.finding.application.FindingService;
 import com.securefindings.finding.domain.Finding;
+import com.securefindings.finding.domain.FindingOverdueSummary;
 import com.securefindings.finding.domain.FindingSeverity;
 import com.securefindings.finding.domain.FindingStatus;
 import com.securefindings.finding.domain.FindingSummary;
@@ -373,6 +374,18 @@ public class FindingController {
                         @Parameter(description = "Identificador del hallazgo", required = true) @PathVariable UUID id) {
 
                 findingService.deleteById(id);
+        }
+
+        @GetMapping("/overdue/summary")
+        @Operation(summary = "Consultar el resumen de hallazgos vencidos", description = "Devuelve los hallazgos vencidos de la organización actual agrupados por estado y severidad")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "200", description = "Resumen recuperado correctamente"),
+                        @ApiResponse(responseCode = "401", description = "Token ausente o inválido"),
+                        @ApiResponse(responseCode = "403", description = "El usuario no tiene permisos"),
+                        @ApiResponse(responseCode = "429", description = "Se ha superado el límite de peticiones")
+        })
+        public FindingOverdueSummary getOverdueSummary() {
+                return findingService.getOverdueSummary();
         }
 
         @GetMapping("/overdue")
