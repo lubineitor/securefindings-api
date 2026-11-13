@@ -145,7 +145,7 @@ public class FindingService {
                         String title,
                         String description,
                         FindingSeverity severity) {
-                return create(title, description, severity, null);
+                return create(title, description, severity, null, null);
         }
 
         @Transactional
@@ -154,6 +154,16 @@ public class FindingService {
                         String description,
                         FindingSeverity severity,
                         UUID assetId) {
+                return create(title, description, severity, assetId, null);
+        }
+
+        @Transactional
+        public Finding create(
+                        String title,
+                        String description,
+                        FindingSeverity severity,
+                        UUID assetId,
+                        Instant dueAt) {
 
                 UUID organizationId = organizationContext.currentOrganizationId();
                 ensureAssetCanBeLinked(assetId, organizationId);
@@ -162,7 +172,8 @@ public class FindingService {
                                 title,
                                 description,
                                 severity,
-                                assetId);
+                                assetId,
+                                dueAt);
 
                 Finding savedFinding = findingRepository
                                 .save(new FindingEntity(finding, organizationId))
@@ -419,17 +430,50 @@ public class FindingService {
                         FindingSeverity severity) {
 
                 UUID organizationId = organizationContext.currentOrganizationId();
-
                 Finding currentFinding = getById(id);
 
-                Finding updatedFinding = currentFinding.withDetails(
+                return updateFindingDetails(
+                                currentFinding,
                                 title,
                                 description,
-                                severity);
-
-                Finding savedFinding = save(
-                                updatedFinding,
+                                severity,
+                                currentFinding.dueAt(),
                                 organizationId);
+        }
+
+        @Transactional
+        public Finding update(
+                        UUID id,
+                        String title,
+                        String description,
+                        FindingSeverity severity,
+                        Instant dueAt) {
+
+                UUID organizationId = organizationContext.currentOrganizationId();
+                Finding currentFinding = getById(id);
+
+                return updateFindingDetails(
+                                currentFinding,
+                                title,
+                                description,
+                                severity,
+                                dueAt,
+                                organizationId);
+        }
+
+        private Finding updateFindingDetails(
+                        Finding currentFinding,
+                        String title,
+                        String description,
+                        FindingSeverity severity,
+                        Instant dueAt,
+                        UUID organizationId) {
+
+                Finding updatedFinding = currentFinding
+                                .withDetails(title, description, severity)
+                                .withDueAt(dueAt);
+
+                Finding savedFinding = save(updatedFinding, organizationId);
 
                 auditService.register(
                                 savedFinding.id(),

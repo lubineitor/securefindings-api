@@ -267,7 +267,8 @@ public class FindingController {
                                 request.title(),
                                 request.description(),
                                 request.severity(),
-                                request.assetId());
+                                request.assetId(),
+                                request.dueAt());
         }
 
         @PatchMapping("/{id}/status")
@@ -349,7 +350,8 @@ public class FindingController {
                                 id,
                                 request.title(),
                                 request.description(),
-                                request.severity());
+                                request.severity(),
+                                request.dueAt());
         }
 
         @DeleteMapping("/{id}")
