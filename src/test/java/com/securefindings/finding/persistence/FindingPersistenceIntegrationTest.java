@@ -760,4 +760,58 @@ class FindingPersistenceIntegrationTest {
 
                 assertEquals(dueAt, recoveredEntity.toDomain().dueAt());
         }
+
+        @Test
+        void deberiaListarSoloHallazgosVencidosQueSiguenAbiertos() {
+                Instant firstDueAt = Instant.parse("2020-01-01T00:00:00Z");
+                Instant secondDueAt = Instant.parse("2020-01-02T00:00:00Z");
+                Instant futureDueAt = Instant.parse("2099-01-01T00:00:00Z");
+
+                Finding openOverdue = findingService.create(
+                                "SQL Injection vencido",
+                                "Hallazgo abierto con fecha pasada",
+                                FindingSeverity.HIGH,
+                                null,
+                                firstDueAt);
+
+                Finding inProgressOverdue = findingService.create(
+                                "XSS vencido",
+                                "Hallazgo en curso con fecha pasada",
+                                FindingSeverity.MEDIUM,
+                                null,
+                                secondDueAt);
+
+                Finding resolvedOverdue = findingService.create(
+                                "Hallazgo resuelto",
+                                "Hallazgo resuelto con fecha pasada",
+                                FindingSeverity.LOW,
+                                null,
+                                firstDueAt);
+
+                findingService.updateStatus(
+                                resolvedOverdue.id(),
+                                FindingStatus.RESOLVED);
+
+                findingService.create(
+                                "Hallazgo con fecha futura",
+                                "Todavía no está vencido",
+                                FindingSeverity.HIGH,
+                                null,
+                                futureDueAt);
+
+                findingService.create(
+                                "Hallazgo sin fecha límite",
+                                "No tiene fecha límite asignada",
+                                FindingSeverity.LOW);
+
+                Page<Finding> overduePage = findingService.findOverduePage(0, 20);
+
+                assertEquals(2L, overduePage.getTotalElements());
+                assertEquals(
+                                openOverdue.id(),
+                                overduePage.getContent().get(0).id());
+                assertEquals(
+                                inProgressOverdue.id(),
+                                overduePage.getContent().get(1).id());
+        }
 }
