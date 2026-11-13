@@ -49,6 +49,7 @@ en este documento y en `SECURITY.md`.
   filtros de fechas y aislamiento por organización.
 - Exportación CSV de la auditoría global de hallazgos, filtrada por organización
   y protegida frente a la inyección de fórmulas.
+- Fecha límite opcional para hallazgos, disponible en creación, actualización y exportación CSV.
 
 ## Criterios de aceptación del MVP
 

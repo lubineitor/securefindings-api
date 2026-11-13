@@ -77,6 +77,23 @@ Cada hallazgo contiene:
 - Fecha de actualización.
 - Activo asociado, si se ha indicado.
 
+#### Fecha límite
+
+Las peticiones de creación y actualización aceptan el campo opcional `dueAt`
+como fecha ISO-8601. La respuesta del hallazgo incluye ese valor y la exportación
+CSV lo presenta en la columna `dueAt`. En una petición `PUT`, enviar `dueAt: null`
+o no incluir el campo elimina la fecha límite.
+
+```json
+{
+  "title": "SQL Injection",
+  "description": "Entrada de usuario sin validar",
+  "severity": "HIGH",
+  "assetId": null,
+  "dueAt": "2026-12-01T09:00:00Z"
+}
+```
+
 ### Inventario de activos
 
 La API permite administrar un inventario de activos por organización. Cada activo
@@ -454,12 +471,13 @@ Las pruebas públicas devuelven únicamente el estado, sin mostrar componentes n
 |---|---|---|---|
 | `GET` | `/api/v1/findings` | Lista hallazgos paginados | `ANALYST`, `ADMIN` |
 | `GET` | `/api/v1/findings/{id}` | Obtiene un hallazgo | `ANALYST`, `ADMIN` |
-| `POST` | `/api/v1/findings` | Crea un hallazgo | `ANALYST`, `ADMIN` |
-| `PUT` | `/api/v1/findings/{id}` | Actualiza los datos | `ANALYST`, `ADMIN` |
-| `PATCH` | `/api/v1/findings/{id}/status` | Actualiza el estado | `ANALYST`, `ADMIN` |
-| `DELETE` | `/api/v1/findings/{id}` | Elimina un hallazgo | `ADMIN` |
 | `GET` | `/api/v1/findings/summary` | Resume hallazgos por estado y severidad | `ANALYST`, `ADMIN` |
 | `GET` | `/api/v1/findings/export` | Exporta hallazgos filtrados a CSV | `ANALYST`, `ADMIN` |
+| `POST` | `/api/v1/findings` | Crea un hallazgo; admite la fecha límite opcional `dueAt` | `ANALYST`, `ADMIN` |
+| `PUT` | `/api/v1/findings/{id}` | Actualiza los datos y la fecha límite del hallazgo | `ANALYST`, `ADMIN` |
+| `PATCH` | `/api/v1/findings/{id}/status` | Actualiza el estado | `ANALYST`, `ADMIN` |
+| `DELETE` | `/api/v1/findings/{id}` | Elimina un hallazgo | `ADMIN` |
+
 
 ### Activos
 
@@ -582,9 +600,10 @@ como `securefindings.csv`. Acepta los filtros `q`, `severity`, `status`,
 `createdFrom`, `createdTo` y `assetId`. El orden es `createdAt DESC` e `id ASC`.
 
 El archivo incluye las columnas `id`, `title`, `description`, `severity`,
-`status`, `createdAt`, `updatedAt` y `assetId`. La columna `assetId` queda vacía
-si el hallazgo no tiene activo asociado. Se descarga como
-`text/csv; charset=UTF-8`, con nombre `securefindings.csv` y la cabecera
+`status`, `createdAt`, `updatedAt`, `assetId` y `dueAt`. Las columnas `assetId`
+y `dueAt` quedan vacías cuando el hallazgo no tiene esos valores.
+
+Se descarga como `text/csv; charset=UTF-8`, con nombre `securefindings.csv` y la cabecera
 `Cache-Control: no-store`.
 
 La exportación admite hasta 1.000 filas. Si los filtros coinciden con más
