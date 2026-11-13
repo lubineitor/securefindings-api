@@ -374,4 +374,22 @@ public class FindingController {
 
                 findingService.deleteById(id);
         }
+
+        @GetMapping("/overdue")
+        @Operation(summary = "Consultar hallazgos vencidos", description = "Devuelve hallazgos vencidos de la organización actual que siguen abiertos o en curso")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "200", description = "Hallazgos vencidos recuperados"),
+                        @ApiResponse(responseCode = "400", description = "Los parámetros de paginación no son válidos"),
+                        @ApiResponse(responseCode = "401", description = "Token ausente o inválido"),
+                        @ApiResponse(responseCode = "403", description = "El usuario no tiene permisos"),
+                        @ApiResponse(responseCode = "429", description = "Se ha superado el límite de peticiones")
+        })
+        public FindingPageResponse findOverdue(
+                        @Parameter(description = "Número de página. Empieza en 0", example = "0", in = ParameterIn.QUERY) @RequestParam(name = "page", defaultValue = "0") @Min(0) int page,
+
+                        @Parameter(description = "Elementos por página, entre 1 y 100", example = "20", in = ParameterIn.QUERY) @RequestParam(name = "size", defaultValue = "20") @Min(1) @Max(100) int size) {
+
+                return FindingPageResponse.from(
+                                findingService.findOverduePage(page, size));
+        }
 }

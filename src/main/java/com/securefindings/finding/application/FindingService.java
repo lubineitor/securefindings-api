@@ -637,4 +637,26 @@ public class FindingService {
 
                 return savedFinding;
         }
+
+        public Page<Finding> findOverduePage(int page, int size) {
+                UUID organizationId = organizationContext.currentOrganizationId();
+
+                Pageable pageable = PageRequest.of(
+                                page,
+                                size,
+                                Sort.by(
+                                                Sort.Order.asc("dueAt"),
+                                                Sort.Order.asc("id")));
+
+                Page<FindingEntity> entities = findingRepository
+                                .findByOrganizationIdAndDueAtLessThanEqualAndStatusIn(
+                                                organizationId,
+                                                Instant.now(),
+                                                List.of(
+                                                                FindingStatus.OPEN,
+                                                                FindingStatus.IN_PROGRESS),
+                                                pageable);
+
+                return toDomainPage(entities);
+        }
 }
