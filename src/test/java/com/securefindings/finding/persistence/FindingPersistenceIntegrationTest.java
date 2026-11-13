@@ -35,6 +35,7 @@ import com.securefindings.finding.api.FindingSortDirection;
 import com.securefindings.finding.api.FindingSortField;
 import com.securefindings.finding.application.FindingService;
 import com.securefindings.finding.domain.Finding;
+import com.securefindings.finding.domain.FindingOverdueSummary;
 import com.securefindings.finding.domain.FindingSeverity;
 import com.securefindings.finding.domain.FindingStatus;
 import com.securefindings.finding.domain.FindingSummary;
@@ -813,5 +814,65 @@ class FindingPersistenceIntegrationTest {
                 assertEquals(
                                 inProgressOverdue.id(),
                                 overduePage.getContent().get(1).id());
+        }
+
+        @Test
+        void deberiaResumirHallazgosVencidosPorEstadoYSeveridad() {
+                Instant firstDueAt = Instant.parse("2020-01-01T00:00:00Z");
+                Instant secondDueAt = Instant.parse("2020-01-02T00:00:00Z");
+                Instant futureDueAt = Instant.parse("2099-01-01T00:00:00Z");
+
+                findingService.create(
+                                "Hallazgo abierto vencido",
+                                "Hallazgo de severidad alta",
+                                FindingSeverity.HIGH,
+                                null,
+                                firstDueAt);
+
+                Finding inProgressOverdue = findingService.create(
+                                "Hallazgo en curso vencido",
+                                "Hallazgo de severidad media",
+                                FindingSeverity.MEDIUM,
+                                null,
+                                secondDueAt);
+
+                findingService.updateStatus(
+                                inProgressOverdue.id(),
+                                FindingStatus.IN_PROGRESS);
+
+                Finding resolvedOverdue = findingService.create(
+                                "Hallazgo resuelto vencido",
+                                "No debe aparecer en el resumen",
+                                FindingSeverity.CRITICAL,
+                                null,
+                                firstDueAt);
+
+                findingService.updateStatus(
+                                resolvedOverdue.id(),
+                                FindingStatus.RESOLVED);
+
+                findingService.create(
+                                "Hallazgo futuro",
+                                "Todavía no está vencido",
+                                FindingSeverity.CRITICAL,
+                                null,
+                                futureDueAt);
+
+                findingService.create(
+                                "Hallazgo sin fecha límite",
+                                "No debe aparecer en el resumen",
+                                FindingSeverity.LOW);
+
+                FindingOverdueSummary summary = findingService.getOverdueSummary();
+
+                assertEquals(2L, summary.total());
+                assertEquals(1L, summary.byStatus().get(FindingStatus.OPEN));
+                assertEquals(1L, summary.byStatus().get(FindingStatus.IN_PROGRESS));
+                assertEquals(0L, summary.byStatus().get(FindingStatus.RESOLVED));
+
+                assertEquals(1L, summary.bySeverity().get(FindingSeverity.HIGH));
+                assertEquals(1L, summary.bySeverity().get(FindingSeverity.MEDIUM));
+                assertEquals(0L, summary.bySeverity().get(FindingSeverity.CRITICAL));
+                assertEquals(0L, summary.bySeverity().get(FindingSeverity.LOW));
         }
 }
