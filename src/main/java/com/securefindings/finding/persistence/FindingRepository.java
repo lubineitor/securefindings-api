@@ -1,6 +1,7 @@
 package com.securefindings.finding.persistence;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -21,6 +22,14 @@ public interface FindingRepository
         FindingStatus getStatus();
 
         FindingSeverity getSeverity();
+
+        Long getTotal();
+    }
+
+    interface TrendCountProjection {
+        LocalDate getBucketDate();
+
+        String getSeverity();
 
         Long getTotal();
     }
@@ -181,4 +190,40 @@ public interface FindingRepository
             @Param("organizationId") UUID organizationId,
             @Param("asOf") Instant asOf,
             @Param("statuses") List<FindingStatus> statuses);
+
+    @Query(value = """
+                       SELECT date_trunc(:interval, finding.created_at AT TIME ZONE 'UTC')::date AS "bucketDate",
+            finding.severity AS severity,
+            COUNT(finding.id) AS total
+                       FROM findings finding
+                       WHERE finding.organization_id = :organizationId
+                         AND finding.created_at >= :fromInclusive
+                         AND finding.created_at < :toExclusive
+                      GROUP BY 1, finding.severity
+                 ORDER BY 1
+                       """, nativeQuery = true)
+    List<TrendCountProjection> findTrendByOrganization(
+            @Param("organizationId") UUID organizationId,
+            @Param("fromInclusive") Instant fromInclusive,
+            @Param("toExclusive") Instant toExclusive,
+            @Param("interval") String interval);
+
+    @Query(value = """
+            SELECT date_trunc(:interval, finding.created_at AT TIME ZONE 'UTC')::date AS "bucketDate",
+            finding.severity AS severity,
+            COUNT(finding.id) AS total
+                 FROM findings finding
+                 WHERE finding.organization_id = :organizationId
+                   AND finding.asset_id = :assetId
+                   AND finding.created_at >= :fromInclusive
+                   AND finding.created_at < :toExclusive
+                 GROUP BY 1, finding.severity
+                 ORDER BY 1
+                 """, nativeQuery = true)
+    List<TrendCountProjection> findTrendByOrganizationAndAssetId(
+            @Param("organizationId") UUID organizationId,
+            @Param("assetId") UUID assetId,
+            @Param("fromInclusive") Instant fromInclusive,
+            @Param("toExclusive") Instant toExclusive,
+            @Param("interval") String interval);
 }

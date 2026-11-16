@@ -31,6 +31,8 @@ import com.securefindings.finding.domain.FindingOverdueSummary;
 import com.securefindings.finding.domain.FindingSeverity;
 import com.securefindings.finding.domain.FindingStatus;
 import com.securefindings.finding.domain.FindingSummary;
+import com.securefindings.finding.domain.FindingTrend;
+import com.securefindings.finding.domain.FindingTrendInterval;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -143,6 +145,27 @@ public class FindingController {
                 }
 
                 return FindingPageResponse.from(findingPage);
+        }
+
+        @GetMapping("/trends")
+        @Operation(summary = "Consultar tendencias de hallazgos", description = "Agrupa por severidad los hallazgos creados en cada periodo UTC")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "200", description = "Tendencia recuperada correctamente"),
+                        @ApiResponse(responseCode = "400", description = "El rango, intervalo o los parámetros no son válidos"),
+                        @ApiResponse(responseCode = "401", description = "Token ausente o inválido"),
+                        @ApiResponse(responseCode = "403", description = "El usuario no tiene permisos"),
+                        @ApiResponse(responseCode = "429", description = "Se ha superado el límite de peticiones")
+        })
+        public FindingTrend getTrends(
+                        @Parameter(description = "Fecha inicial inclusiva en ISO-8601", example = "2026-01-01T00:00:00Z", in = ParameterIn.QUERY) @RequestParam(name = "from") @DateTimeFormat(iso = ISO.DATE_TIME) Instant from,
+
+                        @Parameter(description = "Fecha final exclusiva en ISO-8601", example = "2026-02-01T00:00:00Z", in = ParameterIn.QUERY) @RequestParam(name = "to") @DateTimeFormat(iso = ISO.DATE_TIME) Instant to,
+
+                        @Parameter(description = "Intervalo de agrupación: DAY, WEEK o MONTH", example = "DAY", in = ParameterIn.QUERY) @RequestParam(name = "interval", defaultValue = "DAY") FindingTrendInterval interval,
+
+                        @Parameter(description = "Filtrar por identificador del activo", in = ParameterIn.QUERY) @RequestParam(name = "assetId", required = false) UUID assetId) {
+
+                return findingService.getTrend(from, to, interval, assetId);
         }
 
         @GetMapping("/summary")
