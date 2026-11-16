@@ -54,6 +54,7 @@ en este documento y en `SECURITY.md`.
 - Resumen de hallazgos vencidos por estado y severidad, calculado para la organización actual.
 - Importación masiva de hallazgos desde CSV UTF-8, validada por fila, limitada
   a 1.000 filas, con validación previa sin persistencia y guardado transaccional.
+- Tendencia temporal de hallazgos por día, semana o mes, agrupada por severidad y filtrable por activo para la organización actual.
 
 ## Criterios de aceptación del MVP
 

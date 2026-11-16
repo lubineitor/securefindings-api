@@ -476,11 +476,27 @@ Las pruebas públicas devuelven únicamente el estado, sin mostrar componentes n
 | `GET` | `/api/v1/findings/overdue` | Lista hallazgos vencidos abiertos o en curso | `ANALYST`, `ADMIN` |
 | `GET` | `/api/v1/findings/overdue/summary` | Resume hallazgos vencidos por estado y severidad | `ANALYST`, `ADMIN` |
 | `GET` | `/api/v1/findings/import/template` | Descarga la plantilla CSV de importación | `ANALYST`, `ADMIN` |
+| `GET` | `/api/v1/findings/trends` | Agrupa por severidad y periodo temporal | `ANALYST`, `ADMIN` |
 | `POST` | `/api/v1/findings/import` | Importa hallazgos desde un CSV validado por fila | `ANALYST`, `ADMIN` |
 | `POST` | `/api/v1/findings` | Crea un hallazgo; admite la fecha límite opcional `dueAt` | `ANALYST`, `ADMIN` |
 | `PUT` | `/api/v1/findings/{id}` | Actualiza los datos y la fecha límite del hallazgo | `ANALYST`, `ADMIN` |
 | `PATCH` | `/api/v1/findings/{id}/status` | Actualiza el estado | `ANALYST`, `ADMIN` |
 | `DELETE` | `/api/v1/findings/{id}` | Elimina un hallazgo | `ADMIN` |
+
+#### Tendencia temporal de hallazgos
+
+`GET /api/v1/findings/trends` agrupa por severidad los hallazgos creados en
+cada periodo UTC. Acepta `DAY`, `WEEK` o `MONTH` en `interval`; si se omite, se
+usa `DAY`. Las semanas comienzan el lunes.
+
+`from` es inclusivo y `to` exclusivo. Ambos son obligatorios y deben estar en
+formato ISO-8601. El rango máximo es de 366 días. Los periodos vacíos se
+devuelven con total y recuentos por severidad a cero. Se puede limitar la
+consulta a un activo mediante `assetId`.
+
+```text
+GET /api/v1/findings/trends?from=2026-01-01T00:00:00Z&to=2026-02-01T00:00:00Z&interval=WEEK
+```
 
 #### Hallazgos vencidos
 
