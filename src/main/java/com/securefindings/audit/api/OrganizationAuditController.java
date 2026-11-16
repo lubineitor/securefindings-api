@@ -1,10 +1,15 @@
 package com.securefindings.audit.api;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.List;
 
 import org.springframework.data.domain.Page;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.format.annotation.DateTimeFormat.ISO;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -38,13 +43,18 @@ import jakarta.validation.constraints.Size;
 public class OrganizationAuditController {
 
     private final AuditService auditService;
+    private final FindingAuditCsvExporter findingAuditCsvExporter;
 
-    public OrganizationAuditController(AuditService auditService) {
+    public OrganizationAuditController(
+            AuditService auditService,
+            FindingAuditCsvExporter findingAuditCsvExporter) {
         this.auditService = auditService;
+        this.findingAuditCsvExporter = findingAuditCsvExporter;
     }
 
     @GetMapping
-    @Operation(summary = "Consultar la auditoría de la organización actual", description = "Devuelve eventos paginados de la organización asociada al token. No permite seleccionar la organización mediante un parámetro del cliente.")
+    @Operation(summary = "Consultar la auditoría de la organización actual", description = "Devuelve eventos paginados de la organización asociada al token. "
+            + "No permite seleccionar la organización mediante un parámetro del cliente.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Historial recuperado correctamente", content = @Content(mediaType = "application/json", schema = @Schema(implementation = FindingAuditPageResponse.class))),
             @ApiResponse(responseCode = "400", description = "Los filtros o parámetros no son válidos", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class))),
@@ -63,9 +73,9 @@ public class OrganizationAuditController {
 
             @Parameter(description = "Filtrar por actor responsable", example = "analista", in = ParameterIn.QUERY) @RequestParam(name = "actor", required = false) @Size(max = 255, message = "El actor no puede superar los 255 caracteres") String actor,
 
-            @Parameter(description = "Fecha y hora inicial inclusive (ISO-8601)", example = "2026-10-01T00:00:00Z", in = ParameterIn.QUERY) @RequestParam(name = "occurredFrom", required = false) @DateTimeFormat(iso = ISO.DATE_TIME) Instant occurredFrom,
+            @Parameter(description = "Fecha y hora inicial inclusiva (ISO-8601)", example = "2026-10-01T00:00:00Z", in = ParameterIn.QUERY) @RequestParam(name = "occurredFrom", required = false) @DateTimeFormat(iso = ISO.DATE_TIME) Instant occurredFrom,
 
-            @Parameter(description = "Fecha y hora final inclusive (ISO-8601)", example = "2026-10-19T23:59:59Z", in = ParameterIn.QUERY) @RequestParam(name = "occurredTo", required = false) @DateTimeFormat(iso = ISO.DATE_TIME) Instant occurredTo) {
+            @Parameter(description = "Fecha y hora final inclusiva (ISO-8601)", example = "2026-10-19T23:59:59Z", in = ParameterIn.QUERY) @RequestParam(name = "occurredTo", required = false) @DateTimeFormat(iso = ISO.DATE_TIME) Instant occurredTo) {
 
         Page<FindingAuditEntity> auditPage = auditService.findPageByOrganization(
                 page,
@@ -77,5 +87,45 @@ public class OrganizationAuditController {
                 occurredTo);
 
         return FindingAuditPageResponse.from(auditPage);
+    }
+
+    @GetMapping(value = "/export", produces = "text/csv")
+    @Operation(summary = "Exportar la auditoría global a CSV", description = "Exporta los eventos filtrados de la organización actual. "
+            + "El máximo es de 1.000 eventos.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Archivo CSV generado"),
+            @ApiResponse(responseCode = "400", description = "Los filtros no son válidos", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class))),
+            @ApiResponse(responseCode = "413", description = "La exportación supera el límite de eventos", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiErrorResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Token ausente o inválido"),
+            @ApiResponse(responseCode = "403", description = "El usuario no tiene permisos")
+    })
+    public ResponseEntity<byte[]> exportOrganizationAudit(
+            @Parameter(description = "Filtrar por acción", example = "UPDATED", in = ParameterIn.QUERY) @RequestParam(name = "action", required = false) AuditAction action,
+
+            @Parameter(description = "Filtrar por identificador de petición", example = "audit-request-123", in = ParameterIn.QUERY) @RequestParam(name = "requestId", required = false) @Pattern(regexp = "[A-Za-z0-9][A-Za-z0-9._-]{0,63}", message = "El identificador de petición no tiene un formato válido") String requestId,
+
+            @Parameter(description = "Filtrar por actor", example = "analista", in = ParameterIn.QUERY) @RequestParam(name = "actor", required = false) @Size(max = 255, message = "El actor no puede superar los 255 caracteres") String actor,
+
+            @Parameter(description = "Fecha inicial inclusiva en formato ISO-8601", in = ParameterIn.QUERY) @RequestParam(name = "occurredFrom", required = false) @DateTimeFormat(iso = ISO.DATE_TIME) Instant occurredFrom,
+
+            @Parameter(description = "Fecha final inclusiva en formato ISO-8601", in = ParameterIn.QUERY) @RequestParam(name = "occurredTo", required = false) @DateTimeFormat(iso = ISO.DATE_TIME) Instant occurredTo) {
+
+        List<FindingAuditEntity> events = auditService.findForOrganizationExport(
+                action,
+                requestId,
+                actor,
+                occurredFrom,
+                occurredTo);
+
+        byte[] csv = findingAuditCsvExporter.toCsv(events)
+                .getBytes(StandardCharsets.UTF_8);
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType("text/csv; charset=UTF-8"))
+                .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"securefindings-finding-audit.csv\"")
+                .header(HttpHeaders.CACHE_CONTROL, "no-store")
+                .body(csv);
     }
 }

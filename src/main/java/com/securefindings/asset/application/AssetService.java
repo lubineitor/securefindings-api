@@ -1,6 +1,9 @@
 package com.securefindings.asset.application;
 
+import java.time.Instant;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -17,6 +20,7 @@ import com.securefindings.asset.domain.AssetAuditAction;
 import com.securefindings.asset.domain.AssetCriticality;
 import com.securefindings.asset.domain.AssetEnvironment;
 import com.securefindings.asset.domain.AssetStatus;
+import com.securefindings.asset.domain.AssetSummary;
 import com.securefindings.asset.domain.AssetType;
 import com.securefindings.asset.persistence.AssetEntity;
 import com.securefindings.asset.persistence.AssetRepository;
@@ -71,6 +75,87 @@ public class AssetService {
                                                 entity,
                                                 "El repositorio devolvió una entidad nula")
                                                 .toDomain());
+        }
+
+        public AssetSummary getSummary() {
+                return getSummary(null, null);
+        }
+
+        public AssetSummary getSummary(
+                        Instant createdFrom,
+                        Instant createdTo) {
+
+                if (createdFrom != null
+                                && createdTo != null
+                                && createdFrom.isAfter(createdTo)) {
+                        throw new IllegalArgumentException(
+                                        "createdFrom no puede ser posterior a createdTo");
+                }
+
+                UUID organizationId = organizationContext.currentOrganizationId();
+
+                Map<AssetStatus, Long> byStatus = emptyCounts(AssetStatus.class);
+                Map<AssetType, Long> byType = emptyCounts(AssetType.class);
+                Map<AssetEnvironment, Long> byEnvironment = emptyCounts(AssetEnvironment.class);
+                Map<AssetCriticality, Long> byCriticality = emptyCounts(AssetCriticality.class);
+
+                assetRepository.countStatusesByOrganization(
+                                organizationId,
+                                createdFrom,
+                                createdTo)
+                                .forEach(result -> byStatus.put(
+                                                result.getStatus(),
+                                                result.getTotal()));
+
+                assetRepository.countTypesByOrganization(
+                                organizationId,
+                                createdFrom,
+                                createdTo)
+                                .forEach(result -> byType.put(
+                                                result.getType(),
+                                                result.getTotal()));
+
+                assetRepository.countEnvironmentsByOrganization(
+                                organizationId,
+                                createdFrom,
+                                createdTo)
+                                .forEach(result -> byEnvironment.put(
+                                                result.getEnvironment(),
+                                                result.getTotal()));
+
+                assetRepository.countCriticalitiesByOrganization(
+                                organizationId,
+                                createdFrom,
+                                createdTo)
+                                .forEach(result -> byCriticality.put(
+                                                result.getCriticality(),
+                                                result.getTotal()));
+
+                long total = 0L;
+                for (Long count : byStatus.values()) {
+                        if (count == null) {
+                                throw new IllegalStateException(
+                                                "El recuento de estados no puede ser nulo");
+                        }
+                        total += count;
+                }
+
+                return new AssetSummary(
+                                total,
+                                byStatus,
+                                byType,
+                                byEnvironment,
+                                byCriticality);
+        }
+
+        private <E extends Enum<E>> Map<E, Long> emptyCounts(Class<E> enumType) {
+                Map<E, Long> counts = new EnumMap<>(enumType);
+
+                for (E value : enumType.getEnumConstants()) {
+                        counts.put(value, 0L);
+                }
+
+                return counts;
         }
 
         public List<Asset> findForExport(

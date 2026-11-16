@@ -29,6 +29,7 @@ import com.securefindings.asset.domain.AssetAuditAction;
 import com.securefindings.asset.domain.AssetCriticality;
 import com.securefindings.asset.domain.AssetEnvironment;
 import com.securefindings.asset.domain.AssetStatus;
+import com.securefindings.asset.domain.AssetSummary;
 import com.securefindings.asset.domain.AssetType;
 import com.securefindings.audit.persistence.FindingAuditRepository;
 import com.securefindings.comment.persistence.FindingCommentRepository;
@@ -177,6 +178,62 @@ class AssetPersistenceIntegrationTest {
 
                 assertEquals(1, page.getTotalElements());
                 assertEquals(currentAsset.id(), page.getContent().getFirst().id());
+        }
+
+        @Test
+        void deberiaResumirActivosPorCategoriaSinMezclarOrganizaciones() {
+                assetService.create(
+                                "API resumen",
+                                "summary-api",
+                                AssetType.API,
+                                AssetEnvironment.PRODUCTION,
+                                AssetCriticality.HIGH);
+
+                Asset archivedServer = assetService.create(
+                                "Servidor resumen",
+                                "summary-server",
+                                AssetType.SERVER,
+                                AssetEnvironment.STAGING,
+                                AssetCriticality.CRITICAL);
+
+                assetService.update(
+                                archivedServer.id(),
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                AssetStatus.ARCHIVED);
+
+                saveOtherOrganization();
+
+                Asset foreignAsset = Asset.create(
+                                "Activo de otra organización",
+                                "foreign-summary-asset",
+                                AssetType.DATABASE,
+                                AssetEnvironment.TEST,
+                                AssetCriticality.LOW);
+                assetRepository.saveAndFlush(
+                                new AssetEntity(foreignAsset, OTHER_ORGANIZATION_ID));
+
+                AssetSummary summary = assetService.getSummary();
+
+                assertEquals(2L, summary.total());
+                assertEquals(1L, summary.byStatus().get(AssetStatus.ACTIVE));
+                assertEquals(1L, summary.byStatus().get(AssetStatus.ARCHIVED));
+                assertEquals(1L, summary.byType().get(AssetType.API));
+                assertEquals(1L, summary.byType().get(AssetType.SERVER));
+                assertEquals(0L, summary.byType().get(AssetType.DATABASE));
+                assertEquals(1L, summary.byEnvironment().get(AssetEnvironment.PRODUCTION));
+                assertEquals(1L, summary.byEnvironment().get(AssetEnvironment.STAGING));
+                assertEquals(1L, summary.byCriticality().get(AssetCriticality.HIGH));
+                assertEquals(1L, summary.byCriticality().get(AssetCriticality.CRITICAL));
+
+                AssetSummary futureSummary = assetService.getSummary(
+                                Instant.parse("2099-01-01T00:00:00Z"),
+                                Instant.parse("2099-01-02T00:00:00Z"));
+
+                assertEquals(0L, futureSummary.total());
         }
 
         @Test

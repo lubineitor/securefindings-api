@@ -17,7 +17,8 @@ public class FindingCsvExporter {
             "status",
             "createdAt",
             "updatedAt",
-            "assetId");
+            "assetId",
+            "dueAt");
 
     public String toCsv(List<Finding> findings) {
         StringBuilder csv = new StringBuilder();
@@ -34,7 +35,10 @@ public class FindingCsvExporter {
                     finding.updatedAt().toString(),
                     finding.assetId() == null
                             ? ""
-                            : finding.assetId().toString()));
+                            : finding.assetId().toString(),
+                    finding.dueAt() == null
+                            ? ""
+                            : finding.dueAt().toString()));
         }
 
         return csv.toString();

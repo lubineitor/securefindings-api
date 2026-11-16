@@ -1,7 +1,12 @@
 package com.securefindings.finding.application;
 
+import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -28,9 +33,12 @@ import com.securefindings.audit.domain.AuditAction;
 import com.securefindings.finding.api.FindingSortDirection;
 import com.securefindings.finding.api.FindingSortField;
 import com.securefindings.finding.domain.Finding;
+import com.securefindings.finding.domain.FindingOverdueSummary;
 import com.securefindings.finding.domain.FindingSeverity;
 import com.securefindings.finding.domain.FindingStatus;
 import com.securefindings.finding.domain.FindingSummary;
+import com.securefindings.finding.domain.FindingTrend;
+import com.securefindings.finding.domain.FindingTrendInterval;
 import com.securefindings.finding.persistence.FindingEntity;
 import com.securefindings.finding.persistence.FindingRepository;
 import com.securefindings.security.OrganizationContext;
@@ -40,6 +48,8 @@ import com.securefindings.security.OrganizationContext;
 public class FindingService {
 
         private static final String SYSTEM_ACTOR = "system";
+        private static final Duration MAX_TREND_RANGE = Duration.ofDays(366);
+
         public static final int MAX_EXPORT_ROWS = 1_000;
 
         private final FindingRepository findingRepository;
@@ -140,12 +150,118 @@ public class FindingService {
                 return new FindingSummary(total, byStatus, bySeverity);
         }
 
+        public FindingTrend getTrend(
+                        Instant from,
+                        Instant to,
+                        FindingTrendInterval interval,
+                        UUID assetId) {
+
+                if (from == null || to == null || interval == null) {
+                        throw new IllegalArgumentException(
+                                        "from, to e interval son obligatorios");
+                }
+
+                if (!from.isBefore(to)) {
+                        throw new IllegalArgumentException(
+                                        "from debe ser anterior a to");
+                }
+
+                if (Duration.between(from, to).compareTo(MAX_TREND_RANGE) > 0) {
+                        throw new IllegalArgumentException(
+                                        "El rango de consulta no puede superar 366 días");
+                }
+
+                UUID organizationId = organizationContext.currentOrganizationId();
+
+                List<FindingRepository.TrendCountProjection> aggregates = assetId == null
+                                ? findingRepository.findTrendByOrganization(
+                                                organizationId,
+                                                from,
+                                                to,
+                                                interval.sqlValue())
+                                : findingRepository.findTrendByOrganizationAndAssetId(
+                                                organizationId,
+                                                assetId,
+                                                from,
+                                                to,
+                                                interval.sqlValue());
+
+                Map<Instant, Map<FindingSeverity, Long>> buckets = new LinkedHashMap<>();
+
+                Instant bucketStart = interval.bucketStart(from);
+
+                while (bucketStart.isBefore(to)) {
+                        Map<FindingSeverity, Long> counts = new EnumMap<>(FindingSeverity.class);
+
+                        for (FindingSeverity severity : FindingSeverity.values()) {
+                                counts.put(severity, 0L);
+                        }
+
+                        buckets.put(bucketStart, counts);
+                        bucketStart = interval.nextBucket(bucketStart);
+                }
+
+                for (FindingRepository.TrendCountProjection aggregate : aggregates) {
+                        LocalDate databaseBucketDate = Objects.requireNonNull(
+                                        aggregate.getBucketDate(),
+                                        "La consulta devolvió una fecha nula");
+
+                        Instant resultBucketStart = databaseBucketDate
+                                        .atStartOfDay(ZoneOffset.UTC)
+                                        .toInstant();
+
+                        Map<FindingSeverity, Long> counts = buckets.get(resultBucketStart);
+
+                        if (counts == null) {
+                                throw new IllegalStateException(
+                                                "La consulta devolvió un periodo fuera del rango solicitado");
+                        }
+
+                        FindingSeverity severity = FindingSeverity.valueOf(
+                                        Objects.requireNonNull(
+                                                        aggregate.getSeverity(),
+                                                        "La consulta devolvió una severidad nula"));
+
+                        Long count = Objects.requireNonNull(
+                                        aggregate.getTotal(),
+                                        "La consulta devolvió un recuento nulo");
+
+                        counts.put(severity, count);
+                }
+
+                List<FindingTrend.Point> points = new ArrayList<>();
+
+                for (Map.Entry<Instant, Map<FindingSeverity, Long>> bucket : buckets.entrySet()) {
+
+                        long total = 0L;
+
+                        for (FindingSeverity severity : FindingSeverity.values()) {
+                                Long severityCount = bucket.getValue().get(severity);
+
+                                if (severityCount == null) {
+                                        throw new IllegalStateException(
+                                                        "El recuento por severidad no puede ser nulo");
+                                }
+
+                                total += severityCount;
+                        }
+
+                        points.add(new FindingTrend.Point(
+                                        bucket.getKey(),
+                                        total,
+                                        bucket.getValue()));
+                }
+
+                return new FindingTrend(from, to, interval, points);
+        }
+
         @Transactional
         public Finding create(
                         String title,
                         String description,
                         FindingSeverity severity) {
-                return create(title, description, severity, null);
+
+                return create(title, description, severity, null, null);
         }
 
         @Transactional
@@ -155,6 +271,17 @@ public class FindingService {
                         FindingSeverity severity,
                         UUID assetId) {
 
+                return create(title, description, severity, assetId, null);
+        }
+
+        @Transactional
+        public Finding create(
+                        String title,
+                        String description,
+                        FindingSeverity severity,
+                        UUID assetId,
+                        Instant dueAt) {
+
                 UUID organizationId = organizationContext.currentOrganizationId();
                 ensureAssetCanBeLinked(assetId, organizationId);
 
@@ -162,7 +289,8 @@ public class FindingService {
                                 title,
                                 description,
                                 severity,
-                                assetId);
+                                assetId,
+                                dueAt);
 
                 Finding savedFinding = findingRepository
                                 .save(new FindingEntity(finding, organizationId))
@@ -328,6 +456,7 @@ public class FindingService {
                 }
 
                 UUID organizationId = organizationContext.currentOrganizationId();
+
                 Pageable pageable = PageRequest.of(
                                 0,
                                 MAX_EXPORT_ROWS + 1,
@@ -367,9 +496,7 @@ public class FindingService {
                 UUID organizationId = organizationContext.currentOrganizationId();
 
                 return findingRepository
-                                .findByIdAndOrganizationId(
-                                                id,
-                                                organizationId)
+                                .findByIdAndOrganizationId(id, organizationId)
                                 .map(entity -> Objects.requireNonNull(
                                                 entity,
                                                 "El repositorio devolvió una entidad nula")
@@ -387,7 +514,6 @@ public class FindingService {
                         FindingStatus status) {
 
                 UUID organizationId = organizationContext.currentOrganizationId();
-
                 Finding currentFinding = getById(id);
 
                 if (!currentFinding.status().canTransitionTo(status)) {
@@ -398,10 +524,7 @@ public class FindingService {
                 }
 
                 Finding updatedFinding = currentFinding.withStatus(status);
-
-                Finding savedFinding = save(
-                                updatedFinding,
-                                organizationId);
+                Finding savedFinding = save(updatedFinding, organizationId);
 
                 auditService.register(
                                 savedFinding.id(),
@@ -419,17 +542,50 @@ public class FindingService {
                         FindingSeverity severity) {
 
                 UUID organizationId = organizationContext.currentOrganizationId();
-
                 Finding currentFinding = getById(id);
 
-                Finding updatedFinding = currentFinding.withDetails(
+                return updateFindingDetails(
+                                currentFinding,
                                 title,
                                 description,
-                                severity);
-
-                Finding savedFinding = save(
-                                updatedFinding,
+                                severity,
+                                currentFinding.dueAt(),
                                 organizationId);
+        }
+
+        @Transactional
+        public Finding update(
+                        UUID id,
+                        String title,
+                        String description,
+                        FindingSeverity severity,
+                        Instant dueAt) {
+
+                UUID organizationId = organizationContext.currentOrganizationId();
+                Finding currentFinding = getById(id);
+
+                return updateFindingDetails(
+                                currentFinding,
+                                title,
+                                description,
+                                severity,
+                                dueAt,
+                                organizationId);
+        }
+
+        private Finding updateFindingDetails(
+                        Finding currentFinding,
+                        String title,
+                        String description,
+                        FindingSeverity severity,
+                        Instant dueAt,
+                        UUID organizationId) {
+
+                Finding updatedFinding = currentFinding
+                                .withDetails(title, description, severity)
+                                .withDueAt(dueAt);
+
+                Finding savedFinding = save(updatedFinding, organizationId);
 
                 auditService.register(
                                 savedFinding.id(),
@@ -446,7 +602,6 @@ public class FindingService {
                 if (!findingRepository.existsByIdAndOrganizationId(
                                 id,
                                 organizationId)) {
-
                         throw new FindingNotFoundException(id);
                 }
 
@@ -519,9 +674,7 @@ public class FindingService {
                         UUID organizationId) {
 
                 return findingRepository
-                                .save(new FindingEntity(
-                                                finding,
-                                                organizationId))
+                                .save(new FindingEntity(finding, organizationId))
                                 .toDomain();
         }
 
@@ -530,9 +683,7 @@ public class FindingService {
                                 .getContext()
                                 .getAuthentication();
 
-                if (authentication == null
-                                || !authentication.isAuthenticated()) {
-
+                if (authentication == null || !authentication.isAuthenticated()) {
                         return SYSTEM_ACTOR;
                 }
 
@@ -541,9 +692,7 @@ public class FindingService {
                                         .getToken()
                                         .getClaimAsString("preferred_username");
 
-                        if (preferredUsername != null
-                                        && !preferredUsername.isBlank()) {
-
+                        if (preferredUsername != null && !preferredUsername.isBlank()) {
                                 return preferredUsername;
                         }
                 }
@@ -592,5 +741,86 @@ public class FindingService {
                                 currentActor());
 
                 return savedFinding;
+        }
+
+        public Page<Finding> findOverduePage(int page, int size) {
+                UUID organizationId = organizationContext.currentOrganizationId();
+
+                Pageable pageable = PageRequest.of(
+                                page,
+                                size,
+                                Sort.by(
+                                                Sort.Order.asc("dueAt"),
+                                                Sort.Order.asc("id")));
+
+                Page<FindingEntity> entities = findingRepository
+                                .findByOrganizationIdAndDueAtLessThanEqualAndStatusIn(
+                                                organizationId,
+                                                Instant.now(),
+                                                List.of(
+                                                                FindingStatus.OPEN,
+                                                                FindingStatus.IN_PROGRESS),
+                                                pageable);
+
+                return toDomainPage(entities);
+        }
+
+        public FindingOverdueSummary getOverdueSummary() {
+                UUID organizationId = organizationContext.currentOrganizationId();
+                Instant asOf = Instant.now();
+
+                List<FindingRepository.OverdueCountProjection> counts = findingRepository
+                                .countOverdueByOrganizationAndStatuses(
+                                                organizationId,
+                                                asOf,
+                                                List.of(
+                                                                FindingStatus.OPEN,
+                                                                FindingStatus.IN_PROGRESS));
+
+                Map<FindingStatus, Long> byStatus = new EnumMap<>(FindingStatus.class);
+
+                for (FindingStatus status : FindingStatus.values()) {
+                        byStatus.put(status, 0L);
+                }
+
+                Map<FindingSeverity, Long> bySeverity = new EnumMap<>(FindingSeverity.class);
+
+                for (FindingSeverity severity : FindingSeverity.values()) {
+                        bySeverity.put(severity, 0L);
+                }
+
+                for (FindingRepository.OverdueCountProjection count : counts) {
+                        FindingStatus status = Objects.requireNonNull(
+                                        count.getStatus(),
+                                        "El estado del recuento no puede ser nulo");
+
+                        FindingSeverity severity = Objects.requireNonNull(
+                                        count.getSeverity(),
+                                        "La severidad del recuento no puede ser nula");
+
+                        Long value = Objects.requireNonNull(
+                                        count.getTotal(),
+                                        "El recuento no puede ser nulo");
+
+                        byStatus.put(status, byStatus.get(status) + value);
+                        bySeverity.put(severity, bySeverity.get(severity) + value);
+                }
+
+                long total = 0L;
+
+                for (Long count : byStatus.values()) {
+                        if (count == null) {
+                                throw new IllegalStateException(
+                                                "El recuento de estados no puede ser nulo");
+                        }
+
+                        total += count;
+                }
+
+                return new FindingOverdueSummary(
+                                asOf,
+                                total,
+                                byStatus,
+                                bySeverity);
         }
 }

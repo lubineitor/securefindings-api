@@ -1,6 +1,7 @@
 package com.securefindings.finding.persistence;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -15,141 +16,214 @@ import com.securefindings.finding.domain.FindingSeverity;
 import com.securefindings.finding.domain.FindingStatus;
 
 public interface FindingRepository
-                extends JpaRepository<FindingEntity, UUID> {
+        extends JpaRepository<FindingEntity, UUID> {
 
-        Optional<FindingEntity> findByIdAndOrganizationId(
-                        UUID id,
-                        UUID organizationId);
+    interface OverdueCountProjection {
+        FindingStatus getStatus();
 
-        boolean existsByIdAndOrganizationId(
-                        UUID id,
-                        UUID organizationId);
+        FindingSeverity getSeverity();
 
-        void deleteByIdAndOrganizationId(
-                        UUID id,
-                        UUID organizationId);
+        Long getTotal();
+    }
 
-        boolean existsByOrganizationIdAndAssetId(UUID organizationId, UUID assetId);
+    interface TrendCountProjection {
+        LocalDate getBucketDate();
 
-        @Query("""
-                        SELECT finding
-                        FROM FindingEntity finding
-                        WHERE finding.organizationId = :organizationId
-                          AND (
-                                COALESCE(:searchTerm, '') = ''
-                                OR LOWER(finding.title) LIKE LOWER(
-                                        CONCAT('%', COALESCE(:searchTerm, ''), '%')) ESCAPE '!'
-                                OR LOWER(finding.description) LIKE LOWER(
-                                        CONCAT('%', COALESCE(:searchTerm, ''), '%')) ESCAPE '!'
-                          )
-                          AND (:severity IS NULL OR finding.severity = :severity)
-                          AND (:status IS NULL OR finding.status = :status)
-                          AND finding.createdAt >= COALESCE(:createdFrom, finding.createdAt)
-                          AND finding.createdAt <= COALESCE(:createdTo, finding.createdAt)
-                        """)
-        Page<FindingEntity> findPageByFilters(
-                        @Param("organizationId") UUID organizationId,
-                        @Param("searchTerm") String searchTerm,
-                        @Param("severity") FindingSeverity severity,
-                        @Param("status") FindingStatus status,
-                        @Param("createdFrom") Instant createdFrom,
-                        @Param("createdTo") Instant createdTo,
-                        Pageable pageable);
+        String getSeverity();
 
-        interface StatusCountProjection {
-                FindingStatus getStatus();
+        Long getTotal();
+    }
 
-                Long getTotal();
-        }
+    Optional<FindingEntity> findByIdAndOrganizationId(
+            UUID id,
+            UUID organizationId);
 
-        interface SeverityCountProjection {
-                FindingSeverity getSeverity();
+    boolean existsByIdAndOrganizationId(
+            UUID id,
+            UUID organizationId);
 
-                Long getTotal();
-        }
+    void deleteByIdAndOrganizationId(
+            UUID id,
+            UUID organizationId);
 
-        @Query("""
-                        SELECT finding.status AS status, COUNT(finding.id) AS total
-                        FROM FindingEntity finding
-                        WHERE finding.organizationId = :organizationId
-                          AND finding.createdAt >= COALESCE(:createdFrom, finding.createdAt)
-                          AND finding.createdAt <= COALESCE(:createdTo, finding.createdAt)
-                        GROUP BY finding.status
-                        """)
-        List<StatusCountProjection> countStatusesByOrganization(
-                        @Param("organizationId") UUID organizationId,
-                        @Param("createdFrom") Instant createdFrom,
-                        @Param("createdTo") Instant createdTo);
+    boolean existsByOrganizationIdAndAssetId(UUID organizationId, UUID assetId);
 
-        @Query("""
-                        SELECT finding.severity AS severity, COUNT(finding.id) AS total
-                        FROM FindingEntity finding
-                        WHERE finding.organizationId = :organizationId
-                          AND finding.createdAt >= COALESCE(:createdFrom, finding.createdAt)
-                          AND finding.createdAt <= COALESCE(:createdTo, finding.createdAt)
-                        GROUP BY finding.severity
-                        """)
-        List<SeverityCountProjection> countSeveritiesByOrganization(
-                        @Param("organizationId") UUID organizationId,
-                        @Param("createdFrom") Instant createdFrom,
-                        @Param("createdTo") Instant createdTo);
+    @Query("""
+            SELECT finding
+            FROM FindingEntity finding
+            WHERE finding.organizationId = :organizationId
+              AND (
+                    COALESCE(:searchTerm, '') = ''
+                    OR LOWER(finding.title) LIKE LOWER(
+                            CONCAT('%', COALESCE(:searchTerm, ''), '%')) ESCAPE '!'
+                    OR LOWER(finding.description) LIKE LOWER(
+                            CONCAT('%', COALESCE(:searchTerm, ''), '%')) ESCAPE '!'
+              )
+              AND (:severity IS NULL OR finding.severity = :severity)
+              AND (:status IS NULL OR finding.status = :status)
+              AND finding.createdAt >= COALESCE(:createdFrom, finding.createdAt)
+              AND finding.createdAt <= COALESCE(:createdTo, finding.createdAt)
+            """)
+    Page<FindingEntity> findPageByFilters(
+            @Param("organizationId") UUID organizationId,
+            @Param("searchTerm") String searchTerm,
+            @Param("severity") FindingSeverity severity,
+            @Param("status") FindingStatus status,
+            @Param("createdFrom") Instant createdFrom,
+            @Param("createdTo") Instant createdTo,
+            Pageable pageable);
 
-        boolean existsByOrganizationId(UUID organizationId);
+    interface StatusCountProjection {
+        FindingStatus getStatus();
 
-        @Query("""
-                        SELECT finding
-                        FROM FindingEntity finding
-                        WHERE finding.organizationId = :organizationId
-                          AND finding.assetId = :assetId
-                          AND (
-                                COALESCE(:searchTerm, '') = ''
-                                OR LOWER(finding.title) LIKE LOWER(
-                                        CONCAT('%', COALESCE(:searchTerm, ''), '%')) ESCAPE '!'
-                                OR LOWER(finding.description) LIKE LOWER(
-                                        CONCAT('%', COALESCE(:searchTerm, ''), '%')) ESCAPE '!'
-                          )
-                          AND (:severity IS NULL OR finding.severity = :severity)
-                          AND (:status IS NULL OR finding.status = :status)
-                          AND finding.createdAt >= COALESCE(:createdFrom, finding.createdAt)
-                          AND finding.createdAt <= COALESCE(:createdTo, finding.createdAt)
-                        """)
-        Page<FindingEntity> findPageByFiltersAndAssetId(
-                        @Param("organizationId") UUID organizationId,
-                        @Param("searchTerm") String searchTerm,
-                        @Param("severity") FindingSeverity severity,
-                        @Param("status") FindingStatus status,
-                        @Param("createdFrom") Instant createdFrom,
-                        @Param("createdTo") Instant createdTo,
-                        @Param("assetId") UUID assetId,
-                        Pageable pageable);
+        Long getTotal();
+    }
 
-        @Query("""
-                        SELECT finding.status AS status, COUNT(finding.id) AS total
-                        FROM FindingEntity finding
-                        WHERE finding.organizationId = :organizationId
-                          AND finding.assetId = :assetId
-                          AND finding.createdAt >= COALESCE(:createdFrom, finding.createdAt)
-                          AND finding.createdAt <= COALESCE(:createdTo, finding.createdAt)
-                        GROUP BY finding.status
-                        """)
-        List<StatusCountProjection> countStatusesByOrganizationAndAssetId(
-                        @Param("organizationId") UUID organizationId,
-                        @Param("assetId") UUID assetId,
-                        @Param("createdFrom") Instant createdFrom,
-                        @Param("createdTo") Instant createdTo);
+    interface SeverityCountProjection {
+        FindingSeverity getSeverity();
 
-        @Query("""
-                        SELECT finding.severity AS severity, COUNT(finding.id) AS total
-                        FROM FindingEntity finding
-                        WHERE finding.organizationId = :organizationId
-                          AND finding.assetId = :assetId
-                          AND finding.createdAt >= COALESCE(:createdFrom, finding.createdAt)
-                          AND finding.createdAt <= COALESCE(:createdTo, finding.createdAt)
-                        GROUP BY finding.severity
-                        """)
-        List<SeverityCountProjection> countSeveritiesByOrganizationAndAssetId(
-                        @Param("organizationId") UUID organizationId,
-                        @Param("assetId") UUID assetId,
-                        @Param("createdFrom") Instant createdFrom,
-                        @Param("createdTo") Instant createdTo);
+        Long getTotal();
+    }
+
+    @Query("""
+            SELECT finding.status AS status, COUNT(finding.id) AS total
+            FROM FindingEntity finding
+            WHERE finding.organizationId = :organizationId
+              AND finding.createdAt >= COALESCE(:createdFrom, finding.createdAt)
+              AND finding.createdAt <= COALESCE(:createdTo, finding.createdAt)
+            GROUP BY finding.status
+            """)
+    List<StatusCountProjection> countStatusesByOrganization(
+            @Param("organizationId") UUID organizationId,
+            @Param("createdFrom") Instant createdFrom,
+            @Param("createdTo") Instant createdTo);
+
+    @Query("""
+            SELECT finding.severity AS severity, COUNT(finding.id) AS total
+            FROM FindingEntity finding
+            WHERE finding.organizationId = :organizationId
+              AND finding.createdAt >= COALESCE(:createdFrom, finding.createdAt)
+              AND finding.createdAt <= COALESCE(:createdTo, finding.createdAt)
+            GROUP BY finding.severity
+            """)
+    List<SeverityCountProjection> countSeveritiesByOrganization(
+            @Param("organizationId") UUID organizationId,
+            @Param("createdFrom") Instant createdFrom,
+            @Param("createdTo") Instant createdTo);
+
+    boolean existsByOrganizationId(UUID organizationId);
+
+    @Query("""
+            SELECT finding
+            FROM FindingEntity finding
+            WHERE finding.organizationId = :organizationId
+              AND finding.assetId = :assetId
+              AND (
+                    COALESCE(:searchTerm, '') = ''
+                    OR LOWER(finding.title) LIKE LOWER(
+                            CONCAT('%', COALESCE(:searchTerm, ''), '%')) ESCAPE '!'
+                    OR LOWER(finding.description) LIKE LOWER(
+                            CONCAT('%', COALESCE(:searchTerm, ''), '%')) ESCAPE '!'
+              )
+              AND (:severity IS NULL OR finding.severity = :severity)
+              AND (:status IS NULL OR finding.status = :status)
+              AND finding.createdAt >= COALESCE(:createdFrom, finding.createdAt)
+              AND finding.createdAt <= COALESCE(:createdTo, finding.createdAt)
+            """)
+    Page<FindingEntity> findPageByFiltersAndAssetId(
+            @Param("organizationId") UUID organizationId,
+            @Param("searchTerm") String searchTerm,
+            @Param("severity") FindingSeverity severity,
+            @Param("status") FindingStatus status,
+            @Param("createdFrom") Instant createdFrom,
+            @Param("createdTo") Instant createdTo,
+            @Param("assetId") UUID assetId,
+            Pageable pageable);
+
+    @Query("""
+            SELECT finding.status AS status, COUNT(finding.id) AS total
+            FROM FindingEntity finding
+            WHERE finding.organizationId = :organizationId
+              AND finding.assetId = :assetId
+              AND finding.createdAt >= COALESCE(:createdFrom, finding.createdAt)
+              AND finding.createdAt <= COALESCE(:createdTo, finding.createdAt)
+            GROUP BY finding.status
+            """)
+    List<StatusCountProjection> countStatusesByOrganizationAndAssetId(
+            @Param("organizationId") UUID organizationId,
+            @Param("assetId") UUID assetId,
+            @Param("createdFrom") Instant createdFrom,
+            @Param("createdTo") Instant createdTo);
+
+    @Query("""
+            SELECT finding.severity AS severity, COUNT(finding.id) AS total
+            FROM FindingEntity finding
+            WHERE finding.organizationId = :organizationId
+              AND finding.assetId = :assetId
+              AND finding.createdAt >= COALESCE(:createdFrom, finding.createdAt)
+              AND finding.createdAt <= COALESCE(:createdTo, finding.createdAt)
+            GROUP BY finding.severity
+            """)
+    List<SeverityCountProjection> countSeveritiesByOrganizationAndAssetId(
+            @Param("organizationId") UUID organizationId,
+            @Param("assetId") UUID assetId,
+            @Param("createdFrom") Instant createdFrom,
+            @Param("createdTo") Instant createdTo);
+
+    Page<FindingEntity> findByOrganizationIdAndDueAtLessThanEqualAndStatusIn(
+            UUID organizationId,
+            Instant dueAt,
+            List<FindingStatus> statuses,
+            Pageable pageable);
+
+    @Query("""
+            SELECT finding.status AS status,
+                   finding.severity AS severity,
+                   COUNT(finding.id) AS total
+            FROM FindingEntity finding
+            WHERE finding.organizationId = :organizationId
+              AND finding.dueAt <= :asOf
+              AND finding.status IN :statuses
+            GROUP BY finding.status, finding.severity
+            """)
+    List<OverdueCountProjection> countOverdueByOrganizationAndStatuses(
+            @Param("organizationId") UUID organizationId,
+            @Param("asOf") Instant asOf,
+            @Param("statuses") List<FindingStatus> statuses);
+
+    @Query(value = """
+                       SELECT date_trunc(:interval, finding.created_at AT TIME ZONE 'UTC')::date AS "bucketDate",
+            finding.severity AS severity,
+            COUNT(finding.id) AS total
+                       FROM findings finding
+                       WHERE finding.organization_id = :organizationId
+                         AND finding.created_at >= :fromInclusive
+                         AND finding.created_at < :toExclusive
+                      GROUP BY 1, finding.severity
+                 ORDER BY 1
+                       """, nativeQuery = true)
+    List<TrendCountProjection> findTrendByOrganization(
+            @Param("organizationId") UUID organizationId,
+            @Param("fromInclusive") Instant fromInclusive,
+            @Param("toExclusive") Instant toExclusive,
+            @Param("interval") String interval);
+
+    @Query(value = """
+            SELECT date_trunc(:interval, finding.created_at AT TIME ZONE 'UTC')::date AS "bucketDate",
+            finding.severity AS severity,
+            COUNT(finding.id) AS total
+                 FROM findings finding
+                 WHERE finding.organization_id = :organizationId
+                   AND finding.asset_id = :assetId
+                   AND finding.created_at >= :fromInclusive
+                   AND finding.created_at < :toExclusive
+                 GROUP BY 1, finding.severity
+                 ORDER BY 1
+                 """, nativeQuery = true)
+    List<TrendCountProjection> findTrendByOrganizationAndAssetId(
+            @Param("organizationId") UUID organizationId,
+            @Param("assetId") UUID assetId,
+            @Param("fromInclusive") Instant fromInclusive,
+            @Param("toExclusive") Instant toExclusive,
+            @Param("interval") String interval);
 }

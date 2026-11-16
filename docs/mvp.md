@@ -45,6 +45,17 @@ en este documento y en `SECURITY.md`.
   con filtros por acción, actor, `requestId` y fechas.
 - Exportación CSV filtrada de auditoría de activos, limitada a 1.000 eventos y
   protegida frente a la inyección de fórmulas.
+- Resumen del inventario de activos por estado, tipo, entorno y criticidad, con
+  filtros de fechas y aislamiento por organización.
+- Exportación CSV de la auditoría global de hallazgos, filtrada por organización
+  y protegida frente a la inyección de fórmulas.
+- Fecha límite opcional para hallazgos, disponible en creación, actualización y exportación CSV.
+- Consulta paginada de hallazgos vencidos, limitada a estados abiertos y en curso y aislada por organización.
+- Resumen de hallazgos vencidos por estado y severidad, calculado para la organización actual.
+- Importación masiva de hallazgos desde CSV UTF-8, validada por fila, limitada
+  a 1.000 filas, con validación previa sin persistencia y guardado transaccional.
+- Tendencia temporal de hallazgos por día, semana o mes, agrupada por severidad y filtrable por activo para la organización actual.
+- Panel local de Grafana y reglas Prometheus para disponibilidad, errores 5xx, latencia y fallos del rate limiter; el scraping usa OAuth2 con rol `METRICS_READER`.
 
 ## Criterios de aceptación del MVP
 
@@ -73,8 +84,7 @@ en este documento y en `SECURITY.md`.
 
 ## Orden de trabajo sugerido
 
-1. Completar la observabilidad con paneles y alertas basados en las métricas ya
-   expuestas.
+1. Validar las reglas de alerta en un entorno desplegado y configurar el canal de notificaciones que se vaya a utilizar.
 2. Ampliar las pruebas de autorización y de aislamiento entre organizaciones
    para cada endpoint nuevo.
 3. Preparar la configuración de producción y el despliegue automatizado.

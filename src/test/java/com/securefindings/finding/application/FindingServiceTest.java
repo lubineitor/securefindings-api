@@ -756,4 +756,55 @@ class FindingServiceTest {
                                 createdFrom,
                                 createdTo);
         }
+
+        @Test
+        void deberiaCrearUnHallazgoConFechaLimite() {
+                Instant dueAt = Instant.parse("2026-12-01T09:00:00Z");
+
+                when(findingRepository.save(any(FindingEntity.class)))
+                                .thenAnswer(invocation -> invocation.getArgument(0));
+
+                Finding finding = findingService.create(
+                                "SQL Injection",
+                                "Entrada de usuario sin validar",
+                                FindingSeverity.HIGH,
+                                null,
+                                dueAt);
+
+                assertEquals(dueAt, finding.dueAt());
+                verify(findingRepository).save(any(FindingEntity.class));
+        }
+
+        @Test
+        void deberiaActualizarLaFechaLimiteDeUnHallazgo() {
+                Instant previousDueAt = Instant.parse("2026-11-20T09:00:00Z");
+                Instant newDueAt = Instant.parse("2026-12-01T09:00:00Z");
+
+                Finding finding = Finding.create(
+                                "SQL Injection",
+                                "Entrada sin validar",
+                                FindingSeverity.HIGH,
+                                null,
+                                previousDueAt);
+
+                when(findingRepository.findByIdAndOrganizationId(
+                                finding.id(),
+                                TEST_ORGANIZATION_ID))
+                                .thenReturn(Optional.of(new FindingEntity(
+                                                finding,
+                                                TEST_ORGANIZATION_ID)));
+
+                when(findingRepository.save(any(FindingEntity.class)))
+                                .thenAnswer(invocation -> invocation.getArgument(0));
+
+                Finding updatedFinding = findingService.update(
+                                finding.id(),
+                                finding.title(),
+                                finding.description(),
+                                finding.severity(),
+                                newDueAt);
+
+                assertEquals(newDueAt, updatedFinding.dueAt());
+                verify(findingRepository).save(any(FindingEntity.class));
+        }
 }

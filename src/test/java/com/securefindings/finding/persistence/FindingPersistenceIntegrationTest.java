@@ -35,9 +35,12 @@ import com.securefindings.finding.api.FindingSortDirection;
 import com.securefindings.finding.api.FindingSortField;
 import com.securefindings.finding.application.FindingService;
 import com.securefindings.finding.domain.Finding;
+import com.securefindings.finding.domain.FindingOverdueSummary;
 import com.securefindings.finding.domain.FindingSeverity;
 import com.securefindings.finding.domain.FindingStatus;
 import com.securefindings.finding.domain.FindingSummary;
+import com.securefindings.finding.domain.FindingTrend;
+import com.securefindings.finding.domain.FindingTrendInterval;
 import com.securefindings.security.RequestCorrelationFilter;
 
 @Testcontainers
@@ -736,5 +739,218 @@ class FindingPersistenceIntegrationTest {
                 assertEquals(1L, summary.bySeverity().get(FindingSeverity.HIGH));
                 assertEquals(1L, summary.bySeverity().get(FindingSeverity.MEDIUM));
                 assertEquals(0L, summary.bySeverity().get(FindingSeverity.CRITICAL));
+        }
+
+        @Test
+        void deberiaPersistirYRecuperarLaFechaLimiteDeUnHallazgo() {
+                Instant dueAt = Instant.parse("2026-12-01T09:00:00Z");
+
+                Finding finding = Finding.create(
+                                "Hallazgo con fecha límite",
+                                "Descripción de prueba",
+                                FindingSeverity.HIGH,
+                                null,
+                                dueAt);
+
+                FindingEntity savedEntity = findingRepository.saveAndFlush(
+                                new FindingEntity(finding, ORGANIZATION_ID));
+
+                FindingEntity recoveredEntity = findingRepository
+                                .findByIdAndOrganizationId(
+                                                savedEntity.getId(),
+                                                ORGANIZATION_ID)
+                                .orElseThrow();
+
+                assertEquals(dueAt, recoveredEntity.toDomain().dueAt());
+        }
+
+        @Test
+        void deberiaListarSoloHallazgosVencidosQueSiguenAbiertos() {
+                Instant firstDueAt = Instant.parse("2020-01-01T00:00:00Z");
+                Instant secondDueAt = Instant.parse("2020-01-02T00:00:00Z");
+                Instant futureDueAt = Instant.parse("2099-01-01T00:00:00Z");
+
+                Finding openOverdue = findingService.create(
+                                "SQL Injection vencido",
+                                "Hallazgo abierto con fecha pasada",
+                                FindingSeverity.HIGH,
+                                null,
+                                firstDueAt);
+
+                Finding inProgressOverdue = findingService.create(
+                                "XSS vencido",
+                                "Hallazgo en curso con fecha pasada",
+                                FindingSeverity.MEDIUM,
+                                null,
+                                secondDueAt);
+
+                Finding resolvedOverdue = findingService.create(
+                                "Hallazgo resuelto",
+                                "Hallazgo resuelto con fecha pasada",
+                                FindingSeverity.LOW,
+                                null,
+                                firstDueAt);
+
+                findingService.updateStatus(
+                                resolvedOverdue.id(),
+                                FindingStatus.RESOLVED);
+
+                findingService.create(
+                                "Hallazgo con fecha futura",
+                                "Todavía no está vencido",
+                                FindingSeverity.HIGH,
+                                null,
+                                futureDueAt);
+
+                findingService.create(
+                                "Hallazgo sin fecha límite",
+                                "No tiene fecha límite asignada",
+                                FindingSeverity.LOW);
+
+                Page<Finding> overduePage = findingService.findOverduePage(0, 20);
+
+                assertEquals(2L, overduePage.getTotalElements());
+                assertEquals(
+                                openOverdue.id(),
+                                overduePage.getContent().get(0).id());
+                assertEquals(
+                                inProgressOverdue.id(),
+                                overduePage.getContent().get(1).id());
+        }
+
+        @Test
+        void deberiaResumirHallazgosVencidosPorEstadoYSeveridad() {
+                Instant firstDueAt = Instant.parse("2020-01-01T00:00:00Z");
+                Instant secondDueAt = Instant.parse("2020-01-02T00:00:00Z");
+                Instant futureDueAt = Instant.parse("2099-01-01T00:00:00Z");
+
+                findingService.create(
+                                "Hallazgo abierto vencido",
+                                "Hallazgo de severidad alta",
+                                FindingSeverity.HIGH,
+                                null,
+                                firstDueAt);
+
+                Finding inProgressOverdue = findingService.create(
+                                "Hallazgo en curso vencido",
+                                "Hallazgo de severidad media",
+                                FindingSeverity.MEDIUM,
+                                null,
+                                secondDueAt);
+
+                findingService.updateStatus(
+                                inProgressOverdue.id(),
+                                FindingStatus.IN_PROGRESS);
+
+                Finding resolvedOverdue = findingService.create(
+                                "Hallazgo resuelto vencido",
+                                "No debe aparecer en el resumen",
+                                FindingSeverity.CRITICAL,
+                                null,
+                                firstDueAt);
+
+                findingService.updateStatus(
+                                resolvedOverdue.id(),
+                                FindingStatus.RESOLVED);
+
+                findingService.create(
+                                "Hallazgo futuro",
+                                "Todavía no está vencido",
+                                FindingSeverity.CRITICAL,
+                                null,
+                                futureDueAt);
+
+                findingService.create(
+                                "Hallazgo sin fecha límite",
+                                "No debe aparecer en el resumen",
+                                FindingSeverity.LOW);
+
+                FindingOverdueSummary summary = findingService.getOverdueSummary();
+
+                assertEquals(2L, summary.total());
+                assertEquals(1L, summary.byStatus().get(FindingStatus.OPEN));
+                assertEquals(1L, summary.byStatus().get(FindingStatus.IN_PROGRESS));
+                assertEquals(0L, summary.byStatus().get(FindingStatus.RESOLVED));
+
+                assertEquals(1L, summary.bySeverity().get(FindingSeverity.HIGH));
+                assertEquals(1L, summary.bySeverity().get(FindingSeverity.MEDIUM));
+                assertEquals(0L, summary.bySeverity().get(FindingSeverity.CRITICAL));
+                assertEquals(0L, summary.bySeverity().get(FindingSeverity.LOW));
+        }
+
+        private void saveTrendFinding(
+                        String title,
+                        Instant createdAt,
+                        FindingSeverity severity) {
+
+                Finding finding = new Finding(
+                                UUID.randomUUID(),
+                                title,
+                                "Hallazgo de prueba para la tendencia temporal",
+                                severity,
+                                FindingStatus.OPEN,
+                                createdAt,
+                                createdAt);
+
+                findingRepository.saveAndFlush(
+                                new FindingEntity(finding, ORGANIZATION_ID));
+        }
+
+        @Test
+        void deberiaConsultarLaTendenciaEnPostgreSQLYCompletarDiasVacios() {
+                Instant from = Instant.parse("2026-01-01T12:00:00Z");
+                Instant to = Instant.parse("2026-01-04T00:00:00Z");
+
+                saveTrendFinding(
+                                "Antes del inicio",
+                                Instant.parse("2026-01-01T11:59:59Z"),
+                                FindingSeverity.CRITICAL);
+                saveTrendFinding(
+                                "Hallazgo alto",
+                                from,
+                                FindingSeverity.HIGH);
+                saveTrendFinding(
+                                "Hallazgo bajo",
+                                Instant.parse("2026-01-01T15:00:00Z"),
+                                FindingSeverity.LOW);
+                saveTrendFinding(
+                                "Hallazgo crítico",
+                                Instant.parse("2026-01-03T23:59:59Z"),
+                                FindingSeverity.CRITICAL);
+                saveTrendFinding(
+                                "En el límite final exclusivo",
+                                to,
+                                FindingSeverity.MEDIUM);
+
+                FindingTrend trend = findingService.getTrend(
+                                from,
+                                to,
+                                FindingTrendInterval.DAY,
+                                null);
+
+                assertEquals(3, trend.points().size());
+
+                long total = 0L;
+
+                for (FindingTrend.Point point : trend.points()) {
+                        total += point.total();
+                }
+
+                assertEquals(3L, total);
+
+                assertEquals(2L, trend.points().get(0).total());
+                assertEquals(
+                                1L,
+                                trend.points().get(0).bySeverity().get(FindingSeverity.HIGH));
+                assertEquals(
+                                1L,
+                                trend.points().get(0).bySeverity().get(FindingSeverity.LOW));
+
+                assertEquals(0L, trend.points().get(1).total());
+
+                assertEquals(1L, trend.points().get(2).total());
+                assertEquals(
+                                1L,
+                                trend.points().get(2).bySeverity().get(FindingSeverity.CRITICAL));
         }
 }

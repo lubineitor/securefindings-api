@@ -77,6 +77,23 @@ Cada hallazgo contiene:
 - Fecha de actualización.
 - Activo asociado, si se ha indicado.
 
+#### Fecha límite
+
+Las peticiones de creación y actualización aceptan el campo opcional `dueAt`
+como fecha ISO-8601. La respuesta del hallazgo incluye ese valor y la exportación
+CSV lo presenta en la columna `dueAt`. En una petición `PUT`, enviar `dueAt: null`
+o no incluir el campo elimina la fecha límite.
+
+```json
+{
+  "title": "SQL Injection",
+  "description": "Entrada de usuario sin validar",
+  "severity": "HIGH",
+  "assetId": null,
+  "dueAt": "2026-12-01T09:00:00Z"
+}
+```
+
 ### Inventario de activos
 
 La API permite administrar un inventario de activos por organización. Cada activo
@@ -209,12 +226,20 @@ También se puede consultar el historial completo de la organización actual:
 GET /api/v1/organizations/current/audit
 ```
 
-La exportación acepta los filtros `action`, `requestId`, `actor`, `occurredFrom`
-y `occurredTo`. Genera el archivo UTF-8
-`securefindings-asset-audit.csv`, con `Cache-Control: no-store`, y admite hasta
-1.000 eventos. Si supera ese límite, responde `413
-ASSET_AUDIT_EXPORT_LIMIT_EXCEEDED`. Las celdas se escapan y neutralizan para
-evitar la ejecución de fórmulas en hojas de cálculo.
+La auditoría global también puede descargarse en CSV:
+
+```text
+GET /api/v1/organizations/current/audit/export
+```
+
+Acepta los filtros `action`, `requestId`, `actor`, `occurredFrom` y
+`occurredTo`. El archivo UTF-8 `securefindings-finding-audit.csv` incluye las
+columnas `id`, `findingId`, `action`, `actor`, `occurredAt` y `requestId`.
+Las celdas se escapan y neutralizan para evitar fórmulas en hojas de cálculo.
+La respuesta incluye `Cache-Control: no-store`.
+
+La exportación admite hasta 1.000 eventos. Si supera ese límite, responde `413`
+con el código `AUDIT_EXPORT_LIMIT_EXCEEDED` y el límite en `errors.limit`.
 
 #### Filtros de auditoría
 
@@ -366,17 +391,57 @@ Ejemplo de respuesta:
 
 #### Métricas Prometheus
 
-Las métricas se consultan en `GET /actuator/prometheus`. El endpoint requiere un JWT
-con el rol `ADMIN`.
+Las métricas están disponibles en `GET /actuator/prometheus`. El endpoint
+requiere un JWT válido del issuer configurado, con la audiencia
+`securefindings-api` y uno de estos roles:
 
-El rate limiter publica el contador `securefindings.rate_limit.requests`, con la
-etiqueta `outcome`:
+- `ADMIN`
+- `METRICS_READER`
+
+Este endpoint no requiere el claim `organization_id`. El rol
+`METRICS_READER` permite consultar métricas, pero no concede acceso a los
+endpoints de negocio.
+
+El rate limiter publica el contador
+`securefindings_rate_limit_requests_total`, con la etiqueta `outcome`:
 
 - `allowed`: petición permitida.
 - `rate_limited`: petición rechazada por superar el límite.
-- `unavailable`: petición rechazada porque el almacenamiento del rate limiter no estaba disponible.
+- `unavailable`: petición rechazada porque Redis no estaba disponible.
 
-Las etiquetas no contienen usuarios, organizaciones ni direcciones IP.
+Las métricas no incluyen nombres de usuario, organizaciones ni direcciones IP.
+
+##### Monitorización local
+
+El proyecto incluye Prometheus, Grafana y Alertmanager mediante el archivo
+`docker-compose.observability.yml` y el perfil `observability`.
+
+Antes de iniciar los servicios:
+
+1. Configura `GRAFANA_ADMIN_PASSWORD` en el archivo local `.env`.
+2. En Keycloak, asigna el rol `METRICS_READER` a la cuenta de servicio del
+   cliente `securefindings-prometheus`.
+3. Guarda el secreto del cliente en
+   `.secrets/prometheus-client-secret.txt`. Este archivo contiene una credencial
+   y no debe añadirse a Git.
+4. Inicia la API en `http://localhost:8080`.
+
+Inicia el stack de monitorización desde PowerShell:
+
+`docker compose -f docker-compose.yml -f docker-compose.observability.yml --profile observability up -d prometheus grafana alertmanager mailpit`
+
+Servicios locales:
+
+| Servicio | URL |
+|---|---|
+| Prometheus | `http://localhost:9090` |
+| Grafana | `http://localhost:3000` |
+| Alertmanager | `http://localhost:9093` |
+| Mailpit | `http://localhost:8025` |
+
+Prometheus consulta `/actuator/prometheus` usando el flujo OAuth2
+`client_credentials` de Keycloak. Alertmanager envía las notificaciones de
+prueba a Mailpit, que permite revisarlas en su interfaz web.
 
 ### Trazabilidad de peticiones
 
@@ -446,12 +511,49 @@ Las pruebas públicas devuelven únicamente el estado, sin mostrar componentes n
 |---|---|---|---|
 | `GET` | `/api/v1/findings` | Lista hallazgos paginados | `ANALYST`, `ADMIN` |
 | `GET` | `/api/v1/findings/{id}` | Obtiene un hallazgo | `ANALYST`, `ADMIN` |
-| `POST` | `/api/v1/findings` | Crea un hallazgo | `ANALYST`, `ADMIN` |
-| `PUT` | `/api/v1/findings/{id}` | Actualiza los datos | `ANALYST`, `ADMIN` |
-| `PATCH` | `/api/v1/findings/{id}/status` | Actualiza el estado | `ANALYST`, `ADMIN` |
-| `DELETE` | `/api/v1/findings/{id}` | Elimina un hallazgo | `ADMIN` |
 | `GET` | `/api/v1/findings/summary` | Resume hallazgos por estado y severidad | `ANALYST`, `ADMIN` |
 | `GET` | `/api/v1/findings/export` | Exporta hallazgos filtrados a CSV | `ANALYST`, `ADMIN` |
+| `GET` | `/api/v1/findings/overdue` | Lista hallazgos vencidos abiertos o en curso | `ANALYST`, `ADMIN` |
+| `GET` | `/api/v1/findings/overdue/summary` | Resume hallazgos vencidos por estado y severidad | `ANALYST`, `ADMIN` |
+| `GET` | `/api/v1/findings/import/template` | Descarga la plantilla CSV de importación | `ANALYST`, `ADMIN` |
+| `GET` | `/api/v1/findings/trends` | Agrupa por severidad y periodo temporal | `ANALYST`, `ADMIN` |
+| `POST` | `/api/v1/findings/import` | Importa hallazgos desde un CSV validado por fila | `ANALYST`, `ADMIN` |
+| `POST` | `/api/v1/findings` | Crea un hallazgo; admite la fecha límite opcional `dueAt` | `ANALYST`, `ADMIN` |
+| `PUT` | `/api/v1/findings/{id}` | Actualiza los datos y la fecha límite del hallazgo | `ANALYST`, `ADMIN` |
+| `PATCH` | `/api/v1/findings/{id}/status` | Actualiza el estado | `ANALYST`, `ADMIN` |
+| `DELETE` | `/api/v1/findings/{id}` | Elimina un hallazgo | `ADMIN` |
+
+#### Tendencia temporal de hallazgos
+
+`GET /api/v1/findings/trends` agrupa por severidad los hallazgos creados en
+cada periodo UTC. Acepta `DAY`, `WEEK` o `MONTH` en `interval`; si se omite, se
+usa `DAY`. Las semanas comienzan el lunes.
+
+`from` es inclusivo y `to` exclusivo. Ambos son obligatorios y deben estar en
+formato ISO-8601. El rango máximo es de 366 días. Los periodos vacíos se
+devuelven con total y recuentos por severidad a cero. Se puede limitar la
+consulta a un activo mediante `assetId`.
+
+```text
+GET /api/v1/findings/trends?from=2026-01-01T00:00:00Z&to=2026-02-01T00:00:00Z&interval=WEEK
+```
+
+#### Hallazgos vencidos
+
+`GET /api/v1/findings/overdue` devuelve hallazgos de la organización actual cuya
+fecha `dueAt` es anterior o igual a la hora actual. Solo incluye los estados
+`OPEN` e `IN_PROGRESS`. Se ordena por `dueAt ASC` e `id ASC`.
+
+Admite `page` desde `0` y `size` entre `1` y `100`.
+
+```text
+GET /api/v1/findings/overdue?page=0&size=20
+```
+
+`GET /api/v1/findings/overdue/summary` devuelve el total de hallazgos vencidos
+y los recuentos agrupados por estado y severidad. Incluye `asOf`, la hora en UTC
+en que se calculó el resumen. Los estados y severidades sin resultados aparecen
+con recuento `0`.
 
 ### Activos
 
@@ -461,9 +563,23 @@ Las pruebas públicas devuelven únicamente el estado, sin mostrar componentes n
 | `GET` | `/api/v1/assets/{id}` | Consulta un activo | `ANALYST`, `ADMIN` |
 | `GET` | `/api/v1/assets/export` | Exporta activos filtrados a CSV | `ANALYST`, `ADMIN` |
 | `GET` | `/api/v1/assets/{id}/audit` | Consulta el historial paginado del activo | `ANALYST`, `ADMIN` |
+| `GET` | `/api/v1/assets/summary` | Resume activos por estado, tipo, entorno y criticidad | `ANALYST`, `ADMIN` |
 | `POST` | `/api/v1/assets` | Crea un activo | `ADMIN` |
 | `PATCH` | `/api/v1/assets/{id}` | Actualiza, archiva o reactiva un activo | `ADMIN` |
 | `DELETE` | `/api/v1/assets/{id}` | Elimina un activo sin hallazgos asociados | `ADMIN` |
+
+#### Resumen del inventario
+
+`GET /api/v1/assets/summary` devuelve el total y los recuentos agrupados por
+estado, tipo, entorno y criticidad para la organización actual. Cada grupo
+incluye todos los valores posibles, también los que tienen recuento cero.
+
+Acepta `createdFrom` y `createdTo` como fechas ISO-8601 inclusivas. Si se envían
+ambas, la fecha inicial debe ser anterior o igual a la final.
+
+```text
+GET /api/v1/assets/summary?createdFrom=2026-10-01T00:00:00Z&createdTo=2026-10-31T23:59:59Z
+```
 
 #### Auditoría de activos
 
@@ -537,7 +653,7 @@ La exportación admite hasta 1.000 activos. Si hay más, responde `413`:
 
 #### Resumen de hallazgos
 
-`GET /api/v1/findings/summary` la consulta devuelve los recuentos de hallazgos agrupados por estado y severidad
+`GET /api/v1/findings/summary` devuelve los recuentos de hallazgos agrupados por estado y severidad
 para la organización del token. Admite filtros opcionales por fechas y por activo.
 Los hallazgos de otras organizaciones no aparecen en el resultado.
 
@@ -560,9 +676,10 @@ como `securefindings.csv`. Acepta los filtros `q`, `severity`, `status`,
 `createdFrom`, `createdTo` y `assetId`. El orden es `createdAt DESC` e `id ASC`.
 
 El archivo incluye las columnas `id`, `title`, `description`, `severity`,
-`status`, `createdAt`, `updatedAt` y `assetId`. La columna `assetId` queda vacía
-si el hallazgo no tiene activo asociado. Se descarga como
-`text/csv; charset=UTF-8`, con nombre `securefindings.csv` y la cabecera
+`status`, `createdAt`, `updatedAt`, `assetId` y `dueAt`. Las columnas `assetId`
+y `dueAt` quedan vacías cuando el hallazgo no tiene esos valores.
+
+Se descarga como `text/csv; charset=UTF-8`, con nombre `securefindings.csv` y la cabecera
 `Cache-Control: no-store`.
 
 La exportación admite hasta 1.000 filas. Si los filtros coinciden con más
@@ -579,6 +696,108 @@ límite en `errors.limit`:
 }
 ```
 
+#### Importación CSV
+
+`GET /api/v1/findings/import/template` descarga la plantilla UTF-8
+`findings-import-template.csv`, con esta cabecera:
+
+```text
+title,description,severity,assetId,dueAt
+```
+
+Envía el fichero mediante `multipart/form-data`, usando el campo `file`:
+
+```powershell
+curl.exe --request POST "http://localhost:8080/api/v1/findings/import" `
+  --header "Authorization: Bearer $env:TOKEN" `
+  --form "file=@hallazgos.csv;type=text/csv"
+```
+
+Ejemplo de CSV:
+
+```csv
+title,description,severity,assetId,dueAt
+"SQL Injection","Entrada, sin validar",HIGH,,2026-12-01T09:00:00Z
+```
+
+Las columnas deben aparecer en el orden indicado. `severity` acepta `LOW`,
+`MEDIUM`, `HIGH` o `CRITICAL`. `assetId` y `dueAt` son opcionales. La fecha
+límite debe tener formato ISO-8601. El activo indicado debe pertenecer a la
+organización actual y no estar archivado.
+
+Se aceptan campos entrecomillados, comas, comillas escapadas y saltos de línea
+en las descripciones. El fichero puede tener hasta 5 MiB y 1.000 filas.
+
+La importación es atómica: si hay errores, no se crea ningún hallazgo. La
+respuesta `422` informa de la fila, el campo y el motivo. Si todas las filas son
+válidas, devuelve `201` con los identificadores creados. Cada hallazgo genera
+el evento de auditoría `CREATED`.
+
+La plantilla de importación es distinta del CSV de exportación: no incluye IDs,
+estado ni fechas de auditoría.
+
+Antes de importar, puedes validar el fichero sin guardar datos usando
+`dryRun=true`:
+
+```powershell
+curl.exe --request POST "http://localhost:8080/api/v1/findings/import?dryRun=true" `
+  --header "Authorization: Bearer $env:TOKEN" `
+  --form "file=@hallazgos.csv;type=text/csv"
+
+Ejemplo de respuesta `201`:
+
+```json
+{
+  "importedCount": 1,
+  "findingIds": [
+    "55555555-5555-5555-5555-555555555555"
+  ],
+  "errors": []
+}
+```
+
+Ejemplo de respuesta `422`:
+
+```json
+{
+  "importedCount": 0,
+  "findingIds": [],
+  "errors": [
+    {
+      "rowNumber": 3,
+      "field": "severity",
+      "message": "La severidad debe ser uno de: LOW, MEDIUM, HIGH, CRITICAL"
+    }
+  ]
+}
+```
+
+Ejemplo de respuesta `200` en modo de validación:
+
+```json
+{
+  "importedCount": 0,
+  "validatedCount": 1,
+  "dryRun": true,
+  "findingIds": [],
+  "errors": []
+}
+```
+
+Ejemplo de respuesta `201` al importar:
+
+```json
+{
+  "importedCount": 1,
+  "validatedCount": 1,
+  "dryRun": false,
+  "findingIds": [
+    "66666666-6666-6666-6666-666666666666"
+  ],
+  "errors": []
+}
+```
+
 ### Organizaciones
 
 | Método | Endpoint | Descripción | Rol |
@@ -588,6 +807,8 @@ límite en `errors.limit`:
 | `GET` | `/api/v1/organizations/current` | Consulta la organización asociada al token | `ANALYST`, `ADMIN` |
 | `GET` | `/api/v1/organizations/current/audit/assets` | Consulta la auditoría de activos de la organización actual | `ANALYST`, `ADMIN` |
 | `GET` | `/api/v1/organizations/current/audit/assets/export` | Exporta la auditoría filtrada de activos a CSV | `ANALYST`, `ADMIN` |
+| `GET` | `/api/v1/organizations/current/audit` | Consulta la auditoría de hallazgos de la organización actual | `ANALYST`, `ADMIN` |
+| `GET` | `/api/v1/organizations/current/audit/export` | Exporta la auditoría de hallazgos filtrada a CSV | `ANALYST`, `ADMIN` |
 | `POST` | `/api/v1/organizations` | Crea una organización | `ADMIN` |
 | `PATCH` | `/api/v1/organizations/{id}` | Actualiza el nombre visible de una organización | `ADMIN` |
 | `PATCH` | `/api/v1/organizations/current` | Actualiza el nombre visible de la organización | `ADMIN` |

@@ -27,9 +27,12 @@ import org.springframework.web.bind.annotation.RestController;
 import com.securefindings.api.error.GlobalExceptionHandler.ApiErrorResponse;
 import com.securefindings.finding.application.FindingService;
 import com.securefindings.finding.domain.Finding;
+import com.securefindings.finding.domain.FindingOverdueSummary;
 import com.securefindings.finding.domain.FindingSeverity;
 import com.securefindings.finding.domain.FindingStatus;
 import com.securefindings.finding.domain.FindingSummary;
+import com.securefindings.finding.domain.FindingTrend;
+import com.securefindings.finding.domain.FindingTrendInterval;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -142,6 +145,27 @@ public class FindingController {
                 }
 
                 return FindingPageResponse.from(findingPage);
+        }
+
+        @GetMapping("/trends")
+        @Operation(summary = "Consultar tendencias de hallazgos", description = "Agrupa por severidad los hallazgos creados en cada periodo UTC")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "200", description = "Tendencia recuperada correctamente"),
+                        @ApiResponse(responseCode = "400", description = "El rango, intervalo o los parámetros no son válidos"),
+                        @ApiResponse(responseCode = "401", description = "Token ausente o inválido"),
+                        @ApiResponse(responseCode = "403", description = "El usuario no tiene permisos"),
+                        @ApiResponse(responseCode = "429", description = "Se ha superado el límite de peticiones")
+        })
+        public FindingTrend getTrends(
+                        @Parameter(description = "Fecha inicial inclusiva en ISO-8601", example = "2026-01-01T00:00:00Z", in = ParameterIn.QUERY) @RequestParam(name = "from") @DateTimeFormat(iso = ISO.DATE_TIME) Instant from,
+
+                        @Parameter(description = "Fecha final exclusiva en ISO-8601", example = "2026-02-01T00:00:00Z", in = ParameterIn.QUERY) @RequestParam(name = "to") @DateTimeFormat(iso = ISO.DATE_TIME) Instant to,
+
+                        @Parameter(description = "Intervalo de agrupación: DAY, WEEK o MONTH", example = "DAY", in = ParameterIn.QUERY) @RequestParam(name = "interval", defaultValue = "DAY") FindingTrendInterval interval,
+
+                        @Parameter(description = "Filtrar por identificador del activo", in = ParameterIn.QUERY) @RequestParam(name = "assetId", required = false) UUID assetId) {
+
+                return findingService.getTrend(from, to, interval, assetId);
         }
 
         @GetMapping("/summary")
@@ -267,7 +291,8 @@ public class FindingController {
                                 request.title(),
                                 request.description(),
                                 request.severity(),
-                                request.assetId());
+                                request.assetId(),
+                                request.dueAt());
         }
 
         @PatchMapping("/{id}/status")
@@ -349,7 +374,8 @@ public class FindingController {
                                 id,
                                 request.title(),
                                 request.description(),
-                                request.severity());
+                                request.severity(),
+                                request.dueAt());
         }
 
         @DeleteMapping("/{id}")
@@ -371,5 +397,35 @@ public class FindingController {
                         @Parameter(description = "Identificador del hallazgo", required = true) @PathVariable UUID id) {
 
                 findingService.deleteById(id);
+        }
+
+        @GetMapping("/overdue/summary")
+        @Operation(summary = "Consultar el resumen de hallazgos vencidos", description = "Devuelve los hallazgos vencidos de la organización actual agrupados por estado y severidad")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "200", description = "Resumen recuperado correctamente"),
+                        @ApiResponse(responseCode = "401", description = "Token ausente o inválido"),
+                        @ApiResponse(responseCode = "403", description = "El usuario no tiene permisos"),
+                        @ApiResponse(responseCode = "429", description = "Se ha superado el límite de peticiones")
+        })
+        public FindingOverdueSummary getOverdueSummary() {
+                return findingService.getOverdueSummary();
+        }
+
+        @GetMapping("/overdue")
+        @Operation(summary = "Consultar hallazgos vencidos", description = "Devuelve hallazgos vencidos de la organización actual que siguen abiertos o en curso")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "200", description = "Hallazgos vencidos recuperados"),
+                        @ApiResponse(responseCode = "400", description = "Los parámetros de paginación no son válidos"),
+                        @ApiResponse(responseCode = "401", description = "Token ausente o inválido"),
+                        @ApiResponse(responseCode = "403", description = "El usuario no tiene permisos"),
+                        @ApiResponse(responseCode = "429", description = "Se ha superado el límite de peticiones")
+        })
+        public FindingPageResponse findOverdue(
+                        @Parameter(description = "Número de página. Empieza en 0", example = "0", in = ParameterIn.QUERY) @RequestParam(name = "page", defaultValue = "0") @Min(0) int page,
+
+                        @Parameter(description = "Elementos por página, entre 1 y 100", example = "20", in = ParameterIn.QUERY) @RequestParam(name = "size", defaultValue = "20") @Min(1) @Max(100) int size) {
+
+                return FindingPageResponse.from(
+                                findingService.findOverduePage(page, size));
         }
 }
