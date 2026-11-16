@@ -52,6 +52,8 @@ en este documento y en `SECURITY.md`.
 - Fecha límite opcional para hallazgos, disponible en creación, actualización y exportación CSV.
 - Consulta paginada de hallazgos vencidos, limitada a estados abiertos y en curso y aislada por organización.
 - Resumen de hallazgos vencidos por estado y severidad, calculado para la organización actual.
+- Importación masiva de hallazgos desde CSV UTF-8, validada por fila, limitada
+  a 1.000 filas y procesada en una única transacción con auditoría de creación.
 
 ## Criterios de aceptación del MVP
 

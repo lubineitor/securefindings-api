@@ -475,6 +475,8 @@ Las pruebas públicas devuelven únicamente el estado, sin mostrar componentes n
 | `GET` | `/api/v1/findings/export` | Exporta hallazgos filtrados a CSV | `ANALYST`, `ADMIN` |
 | `GET` | `/api/v1/findings/overdue` | Lista hallazgos vencidos abiertos o en curso | `ANALYST`, `ADMIN` |
 | `GET` | `/api/v1/findings/overdue/summary` | Resume hallazgos vencidos por estado y severidad | `ANALYST`, `ADMIN` |
+| `GET` | `/api/v1/findings/import/template` | Descarga la plantilla CSV de importación | `ANALYST`, `ADMIN` |
+| `POST` | `/api/v1/findings/import` | Importa hallazgos desde un CSV validado por fila | `ANALYST`, `ADMIN` |
 | `POST` | `/api/v1/findings` | Crea un hallazgo; admite la fecha límite opcional `dueAt` | `ANALYST`, `ADMIN` |
 | `PUT` | `/api/v1/findings/{id}` | Actualiza los datos y la fecha límite del hallazgo | `ANALYST`, `ADMIN` |
 | `PATCH` | `/api/v1/findings/{id}/status` | Actualiza el estado | `ANALYST`, `ADMIN` |
@@ -635,6 +637,74 @@ límite en `errors.limit`:
   "errors": {
     "limit": "1000"
   }
+}
+```
+
+#### Importación CSV
+
+`GET /api/v1/findings/import/template` descarga la plantilla UTF-8
+`findings-import-template.csv`, con esta cabecera:
+
+```text
+title,description,severity,assetId,dueAt
+```
+
+Envía el fichero mediante `multipart/form-data`, usando el campo `file`:
+
+```powershell
+curl.exe --request POST "http://localhost:8080/api/v1/findings/import" `
+  --header "Authorization: Bearer $env:TOKEN" `
+  --form "file=@hallazgos.csv;type=text/csv"
+```
+
+Ejemplo de CSV:
+
+```csv
+title,description,severity,assetId,dueAt
+"SQL Injection","Entrada, sin validar",HIGH,,2026-12-01T09:00:00Z
+```
+
+Las columnas deben aparecer en el orden indicado. `severity` acepta `LOW`,
+`MEDIUM`, `HIGH` o `CRITICAL`. `assetId` y `dueAt` son opcionales. La fecha
+límite debe tener formato ISO-8601. El activo indicado debe pertenecer a la
+organización actual y no estar archivado.
+
+Se aceptan campos entrecomillados, comas, comillas escapadas y saltos de línea
+en las descripciones. El fichero puede tener hasta 5 MiB y 1.000 filas.
+
+La importación es atómica: si hay errores, no se crea ningún hallazgo. La
+respuesta `422` informa de la fila, el campo y el motivo. Si todas las filas son
+válidas, devuelve `201` con los identificadores creados. Cada hallazgo genera
+el evento de auditoría `CREATED`.
+
+La plantilla de importación es distinta del CSV de exportación: no incluye IDs,
+estado ni fechas de auditoría.
+
+Ejemplo de respuesta `201`:
+
+```json
+{
+  "importedCount": 1,
+  "findingIds": [
+    "55555555-5555-5555-5555-555555555555"
+  ],
+  "errors": []
+}
+```
+
+Ejemplo de respuesta `422`:
+
+```json
+{
+  "importedCount": 0,
+  "findingIds": [],
+  "errors": [
+    {
+      "rowNumber": 3,
+      "field": "severity",
+      "message": "La severidad debe ser uno de: LOW, MEDIUM, HIGH, CRITICAL"
+    }
+  ]
 }
 ```
 
