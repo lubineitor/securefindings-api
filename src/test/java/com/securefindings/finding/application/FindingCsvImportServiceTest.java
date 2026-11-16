@@ -91,11 +91,14 @@ class FindingCsvImportServiceTest {
                 FindingCsvImportResponse response = importService.importCsv(
                                 csv("""
                                                 "SQL Injection","Entrada sin validar",HIGH,%s,%s
-                                                """.formatted(assetId, dueAt)));
+                                                """.formatted(assetId, dueAt)),
+                                false);
 
                 assertEquals(1, response.importedCount());
+                assertEquals(1, response.validatedCount());
                 assertEquals(1, response.findingIds().size());
                 assertTrue(response.errors().isEmpty());
+                assertTrue(!response.dryRun());
 
                 verify(findingService).create(
                                 "SQL Injection",
@@ -106,11 +109,45 @@ class FindingCsvImportServiceTest {
         }
 
         @Test
-        void noDeberiaCrearHallazgosSiHayErroresDeValidacion() {
+        void deberiaValidarElCsvSinCrearHallazgosCuandoDryRunEstaActivo() {
+                UUID assetId = UUID.fromString(
+                                "33333333-3333-3333-3333-333333333333");
+
+                AssetEntity activeAsset = mock(AssetEntity.class);
+                when(activeAsset.getStatus()).thenReturn(AssetStatus.ACTIVE);
+
+                when(organizationContext.currentOrganizationId())
+                                .thenReturn(ORGANIZATION_ID);
+                when(assetRepository.findByIdAndOrganizationId(
+                                assetId,
+                                ORGANIZATION_ID))
+                                .thenReturn(Optional.of(activeAsset));
+
                 FindingCsvImportResponse response = importService.importCsv(
-                                csv(",Descripción,UNKNOWN,no-es-uuid,no-es-fecha"));
+                                csv("Hallazgo,Descripción,HIGH," + assetId + ","),
+                                true);
 
                 assertEquals(0, response.importedCount());
+                assertEquals(1, response.validatedCount());
+                assertTrue(response.dryRun());
+                assertTrue(response.findingIds().isEmpty());
+                assertTrue(response.errors().isEmpty());
+
+                verify(assetRepository).findByIdAndOrganizationId(
+                                assetId,
+                                ORGANIZATION_ID);
+                verifyNoInteractions(findingService);
+        }
+
+        @Test
+        void noDeberiaCrearHallazgosSiHayErroresDeValidacion() {
+                FindingCsvImportResponse response = importService.importCsv(
+                                csv(",Descripción,UNKNOWN,no-es-uuid,no-es-fecha"),
+                                false);
+
+                assertEquals(0, response.importedCount());
+                assertEquals(0, response.validatedCount());
+                assertTrue(!response.dryRun());
                 assertTrue(response.findingIds().isEmpty());
                 assertEquals(4, response.errors().size());
 
@@ -132,7 +169,7 @@ class FindingCsvImportServiceTest {
         @Test
         void noDeberiaImportarSiElActivoNoPerteneceALaOrganizacion() {
                 UUID assetId = UUID.fromString(
-                                "33333333-3333-3333-3333-333333333333");
+                                "44444444-4444-4444-4444-444444444444");
 
                 when(organizationContext.currentOrganizationId())
                                 .thenReturn(ORGANIZATION_ID);
@@ -142,9 +179,11 @@ class FindingCsvImportServiceTest {
                                 .thenReturn(Optional.empty());
 
                 FindingCsvImportResponse response = importService.importCsv(
-                                csv("Hallazgo,Descripción,HIGH," + assetId + ","));
+                                csv("Hallazgo,Descripción,HIGH," + assetId + ","),
+                                false);
 
                 assertEquals(0, response.importedCount());
+                assertEquals(0, response.validatedCount());
                 assertTrue(response.findingIds().isEmpty());
                 assertEquals(1, response.errors().size());
                 assertEquals(2, response.errors().get(0).rowNumber());
@@ -156,7 +195,7 @@ class FindingCsvImportServiceTest {
         @Test
         void noDeberiaImportarSiElActivoEstaArchivado() {
                 UUID assetId = UUID.fromString(
-                                "44444444-4444-4444-4444-444444444444");
+                                "55555555-5555-5555-5555-555555555555");
 
                 AssetEntity archivedAsset = mock(AssetEntity.class);
                 when(archivedAsset.getStatus()).thenReturn(AssetStatus.ARCHIVED);
@@ -169,9 +208,11 @@ class FindingCsvImportServiceTest {
                                 .thenReturn(Optional.of(archivedAsset));
 
                 FindingCsvImportResponse response = importService.importCsv(
-                                csv("Hallazgo,Descripción,HIGH," + assetId + ","));
+                                csv("Hallazgo,Descripción,HIGH," + assetId + ","),
+                                false);
 
                 assertEquals(0, response.importedCount());
+                assertEquals(0, response.validatedCount());
                 assertEquals(1, response.errors().size());
                 assertEquals("assetId", response.errors().get(0).field());
 
