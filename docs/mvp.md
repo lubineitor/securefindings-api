@@ -53,7 +53,7 @@ en este documento y en `SECURITY.md`.
 - Consulta paginada de hallazgos vencidos, limitada a estados abiertos y en curso y aislada por organización.
 - Resumen de hallazgos vencidos por estado y severidad, calculado para la organización actual.
 - Importación masiva de hallazgos desde CSV UTF-8, validada por fila, limitada
-  a 1.000 filas y procesada en una única transacción con auditoría de creación.
+  a 1.000 filas, con validación previa sin persistencia y guardado transaccional.
 
 ## Criterios de aceptación del MVP
 

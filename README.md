@@ -680,6 +680,14 @@ el evento de auditoría `CREATED`.
 La plantilla de importación es distinta del CSV de exportación: no incluye IDs,
 estado ni fechas de auditoría.
 
+Antes de importar, puedes validar el fichero sin guardar datos usando
+`dryRun=true`:
+
+```powershell
+curl.exe --request POST "http://localhost:8080/api/v1/findings/import?dryRun=true" `
+  --header "Authorization: Bearer $env:TOKEN" `
+  --form "file=@hallazgos.csv;type=text/csv"
+
 Ejemplo de respuesta `201`:
 
 ```json
@@ -705,6 +713,32 @@ Ejemplo de respuesta `422`:
       "message": "La severidad debe ser uno de: LOW, MEDIUM, HIGH, CRITICAL"
     }
   ]
+}
+```
+
+Ejemplo de respuesta `200` en modo de validación:
+
+```json
+{
+  "importedCount": 0,
+  "validatedCount": 1,
+  "dryRun": true,
+  "findingIds": [],
+  "errors": []
+}
+```
+
+Ejemplo de respuesta `201` al importar:
+
+```json
+{
+  "importedCount": 1,
+  "validatedCount": 1,
+  "dryRun": false,
+  "findingIds": [
+    "66666666-6666-6666-6666-666666666666"
+  ],
+  "errors": []
 }
 ```
 
