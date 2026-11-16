@@ -76,6 +76,7 @@
             "protocol": "openid-connect",
             "publicClient": false,
             "clientAuthenticatorType": "client-secret",
+            "secret": "${PROMETHEUS_CLIENT_SECRET}",
             "standardFlowEnabled": false,
             "implicitFlowEnabled": false,
             "directAccessGrantsEnabled": false,
@@ -99,6 +100,16 @@
                         "lightweight.claim": "false"
                     }
                 }
+            ]
+        }
+    ],
+    "users": [
+        {
+            "username": "service-account-securefindings-prometheus",
+            "enabled": true,
+            "serviceAccountClientId": "securefindings-prometheus",
+            "realmRoles": [
+                "METRICS_READER"
             ]
         }
     ]
