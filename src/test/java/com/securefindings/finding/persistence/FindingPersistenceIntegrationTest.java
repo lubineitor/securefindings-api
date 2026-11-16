@@ -39,6 +39,8 @@ import com.securefindings.finding.domain.FindingOverdueSummary;
 import com.securefindings.finding.domain.FindingSeverity;
 import com.securefindings.finding.domain.FindingStatus;
 import com.securefindings.finding.domain.FindingSummary;
+import com.securefindings.finding.domain.FindingTrend;
+import com.securefindings.finding.domain.FindingTrendInterval;
 import com.securefindings.security.RequestCorrelationFilter;
 
 @Testcontainers
@@ -874,5 +876,81 @@ class FindingPersistenceIntegrationTest {
                 assertEquals(1L, summary.bySeverity().get(FindingSeverity.MEDIUM));
                 assertEquals(0L, summary.bySeverity().get(FindingSeverity.CRITICAL));
                 assertEquals(0L, summary.bySeverity().get(FindingSeverity.LOW));
+        }
+
+        private void saveTrendFinding(
+                        String title,
+                        Instant createdAt,
+                        FindingSeverity severity) {
+
+                Finding finding = new Finding(
+                                UUID.randomUUID(),
+                                title,
+                                "Hallazgo de prueba para la tendencia temporal",
+                                severity,
+                                FindingStatus.OPEN,
+                                createdAt,
+                                createdAt);
+
+                findingRepository.saveAndFlush(
+                                new FindingEntity(finding, ORGANIZATION_ID));
+        }
+
+        @Test
+        void deberiaConsultarLaTendenciaEnPostgreSQLYCompletarDiasVacios() {
+                Instant from = Instant.parse("2026-01-01T12:00:00Z");
+                Instant to = Instant.parse("2026-01-04T00:00:00Z");
+
+                saveTrendFinding(
+                                "Antes del inicio",
+                                Instant.parse("2026-01-01T11:59:59Z"),
+                                FindingSeverity.CRITICAL);
+                saveTrendFinding(
+                                "Hallazgo alto",
+                                from,
+                                FindingSeverity.HIGH);
+                saveTrendFinding(
+                                "Hallazgo bajo",
+                                Instant.parse("2026-01-01T15:00:00Z"),
+                                FindingSeverity.LOW);
+                saveTrendFinding(
+                                "Hallazgo crítico",
+                                Instant.parse("2026-01-03T23:59:59Z"),
+                                FindingSeverity.CRITICAL);
+                saveTrendFinding(
+                                "En el límite final exclusivo",
+                                to,
+                                FindingSeverity.MEDIUM);
+
+                FindingTrend trend = findingService.getTrend(
+                                from,
+                                to,
+                                FindingTrendInterval.DAY,
+                                null);
+
+                assertEquals(3, trend.points().size());
+
+                long total = 0L;
+
+                for (FindingTrend.Point point : trend.points()) {
+                        total += point.total();
+                }
+
+                assertEquals(3L, total);
+
+                assertEquals(2L, trend.points().get(0).total());
+                assertEquals(
+                                1L,
+                                trend.points().get(0).bySeverity().get(FindingSeverity.HIGH));
+                assertEquals(
+                                1L,
+                                trend.points().get(0).bySeverity().get(FindingSeverity.LOW));
+
+                assertEquals(0L, trend.points().get(1).total());
+
+                assertEquals(1L, trend.points().get(2).total());
+                assertEquals(
+                                1L,
+                                trend.points().get(2).bySeverity().get(FindingSeverity.CRITICAL));
         }
 }
