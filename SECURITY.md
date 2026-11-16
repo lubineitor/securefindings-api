@@ -37,6 +37,7 @@ Esta política cubre:
 - Workflows de GitHub Actions.
 - Dependencias del proyecto.
 - Exportación CSV de auditoría global.
+- Scraping OAuth2 de métricas de Actuator.
 
 ## Cómo informar de una vulnerabilidad
 
@@ -99,6 +100,7 @@ Los principales riesgos considerados son:
 | Dependencias | Vulnerabilidades conocidas | Revisión automatizada y CodeQL |
 | Exportaciones CSV | Inyección de fórmulas al abrir el archivo en una hoja de cálculo | Escape de campos, neutralización de prefijos de fórmula y límite de filas |
 | Activos | Cambios sin trazabilidad | Auditoría persistida por organización con actor, acción, fecha y `requestId`; se conserva tras eliminar el activo |
+| Métricas de Actuator | Exposición de información operacional | `/actuator/prometheus` exige `ADMIN` o el service account limitado a `METRICS_READER`; Prometheus solo se publica en localhost en el entorno local |
 
 ## Autenticación
 

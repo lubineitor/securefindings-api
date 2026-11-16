@@ -391,17 +391,57 @@ Ejemplo de respuesta:
 
 #### Métricas Prometheus
 
-Las métricas se consultan en `GET /actuator/prometheus`. El endpoint requiere un JWT
-con el rol `ADMIN`.
+Las métricas están disponibles en `GET /actuator/prometheus`. El endpoint
+requiere un JWT válido del issuer configurado, con la audiencia
+`securefindings-api` y uno de estos roles:
 
-El rate limiter publica el contador `securefindings.rate_limit.requests`, con la
-etiqueta `outcome`:
+- `ADMIN`
+- `METRICS_READER`
+
+Este endpoint no requiere el claim `organization_id`. El rol
+`METRICS_READER` permite consultar métricas, pero no concede acceso a los
+endpoints de negocio.
+
+El rate limiter publica el contador
+`securefindings_rate_limit_requests_total`, con la etiqueta `outcome`:
 
 - `allowed`: petición permitida.
 - `rate_limited`: petición rechazada por superar el límite.
-- `unavailable`: petición rechazada porque el almacenamiento del rate limiter no estaba disponible.
+- `unavailable`: petición rechazada porque Redis no estaba disponible.
 
-Las etiquetas no contienen usuarios, organizaciones ni direcciones IP.
+Las métricas no incluyen nombres de usuario, organizaciones ni direcciones IP.
+
+##### Monitorización local
+
+El proyecto incluye Prometheus, Grafana y Alertmanager mediante el archivo
+`docker-compose.observability.yml` y el perfil `observability`.
+
+Antes de iniciar los servicios:
+
+1. Configura `GRAFANA_ADMIN_PASSWORD` en el archivo local `.env`.
+2. En Keycloak, asigna el rol `METRICS_READER` a la cuenta de servicio del
+   cliente `securefindings-prometheus`.
+3. Guarda el secreto del cliente en
+   `.secrets/prometheus-client-secret.txt`. Este archivo contiene una credencial
+   y no debe añadirse a Git.
+4. Inicia la API en `http://localhost:8080`.
+
+Inicia el stack de monitorización desde PowerShell:
+
+`docker compose -f docker-compose.yml -f docker-compose.observability.yml --profile observability up -d prometheus grafana alertmanager mailpit`
+
+Servicios locales:
+
+| Servicio | URL |
+|---|---|
+| Prometheus | `http://localhost:9090` |
+| Grafana | `http://localhost:3000` |
+| Alertmanager | `http://localhost:9093` |
+| Mailpit | `http://localhost:8025` |
+
+Prometheus consulta `/actuator/prometheus` usando el flujo OAuth2
+`client_credentials` de Keycloak. Alertmanager envía las notificaciones de
+prueba a Mailpit, que permite revisarlas en su interfaz web.
 
 ### Trazabilidad de peticiones
 
