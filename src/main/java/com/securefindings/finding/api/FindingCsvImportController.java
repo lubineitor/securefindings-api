@@ -10,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
@@ -62,8 +63,9 @@ public class FindingCsvImportController {
         }
 
         @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
-        @Operation(summary = "Importar hallazgos desde CSV", description = "Valida todas las filas y crea los hallazgos en una única transacción")
+        @Operation(summary = "Importar hallazgos desde CSV", description = "Permite validar el fichero con dryRun=true antes de crear los hallazgos")
         @ApiResponses({
+                        @ApiResponse(responseCode = "200", description = "Validación previa completada sin crear hallazgos", content = @Content(mediaType = "application/json", schema = @Schema(implementation = FindingCsvImportResponse.class))),
                         @ApiResponse(responseCode = "201", description = "Hallazgos importados", content = @Content(mediaType = "application/json", schema = @Schema(implementation = FindingCsvImportResponse.class))),
                         @ApiResponse(responseCode = "422", description = "El fichero contiene filas no válidas", content = @Content(mediaType = "application/json", schema = @Schema(implementation = FindingCsvImportResponse.class))),
                         @ApiResponse(responseCode = "400", description = "Petición multipart no válida"),
@@ -72,7 +74,9 @@ public class FindingCsvImportController {
                         @ApiResponse(responseCode = "413", description = "El fichero supera los 5 MiB")
         })
         public ResponseEntity<FindingCsvImportResponse> importCsv(
-                        @Parameter(description = "Fichero CSV UTF-8 de hasta 5 MiB y 1.000 filas", required = true) @RequestPart("file") MultipartFile file) {
+                        @Parameter(description = "Fichero CSV UTF-8 de hasta 5 MiB y 1.000 filas", required = true) @RequestPart("file") MultipartFile file,
+
+                        @Parameter(description = "Valida el fichero sin guardar hallazgos") @RequestParam(name = "dryRun", defaultValue = "false") boolean dryRun) {
 
                 final byte[] csvBytes;
 
@@ -84,12 +88,18 @@ public class FindingCsvImportController {
                                         exception);
                 }
 
-                FindingCsvImportResponse response = importService.importCsv(csvBytes);
+                FindingCsvImportResponse response = importService.importCsv(
+                                csvBytes,
+                                dryRun);
 
                 if (!response.errors().isEmpty()) {
                         return ResponseEntity
                                         .status(HttpStatus.UNPROCESSABLE_CONTENT)
                                         .body(response);
+                }
+
+                if (response.dryRun()) {
+                        return ResponseEntity.ok(response);
                 }
 
                 return ResponseEntity

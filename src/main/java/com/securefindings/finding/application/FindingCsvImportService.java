@@ -41,12 +41,17 @@ public class FindingCsvImportService {
     }
 
     @Transactional
-    public FindingCsvImportResponse importCsv(byte[] csvBytes) {
+    public FindingCsvImportResponse importCsv(
+            byte[] csvBytes,
+            boolean dryRun) {
+
         FindingCsvParser.ParseResult parseResult = parser.parse(csvBytes);
 
         if (!parseResult.errors().isEmpty()) {
             return new FindingCsvImportResponse(
                     0,
+                    0,
+                    dryRun,
                     List.of(),
                     parseResult.errors());
         }
@@ -85,11 +90,24 @@ public class FindingCsvImportService {
         if (!errors.isEmpty()) {
             return new FindingCsvImportResponse(
                     0,
+                    0,
+                    dryRun,
                     List.of(),
                     errors);
         }
 
-        List<UUID> findingIds = new ArrayList<>(parseResult.rows().size());
+        int validatedCount = parseResult.rows().size();
+
+        if (dryRun) {
+            return new FindingCsvImportResponse(
+                    0,
+                    validatedCount,
+                    true,
+                    List.of(),
+                    List.of());
+        }
+
+        List<UUID> findingIds = new ArrayList<>(validatedCount);
 
         for (ParsedRow row : parseResult.rows()) {
             Finding finding = findingService.create(
@@ -104,6 +122,8 @@ public class FindingCsvImportService {
 
         return new FindingCsvImportResponse(
                 findingIds.size(),
+                validatedCount,
+                false,
                 findingIds,
                 List.of());
     }

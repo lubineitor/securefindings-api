@@ -5,6 +5,8 @@ import java.util.UUID;
 
 public record FindingCsvImportResponse(
         int importedCount,
+        int validatedCount,
+        boolean dryRun,
         List<UUID> findingIds,
         List<RowError> errors) {
 
