@@ -19,6 +19,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
   keycloak:
     image: quay.io/keycloak/keycloak:26.7.3
     container_name: securefindings-keycloak
@@ -28,11 +29,13 @@ services:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USERNAME}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
       KC_HOSTNAME: http://localhost:8081
+      PROMETHEUS_CLIENT_SECRET: ${PROMETHEUS_CLIENT_SECRET:?Define PROMETHEUS_CLIENT_SECRET en .env}
     ports:
       - "127.0.0.1:8081:8080"
     volumes:
-      - securefindings-keycloak-data:/opt/keycloak/data
+      - securefindings_keycloak_data:/opt/keycloak/data
       - ./keycloak:/opt/keycloak/data/import:ro
+
   redis:
     image: redis:7-alpine
     container_name: securefindings-redis
@@ -51,6 +54,48 @@ services:
       timeout: 5s
       retries: 5
 
+  prometheus:
+    profiles: [ "monitoring" ]
+    image: prom/prometheus:v3.16.0
+    container_name: securefindings-prometheus
+    restart: unless-stopped
+    depends_on:
+      keycloak:
+        condition: service_started
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/rules:/etc/prometheus/rules:ro
+      - securefindings_prometheus_data:/prometheus
+    secrets:
+      - prometheus_client_secret
+
+  grafana:
+    profiles: [ "monitoring" ]
+    image: grafana/grafana:13.3.1
+    container_name: securefindings-grafana
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USERNAME:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Define GRAFANA_ADMIN_PASSWORD en .env}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - securefindings_grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+
 volumes:
   securefindings_postgres_data:
-  securefindings-keycloak-data:
+  securefindings_keycloak_data:
+  securefindings_prometheus_data:
+  securefindings_grafana_data:
