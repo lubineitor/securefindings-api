@@ -139,7 +139,8 @@ public class OrganizationService {
                                 organization.id(),
                                 Objects.requireNonNull(name).trim(),
                                 organization.slug(),
-                                organization.createdAt());
+                                organization.createdAt(),
+                                organization.status());
 
                 OrganizationEntity savedEntity = organizationRepository.save(
                                 new OrganizationEntity(updatedOrganization));
