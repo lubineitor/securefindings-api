@@ -4,9 +4,12 @@ import java.time.Instant;
 import java.util.UUID;
 
 import com.securefindings.organization.domain.Organization;
+import com.securefindings.organization.domain.OrganizationStatus;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
@@ -27,6 +30,10 @@ public class OrganizationEntity {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 20)
+    private OrganizationStatus status;
+
     protected OrganizationEntity() {
     }
 
@@ -35,14 +42,11 @@ public class OrganizationEntity {
         this.name = organization.name();
         this.slug = organization.slug();
         this.createdAt = organization.createdAt();
+        this.status = organization.status();
     }
 
     public Organization toDomain() {
-        return new Organization(
-                id,
-                name,
-                slug,
-                createdAt);
+        return new Organization(id, name, slug, createdAt, status);
     }
 
     public UUID getId() {
@@ -59,5 +63,9 @@ public class OrganizationEntity {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public OrganizationStatus getStatus() {
+        return status;
     }
 }
