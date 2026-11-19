@@ -812,6 +812,7 @@ Ejemplo de respuesta `201` al importar:
 | `POST` | `/api/v1/organizations` | Crea una organización | `ADMIN` |
 | `PATCH` | `/api/v1/organizations/{id}` | Actualiza el nombre visible de una organización | `ADMIN` |
 | `PATCH` | `/api/v1/organizations/current` | Actualiza el nombre visible de la organización | `ADMIN` |
+| `PATCH` | `/api/v1/organizations/{id}/status` | Suspende o reactiva una organización | `ADMIN` |
 | `DELETE` | `/api/v1/organizations/{id}` | Elimina una organización vacía | `ADMIN` |
 
 #### Listar organizaciones
@@ -877,6 +878,19 @@ El cuerpo de la petición PATCH contiene el nombre, con un máximo de 150 caract
 ```json
 {
   "name": "Secure Findings Europe"
+}
+```
+
+#### Suspender o reactivar una organización
+
+`PATCH /api/v1/organizations/{id}/status` requiere el rol `ADMIN`. Suspender una
+organización bloquea las peticiones que usan su claim `organization_id`. Sus
+datos se conservan. Un administrador puede reactivarla desde la administración
+global.
+
+```json
+{
+  "status": "SUSPENDED"
 }
 ```
 
