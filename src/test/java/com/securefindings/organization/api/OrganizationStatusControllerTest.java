@@ -34,83 +34,114 @@ import com.securefindings.security.SecurityConfig;
 @WithMockUser(username = "analista", roles = "ANALYST")
 class OrganizationStatusControllerTest {
 
-    private static final UUID ORGANIZATION_ID = UUID.fromString(
-            "00000000-0000-0000-0000-000000000001");
+        private static final UUID ORGANIZATION_ID = UUID.fromString(
+                        "00000000-0000-0000-0000-000000000001");
 
-    @Autowired
-    private WebApplicationContext context;
+        @Autowired
+        private WebApplicationContext context;
 
-    @MockitoBean
-    private OrganizationLifecycleService lifecycleService;
+        @MockitoBean
+        private OrganizationLifecycleService lifecycleService;
 
-    private MockMvc mockMvc;
+        private MockMvc mockMvc;
 
-    @BeforeEach
-    void configurarMockMvc() {
-        mockMvc = MockMvcBuilders
-                .webAppContextSetup(context)
-                .apply(springSecurity())
-                .build();
-    }
+        @BeforeEach
+        void configurarMockMvc() {
+                mockMvc = MockMvcBuilders
+                                .webAppContextSetup(context)
+                                .apply(springSecurity())
+                                .build();
+        }
 
-    @Test
-    @WithMockUser(username = "administrador", roles = "ADMIN")
-    void adminPuedeSuspenderUnaOrganizacion() throws Exception {
-        Organization suspended = new Organization(
-                ORGANIZATION_ID,
-                "Secure Findings",
-                "secure-findings",
-                Instant.parse("2026-10-01T10:00:00Z"),
-                OrganizationStatus.SUSPENDED);
+        @Test
+        @WithMockUser(username = "administrador", roles = "ADMIN")
+        void adminPuedeSuspenderUnaOrganizacion() throws Exception {
+                Organization suspended = new Organization(
+                                ORGANIZATION_ID,
+                                "Secure Findings",
+                                "secure-findings",
+                                Instant.parse("2026-10-01T10:00:00Z"),
+                                OrganizationStatus.SUSPENDED);
 
-        when(lifecycleService.changeStatus(
-                ORGANIZATION_ID,
-                OrganizationStatus.SUSPENDED))
-                .thenReturn(suspended);
+                when(lifecycleService.changeStatus(
+                                ORGANIZATION_ID,
+                                OrganizationStatus.SUSPENDED))
+                                .thenReturn(suspended);
 
-        mockMvc.perform(patch(
-                "/api/v1/organizations/{organizationId}/status",
-                ORGANIZATION_ID)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""
-                        {"status":"SUSPENDED"}
-                        """))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(ORGANIZATION_ID.toString()))
-                .andExpect(jsonPath("$.status").value("SUSPENDED"));
+                mockMvc.perform(patch(
+                                "/api/v1/organizations/{organizationId}/status",
+                                ORGANIZATION_ID)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                                {"status":"SUSPENDED"}
+                                                """))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.id").value(ORGANIZATION_ID.toString()))
+                                .andExpect(jsonPath("$.status").value("SUSPENDED"));
 
-        verify(lifecycleService).changeStatus(
-                ORGANIZATION_ID,
-                OrganizationStatus.SUSPENDED);
-    }
+                verify(lifecycleService).changeStatus(
+                                ORGANIZATION_ID,
+                                OrganizationStatus.SUSPENDED);
+        }
 
-    @Test
-    void analystNoPuedeCambiarElEstadoDeUnaOrganizacion() throws Exception {
-        mockMvc.perform(patch(
-                "/api/v1/organizations/{organizationId}/status",
-                ORGANIZATION_ID)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""
-                        {"status":"SUSPENDED"}
-                        """))
-                .andExpect(status().isForbidden());
+        @Test
+        @WithMockUser(username = "administrador", roles = "ADMIN")
+        void adminPuedeReactivarUnaOrganizacionSuspendida() throws Exception {
+                Organization active = new Organization(
+                                ORGANIZATION_ID,
+                                "Secure Findings",
+                                "secure-findings",
+                                Instant.parse("2026-10-01T10:00:00Z"),
+                                OrganizationStatus.ACTIVE);
 
-        verifyNoInteractions(lifecycleService);
-    }
+                when(lifecycleService.changeStatus(
+                                ORGANIZATION_ID,
+                                OrganizationStatus.ACTIVE))
+                                .thenReturn(active);
 
-    @Test
-    @WithMockUser(username = "administrador", roles = "ADMIN")
-    void deberiaValidarQueElEstadoEsteInformado() throws Exception {
-        mockMvc.perform(patch(
-                "/api/v1/organizations/{organizationId}/status",
-                ORGANIZATION_ID)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""
-                        {"status":null}
-                        """))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+                mockMvc.perform(patch(
+                                "/api/v1/organizations/{organizationId}/status",
+                                ORGANIZATION_ID)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                                {"status":"ACTIVE"}
+                                                """))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.id").value(ORGANIZATION_ID.toString()))
+                                .andExpect(jsonPath("$.status").value("ACTIVE"));
 
-        verifyNoInteractions(lifecycleService);
-    }
+                verify(lifecycleService).changeStatus(
+                                ORGANIZATION_ID,
+                                OrganizationStatus.ACTIVE);
+        }
+
+        @Test
+        void analystNoPuedeCambiarElEstadoDeUnaOrganizacion() throws Exception {
+                mockMvc.perform(patch(
+                                "/api/v1/organizations/{organizationId}/status",
+                                ORGANIZATION_ID)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                                {"status":"SUSPENDED"}
+                                                """))
+                                .andExpect(status().isForbidden());
+
+                verifyNoInteractions(lifecycleService);
+        }
+
+        @Test
+        @WithMockUser(username = "administrador", roles = "ADMIN")
+        void deberiaValidarQueElEstadoEsteInformado() throws Exception {
+                mockMvc.perform(patch(
+                                "/api/v1/organizations/{organizationId}/status",
+                                ORGANIZATION_ID)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                                {"status":null}
+                                                """))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+
+                verifyNoInteractions(lifecycleService);
+        }
 }
