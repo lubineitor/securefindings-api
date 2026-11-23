@@ -201,4 +201,25 @@ class OrganizationStatusControllerTest {
 
                 verifyNoInteractions(lifecycleService);
         }
+
+        @Test
+        @WithMockUser(username = "administrador", roles = "ADMIN")
+        void deberiaRechazarCincoEmojisComoMotivoDemasiadoCorto() throws Exception {
+                mockMvc.perform(patch(
+                                "/api/v1/organizations/{organizationId}/status",
+                                ORGANIZATION_ID)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                                {
+                                                  "status": "SUSPENDED",
+                                                  "reason": "😀😀😀😀😀"
+                                                }
+                                                """))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                                .andExpect(jsonPath("$.errors.reason")
+                                                .value("El motivo debe tener entre 10 y 500 caracteres"));
+
+                verifyNoInteractions(lifecycleService);
+        }
 }

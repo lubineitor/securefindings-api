@@ -193,4 +193,16 @@ class OrganizationLifecycleServiceTest {
                                                 "n/a",
                                                 List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
         }
+
+        @Test
+        void deberiaRechazarCincoEmojisComoMotivoDemasiadoCorto() {
+                assertThrows(
+                                IllegalArgumentException.class,
+                                () -> lifecycleService.changeStatus(
+                                                ORGANIZATION_ID,
+                                                OrganizationStatus.SUSPENDED,
+                                                "😀".repeat(5)));
+
+                verifyNoInteractions(organizationRepository, auditRepository);
+        }
 }
