@@ -303,10 +303,10 @@ El endpoint global `/actuator/health` requiere autenticación. Las demás rutas 
 
 ### Métricas de Actuator
 
-`/actuator/prometheus` requiere autenticación JWT y el rol `ADMIN`. Solo se exponen
-los endpoints `health` y `prometheus`. Las métricas del rate limiter utilizan
-etiquetas de valores limitados y no incorporan nombres de usuario, organizaciones
-ni huellas de clientes.
+`/actuator/prometheus` requiere autenticación JWT y uno de los roles `ADMIN` o
+`METRICS_READER`. Solo se exponen los endpoints `health` y `prometheus`. Las
+métricas del rate limiter utilizan etiquetas de valores limitados y no incorporan
+nombres de usuario, organizaciones ni huellas de clientes.
 
 ### Limitación distribuida de peticiones
 
@@ -707,7 +707,7 @@ No se permite que el cliente proporcione directamente:
 
 Esta validación evita utilizar el parámetro de ordenación como vector para manipular consultas o acceder a propiedades internas de persistencia.
 
-## Filtros del historial de auditoría
+## Filtros de auditoría de hallazgos
 
 El historial de auditoría permite filtrar por:
 
@@ -758,6 +758,11 @@ Una acción inválida, un `requestId` con formato incorrecto o un `actor` que su
 ```http
 400 Bad Request
 ```
+
+Los parámetros `occurredFrom` y `occurredTo` filtran por fecha y hora en formato
+ISO-8601. Ambos límites son inclusivos. Si se envían los dos, `occurredFrom` debe
+ser anterior o igual a `occurredTo`; de lo contrario, la API responde
+`400 VALIDATION_ERROR`.
 
 ## Protección frente a inyección SQL
 
@@ -935,6 +940,12 @@ Las migraciones actuales incluyen cambios relacionados con:
 - Persistencia del identificador de petición en auditoría mediante `V6__registrar_request_id_en_auditoria.sql`.
 - Relación de organización en activos.
 - Clave externa compuesta para impedir que un hallazgo se asocie a un activo de otra organización.
+- Fecha límite opcional para hallazgos mediante
+  `V11__agregar_fecha_limite_a_hallazgos.sql`.
+- Estado de las organizaciones mediante
+  `V12__agregar_estado_a_organizaciones.sql`.
+- Auditoría de cambios de estado de organizaciones mediante
+  `V13__registrar_auditoria_de_estado_de_organizaciones.sql`.
 
 Los activos se buscan por UUID y por la organización del contexto; la organización
 no se acepta desde datos enviados por el cliente. Los activos archivados no
