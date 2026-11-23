@@ -125,4 +125,103 @@ class OrganizationStatusAuditQueryServiceTest {
 
                 verifyNoInteractions(auditRepository);
         }
+
+        @Test
+        void exportaEventosAplicandoFiltrosYLimitaLaConsultaAUnEventoExtra() {
+                OrganizationStatusAuditEvent event = new OrganizationStatusAuditEvent(
+                                UUID.fromString("00000000-0000-0000-0000-000000000401"),
+                                ORGANIZATION_ID,
+                                OrganizationStatusAuditAction.SUSPENDED,
+                                "admin",
+                                Instant.parse("2026-11-10T10:00:00Z"),
+                                "request-401");
+
+                OrganizationStatusAuditEntity entity = new OrganizationStatusAuditEntity(event);
+
+                when(auditRepository.findPageByOrganizationIdAndFilters(
+                                eq(ORGANIZATION_ID),
+                                eq(OrganizationStatusAuditAction.SUSPENDED),
+                                eq("request-401"),
+                                eq("admin"),
+                                eq(FROM),
+                                eq(TO),
+                                any(Pageable.class)))
+                                .thenReturn(new PageImpl<>(
+                                                List.of(entity),
+                                                PageRequest.of(
+                                                                0,
+                                                                OrganizationStatusAuditQueryService.MAX_EXPORT_ROWS
+                                                                                + 1),
+                                                1));
+
+                List<OrganizationStatusAuditEntity> actual = queryService.findForExport(
+                                ORGANIZATION_ID,
+                                OrganizationStatusAuditAction.SUSPENDED,
+                                "request-401",
+                                "admin",
+                                FROM,
+                                TO);
+
+                assertEquals(List.of(entity), actual);
+
+                ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+
+                verify(auditRepository).findPageByOrganizationIdAndFilters(
+                                eq(ORGANIZATION_ID),
+                                eq(OrganizationStatusAuditAction.SUSPENDED),
+                                eq("request-401"),
+                                eq("admin"),
+                                eq(FROM),
+                                eq(TO),
+                                pageableCaptor.capture());
+
+                assertEquals(0, pageableCaptor.getValue().getPageNumber());
+                assertEquals(
+                                OrganizationStatusAuditQueryService.MAX_EXPORT_ROWS + 1,
+                                pageableCaptor.getValue().getPageSize());
+                assertEquals(
+                                Sort.by(
+                                                Sort.Order.asc("occurredAt"),
+                                                Sort.Order.asc("id")),
+                                pageableCaptor.getValue().getSort());
+        }
+
+        @Test
+        void rechazaLaExportacionSiHayMasDeMilEventos() {
+                OrganizationStatusAuditEvent event = new OrganizationStatusAuditEvent(
+                                UUID.fromString("00000000-0000-0000-0000-000000000401"),
+                                ORGANIZATION_ID,
+                                OrganizationStatusAuditAction.SUSPENDED,
+                                "admin",
+                                Instant.parse("2026-11-10T10:00:00Z"),
+                                "request-401");
+
+                OrganizationStatusAuditEntity entity = new OrganizationStatusAuditEntity(event);
+
+                when(auditRepository.findPageByOrganizationIdAndFilters(
+                                eq(ORGANIZATION_ID),
+                                eq(null),
+                                eq(null),
+                                eq(null),
+                                eq(null),
+                                eq(null),
+                                any(Pageable.class)))
+                                .thenReturn(new PageImpl<>(
+                                                List.of(entity),
+                                                PageRequest.of(
+                                                                0,
+                                                                OrganizationStatusAuditQueryService.MAX_EXPORT_ROWS
+                                                                                + 1),
+                                                OrganizationStatusAuditQueryService.MAX_EXPORT_ROWS + 1L));
+
+                assertThrows(
+                                OrganizationStatusAuditExportLimitExceededException.class,
+                                () -> queryService.findForExport(
+                                                ORGANIZATION_ID,
+                                                null,
+                                                null,
+                                                null,
+                                                null,
+                                                null));
+        }
 }
