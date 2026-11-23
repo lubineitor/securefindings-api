@@ -842,6 +842,13 @@ Cada evento contiene:
 - Actor autenticado.
 - Fecha de ocurrencia.
 - `requestId`, cuando está disponible.
+- Motivo del cambio, obligatorio para las nuevas transiciones y limitado a entre
+  10 y 500 caracteres.
+
+El endpoint `PATCH /api/v1/organizations/{id}/status` exige que `ADMIN` envíe
+el motivo junto con el nuevo estado. La actualización y el evento que conserva
+ese motivo se guardan en la misma transacción. Los eventos anteriores a la
+migración pueden tener `reason` nulo.
 
 El cambio de estado y el registro de auditoría se guardan en la misma
 transacción. La clave foránea conserva la relación con la organización e impide
@@ -873,6 +880,9 @@ consulta paginada. Está limitada a 1.000 eventos; si supera ese límite, respon
 El CSV se genera en UTF-8. Los valores se escapan y neutralizan para evitar la
 inyección de fórmulas en hojas de cálculo. La respuesta incluye
 `Cache-Control: no-store`.
+
+El CSV incluye el motivo del cambio en la columna `reason`; para los eventos
+históricos sin ese dato, la celda queda vacía.
 
 ### Historial de activos
 

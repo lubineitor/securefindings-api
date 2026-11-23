@@ -57,8 +57,11 @@ en este documento y en `SECURITY.md`.
   a 1.000 filas, con validación previa sin persistencia y guardado transaccional.
 - Tendencia temporal de hallazgos por día, semana o mes, agrupada por severidad y filtrable por activo para la organización actual.
 - Panel local de Grafana y reglas Prometheus para disponibilidad, errores 5xx, latencia y fallos del rate limiter; el scraping usa OAuth2 con rol `METRICS_READER`.
-- Suspensión y reactivación de organizaciones por `ADMIN`; las organizaciones
-  suspendidas no pueden acceder a operaciones aisladas por organización.
+- Suspensión y reactivación de organizaciones por `ADMIN`, con un motivo
+  obligatorio de entre 10 y 500 caracteres; las organizaciones suspendidas no
+  pueden acceder a operaciones aisladas por organización.
+- Consulta paginada y exportación CSV de la auditoría de cambios de estado,
+  disponible para `ADMIN` incluso cuando la organización está suspendida.
 - Auditoría paginada de suspensiones y reactivaciones, consultable por `ADMIN`
   mediante `GET /api/v1/organizations/{id}/status-audit`, incluso si la
   organización está suspendida.

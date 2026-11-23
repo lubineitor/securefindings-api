@@ -844,6 +844,10 @@ código `ORGANIZATION_STATUS_AUDIT_EXPORT_LIMIT_EXCEEDED`. La respuesta usa
 `Cache-Control: no-store` y el nombre
 `securefindings-organization-status-audit.csv`.
 
+El CSV incluye las columnas `id`, `organizationId`, `action`, `actor`,
+`occurredAt`, `requestId` y `reason`. El motivo aparece vacío en los eventos
+históricos que no lo tenían registrado.
+
 ```text
 GET /api/v1/organizations/00000000-0000-0000-0000-000000000001/status-audit/export?action=SUSPENDED&occurredFrom=2026-11-01T00:00:00Z&occurredTo=2026-11-30T23:59:59Z
 ```
@@ -909,9 +913,14 @@ organización bloquea las peticiones que usan su claim `organization_id`. Sus
 datos se conservan. Un administrador puede reactivarla desde la administración
 global.
 
+El cuerpo debe incluir `status` y `reason`. El motivo es obligatorio, debe
+tener entre 10 y 500 caracteres después de eliminar los espacios exteriores y
+queda registrado en la auditoría del cambio.
+
 ```json
 {
-  "status": "SUSPENDED"
+  "status": "SUSPENDED",
+  "reason": "Incidente confirmado por revisión"
 }
 ```
 
@@ -920,6 +929,10 @@ global.
 `GET /api/v1/organizations/{id}/status-audit` devuelve los eventos de
 suspensión y reactivación de una organización. Requiere el rol `ADMIN`.
 Los resultados se ordenan por fecha e identificador descendentes.
+
+Cada evento incluye la acción, el actor, la fecha, el `requestId` cuando está
+disponible y el motivo del cambio. Los eventos creados antes de guardar motivos
+pueden devolver `reason` como `null`.
 
 | Parámetro | Descripción |
 |---|---|
