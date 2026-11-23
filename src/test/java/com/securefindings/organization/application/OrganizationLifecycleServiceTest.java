@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
@@ -43,6 +44,10 @@ class OrganizationLifecycleServiceTest {
         private static final Instant CREATED_AT = Instant.parse(
                         "2026-10-01T10:00:00Z");
 
+        private static final String SUSPENSION_REASON = "Incidente confirmado por revisión";
+
+        private static final String REACTIVATION_REASON = "Remediación validada por el administrador";
+
         @Mock
         private OrganizationRepository organizationRepository;
 
@@ -65,7 +70,7 @@ class OrganizationLifecycleServiceTest {
         }
 
         @Test
-        void deberiaSuspenderUnaOrganizacionActiva() {
+        void deberiaSuspenderUnaOrganizacionActivaYRegistrarElMotivo() {
                 Organization active = organization(OrganizationStatus.ACTIVE);
 
                 when(organizationRepository.findById(ORGANIZATION_ID))
@@ -78,7 +83,8 @@ class OrganizationLifecycleServiceTest {
 
                 Organization result = lifecycleService.changeStatus(
                                 ORGANIZATION_ID,
-                                OrganizationStatus.SUSPENDED);
+                                OrganizationStatus.SUSPENDED,
+                                SUSPENSION_REASON);
 
                 assertEquals(OrganizationStatus.SUSPENDED, result.status());
 
@@ -92,11 +98,12 @@ class OrganizationLifecycleServiceTest {
                 assertEquals(OrganizationStatusAuditAction.SUSPENDED, event.getAction());
                 assertEquals("admin", event.getActor());
                 assertEquals("org-status-123", event.getRequestId());
+                assertEquals(SUSPENSION_REASON, event.getReason());
                 assertNotNull(event.getOccurredAt());
         }
 
         @Test
-        void deberiaReactivarUnaOrganizacionSuspendida() {
+        void deberiaReactivarUnaOrganizacionSuspendidaYRegistrarElMotivo() {
                 Organization suspended = organization(OrganizationStatus.SUSPENDED);
 
                 when(organizationRepository.findById(ORGANIZATION_ID))
@@ -108,7 +115,8 @@ class OrganizationLifecycleServiceTest {
 
                 Organization result = lifecycleService.changeStatus(
                                 ORGANIZATION_ID,
-                                OrganizationStatus.ACTIVE);
+                                OrganizationStatus.ACTIVE,
+                                REACTIVATION_REASON);
 
                 assertEquals(OrganizationStatus.ACTIVE, result.status());
 
@@ -119,6 +127,9 @@ class OrganizationLifecycleServiceTest {
                 assertEquals(
                                 OrganizationStatusAuditAction.REACTIVATED,
                                 captor.getValue().getAction());
+                assertEquals(
+                                REACTIVATION_REASON,
+                                captor.getValue().getReason());
         }
 
         @Test
@@ -130,7 +141,8 @@ class OrganizationLifecycleServiceTest {
 
                 Organization result = lifecycleService.changeStatus(
                                 ORGANIZATION_ID,
-                                OrganizationStatus.ACTIVE);
+                                OrganizationStatus.ACTIVE,
+                                "Organización ya revisada");
 
                 assertEquals(OrganizationStatus.ACTIVE, result.status());
                 verify(organizationRepository, never()).save(any(OrganizationEntity.class));
@@ -146,10 +158,23 @@ class OrganizationLifecycleServiceTest {
                                 OrganizationNotFoundException.class,
                                 () -> lifecycleService.changeStatus(
                                                 ORGANIZATION_ID,
-                                                OrganizationStatus.SUSPENDED));
+                                                OrganizationStatus.SUSPENDED,
+                                                "Incidente confirmado por revisión"));
 
                 verify(organizationRepository, never()).save(any(OrganizationEntity.class));
                 verify(auditRepository, never()).save(any(OrganizationStatusAuditEntity.class));
+        }
+
+        @Test
+        void deberiaRechazarUnMotivoDemasiadoCortoAntesDeConsultarLaOrganizacion() {
+                assertThrows(
+                                IllegalArgumentException.class,
+                                () -> lifecycleService.changeStatus(
+                                                ORGANIZATION_ID,
+                                                OrganizationStatus.SUSPENDED,
+                                                "corto"));
+
+                verifyNoInteractions(organizationRepository, auditRepository);
         }
 
         private Organization organization(OrganizationStatus status) {

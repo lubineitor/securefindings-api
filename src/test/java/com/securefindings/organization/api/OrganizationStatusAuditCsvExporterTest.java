@@ -15,69 +15,88 @@ import com.securefindings.organization.persistence.OrganizationStatusAuditEntity
 
 class OrganizationStatusAuditCsvExporterTest {
 
-    private static final UUID ORGANIZATION_ID = UUID.fromString(
-            "00000000-0000-0000-0000-000000000001");
+        private static final UUID ORGANIZATION_ID = UUID.fromString(
+                        "00000000-0000-0000-0000-000000000001");
 
-    private final OrganizationStatusAuditCsvExporter exporter = new OrganizationStatusAuditCsvExporter();
+        private final OrganizationStatusAuditCsvExporter exporter = new OrganizationStatusAuditCsvExporter();
 
-    @Test
-    void deberiaEscaparComasYComillas() {
-        OrganizationStatusAuditEntity event = new OrganizationStatusAuditEntity(
-                new OrganizationStatusAuditEvent(
-                        UUID.fromString("11111111-1111-1111-1111-111111111111"),
-                        ORGANIZATION_ID,
-                        OrganizationStatusAuditAction.SUSPENDED,
-                        "admin, \"externo\"",
-                        Instant.parse("2026-11-10T10:00:00Z"),
-                        "status-request-1"));
+        @Test
+        void deberiaEscaparComasYComillas() {
+                OrganizationStatusAuditEntity event = new OrganizationStatusAuditEntity(
+                                new OrganizationStatusAuditEvent(
+                                                UUID.fromString("11111111-1111-1111-1111-111111111111"),
+                                                ORGANIZATION_ID,
+                                                OrganizationStatusAuditAction.SUSPENDED,
+                                                "admin, \"externo\"",
+                                                Instant.parse("2026-11-10T10:00:00Z"),
+                                                "status-request-1",
+                                                "Suspensión tras incidente confirmado"));
 
-        String expected = "\"id\",\"organizationId\",\"action\",\"actor\",\"occurredAt\",\"requestId\"\r\n"
-                + "\"11111111-1111-1111-1111-111111111111\","
-                + "\"00000000-0000-0000-0000-000000000001\","
-                + "\"SUSPENDED\","
-                + "\"admin, \"\"externo\"\"\","
-                + "\"2026-11-10T10:00:00Z\","
-                + "\"status-request-1\"\r\n";
+                String expected = "\"id\",\"organizationId\",\"action\",\"actor\",\"occurredAt\",\"requestId\",\"reason\"\r\n"
+                                + "\"11111111-1111-1111-1111-111111111111\","
+                                + "\"00000000-0000-0000-0000-000000000001\","
+                                + "\"SUSPENDED\","
+                                + "\"admin, \"\"externo\"\"\","
+                                + "\"2026-11-10T10:00:00Z\","
+                                + "\"status-request-1\","
+                                + "\"Suspensión tras incidente confirmado\"\r\n";
 
-        assertEquals(expected, exporter.toCsv(List.of(event)));
-    }
+                assertEquals(expected, exporter.toCsv(List.of(event)));
+        }
 
-    @Test
-    void deberiaNeutralizarCeldasQuePuedenEjecutarFormulas() {
-        OrganizationStatusAuditEntity event = new OrganizationStatusAuditEntity(
-                new OrganizationStatusAuditEvent(
-                        UUID.randomUUID(),
-                        ORGANIZATION_ID,
-                        OrganizationStatusAuditAction.SUSPENDED,
-                        "=1+1",
-                        Instant.parse("2026-11-10T10:00:00Z"),
-                        "status-request-2"));
+        @Test
+        void deberiaNeutralizarCeldasQuePuedenEjecutarFormulas() {
+                OrganizationStatusAuditEntity event = new OrganizationStatusAuditEntity(
+                                new OrganizationStatusAuditEvent(
+                                                UUID.randomUUID(),
+                                                ORGANIZATION_ID,
+                                                OrganizationStatusAuditAction.SUSPENDED,
+                                                "=1+1",
+                                                Instant.parse("2026-11-10T10:00:00Z"),
+                                                "status-request-2"));
 
-        String csv = exporter.toCsv(List.of(event));
+                String csv = exporter.toCsv(List.of(event));
 
-        assertTrue(csv.contains("\"'=1+1\""));
-    }
+                assertTrue(csv.contains("\"'=1+1\""));
+        }
 
-    @Test
-    void deberiaDejarRequestIdVacioCuandoEsNulo() {
-        OrganizationStatusAuditEntity event = new OrganizationStatusAuditEntity(
-                new OrganizationStatusAuditEvent(
-                        UUID.randomUUID(),
-                        ORGANIZATION_ID,
-                        OrganizationStatusAuditAction.REACTIVATED,
-                        "admin",
-                        Instant.parse("2026-11-11T10:00:00Z"),
-                        null));
+        @Test
+        void deberiaDejarRequestIdVacioCuandoEsNulo() {
+                OrganizationStatusAuditEntity event = new OrganizationStatusAuditEntity(
+                                new OrganizationStatusAuditEvent(
+                                                UUID.randomUUID(),
+                                                ORGANIZATION_ID,
+                                                OrganizationStatusAuditAction.REACTIVATED,
+                                                "admin",
+                                                Instant.parse("2026-11-11T10:00:00Z"),
+                                                null));
 
-        String csv = exporter.toCsv(List.of(event));
+                String csv = exporter.toCsv(List.of(event));
 
-        assertTrue(csv.endsWith("\"\"\r\n"));
-    }
+                assertTrue(csv.endsWith("\"\"\r\n"));
+        }
 
-    @Test
-    void deberiaDevolverLaCabeceraCuandoNoHayEventos() {
-        assertEquals(
-                "\"id\",\"organizationId\",\"action\",\"actor\",\"occurredAt\",\"requestId\"\r\n",
-                exporter.toCsv(List.of()));
-    }
+        @Test
+        void deberiaDevolverLaCabeceraCuandoNoHayEventos() {
+                assertEquals(
+                                "\"id\",\"organizationId\",\"action\",\"actor\",\"occurredAt\",\"requestId\",\"reason\"\r\n",
+                                exporter.toCsv(List.of()));
+        }
+
+        @Test
+        void deberiaNeutralizarMotivosQuePuedenEjecutarFormulas() {
+                OrganizationStatusAuditEntity event = new OrganizationStatusAuditEntity(
+                                new OrganizationStatusAuditEvent(
+                                                UUID.randomUUID(),
+                                                ORGANIZATION_ID,
+                                                OrganizationStatusAuditAction.SUSPENDED,
+                                                "admin",
+                                                Instant.parse("2026-11-10T10:00:00Z"),
+                                                "status-request-2",
+                                                "=SUM(1,1)+1"));
+
+                String csv = exporter.toCsv(List.of(event));
+
+                assertTrue(csv.contains("\"'=SUM(1,1)+1\""));
+        }
 }

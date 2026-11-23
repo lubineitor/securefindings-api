@@ -37,6 +37,10 @@ class OrganizationStatusControllerTest {
         private static final UUID ORGANIZATION_ID = UUID.fromString(
                         "00000000-0000-0000-0000-000000000001");
 
+        private static final String SUSPENSION_REASON = "Incidente confirmado por revisión";
+
+        private static final String REACTIVATION_REASON = "Remediación validada por el administrador";
+
         @Autowired
         private WebApplicationContext context;
 
@@ -65,7 +69,8 @@ class OrganizationStatusControllerTest {
 
                 when(lifecycleService.changeStatus(
                                 ORGANIZATION_ID,
-                                OrganizationStatus.SUSPENDED))
+                                OrganizationStatus.SUSPENDED,
+                                SUSPENSION_REASON))
                                 .thenReturn(suspended);
 
                 mockMvc.perform(patch(
@@ -73,7 +78,10 @@ class OrganizationStatusControllerTest {
                                 ORGANIZATION_ID)
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
-                                                {"status":"SUSPENDED"}
+                                                {
+                                                  "status": "SUSPENDED",
+                                                  "reason": "Incidente confirmado por revisión"
+                                                }
                                                 """))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.id").value(ORGANIZATION_ID.toString()))
@@ -81,7 +89,8 @@ class OrganizationStatusControllerTest {
 
                 verify(lifecycleService).changeStatus(
                                 ORGANIZATION_ID,
-                                OrganizationStatus.SUSPENDED);
+                                OrganizationStatus.SUSPENDED,
+                                SUSPENSION_REASON);
         }
 
         @Test
@@ -96,7 +105,8 @@ class OrganizationStatusControllerTest {
 
                 when(lifecycleService.changeStatus(
                                 ORGANIZATION_ID,
-                                OrganizationStatus.ACTIVE))
+                                OrganizationStatus.ACTIVE,
+                                REACTIVATION_REASON))
                                 .thenReturn(active);
 
                 mockMvc.perform(patch(
@@ -104,7 +114,10 @@ class OrganizationStatusControllerTest {
                                 ORGANIZATION_ID)
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
-                                                {"status":"ACTIVE"}
+                                                {
+                                                  "status": "ACTIVE",
+                                                  "reason": "Remediación validada por el administrador"
+                                                }
                                                 """))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.id").value(ORGANIZATION_ID.toString()))
@@ -112,7 +125,8 @@ class OrganizationStatusControllerTest {
 
                 verify(lifecycleService).changeStatus(
                                 ORGANIZATION_ID,
-                                OrganizationStatus.ACTIVE);
+                                OrganizationStatus.ACTIVE,
+                                REACTIVATION_REASON);
         }
 
         @Test
@@ -122,7 +136,10 @@ class OrganizationStatusControllerTest {
                                 ORGANIZATION_ID)
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
-                                                {"status":"SUSPENDED"}
+                                                {
+                                                  "status": "SUSPENDED",
+                                                  "reason": "Incidente confirmado por revisión"
+                                                }
                                                 """))
                                 .andExpect(status().isForbidden());
 
@@ -137,7 +154,47 @@ class OrganizationStatusControllerTest {
                                 ORGANIZATION_ID)
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
-                                                {"status":null}
+                                                {
+                                                  "status": null,
+                                                  "reason": "Incidente confirmado por revisión"
+                                                }
+                                                """))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+
+                verifyNoInteractions(lifecycleService);
+        }
+
+        @Test
+        @WithMockUser(username = "administrador", roles = "ADMIN")
+        void deberiaRechazarLaPeticionSiFaltaElMotivo() throws Exception {
+                mockMvc.perform(patch(
+                                "/api/v1/organizations/{organizationId}/status",
+                                ORGANIZATION_ID)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                                {
+                                                  "status": "SUSPENDED"
+                                                }
+                                                """))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+
+                verifyNoInteractions(lifecycleService);
+        }
+
+        @Test
+        @WithMockUser(username = "administrador", roles = "ADMIN")
+        void deberiaRechazarUnMotivoDemasiadoCorto() throws Exception {
+                mockMvc.perform(patch(
+                                "/api/v1/organizations/{organizationId}/status",
+                                ORGANIZATION_ID)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                                {
+                                                  "status": "SUSPENDED",
+                                                  "reason": "fallo"
+                                                }
                                                 """))
                                 .andExpect(status().isBadRequest())
                                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
