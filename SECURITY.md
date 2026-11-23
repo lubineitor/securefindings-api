@@ -213,6 +213,12 @@ La petición debe rechazarse. Las operaciones globales del directorio de
 organizaciones requieren `ADMIN` y no utilizan `organization_id`, porque
 gestionan el directorio completo o una organización seleccionada por UUID.
 
+La suspensión de una organización impide las operaciones que requieren una
+organización activa en el token. El contexto de organización comprueba el estado
+antes de permitir el acceso. Las operaciones globales de `ADMIN` para consultar
+la auditoría o reactivar la organización siguen disponibles aunque esté
+suspendida.
+
 La organización nunca debe aceptarse desde un parámetro enviado por el cliente
 como mecanismo de autorización.
 
@@ -248,6 +254,8 @@ Los permisos se aplican por endpoint:
 | Crear organizaciones | No | Sí |
 | Consultar la organización actual | Sí | Sí |
 | Actualizar el nombre de la organización actual | No | Sí |
+| Suspender o reactivar organizaciones | No | Sí |
+| Consultar la auditoría de estado de una organización | No | Sí |
 
 La aplicación responde:
 
@@ -816,6 +824,28 @@ Esto permite relacionar el evento con:
 - Otros eventos de la misma operación.
 
 En eventos técnicos o registros históricos puede ser `null`.
+
+### Cambios de estado de organizaciones
+
+Las transiciones entre `ACTIVE` y `SUSPENDED` generan un evento de auditoría
+cuando el estado cambia. Repetir el estado actual no crea un evento.
+
+Cada evento contiene:
+
+- Identificador de la organización.
+- Acción `SUSPENDED` o `REACTIVATED`.
+- Actor autenticado.
+- Fecha de ocurrencia.
+- `requestId`, cuando está disponible.
+
+El cambio de estado y el registro de auditoría se guardan en la misma
+transacción. La clave foránea conserva la relación con la organización e impide
+eliminarla mientras tenga eventos asociados.
+
+`GET /api/v1/organizations/{id}/status-audit` permite consultar los eventos de
+forma paginada y requiere el rol `ADMIN`. Es una operación global: utiliza el
+UUID de la ruta y no el claim `organization_id` del token. Esto permite consultar
+el historial de una organización suspendida.
 
 ### Historial de activos
 

@@ -809,6 +809,7 @@ Ejemplo de respuesta `201` al importar:
 | `GET` | `/api/v1/organizations/current/audit/assets/export` | Exporta la auditoría filtrada de activos a CSV | `ANALYST`, `ADMIN` |
 | `GET` | `/api/v1/organizations/current/audit` | Consulta la auditoría de hallazgos de la organización actual | `ANALYST`, `ADMIN` |
 | `GET` | `/api/v1/organizations/current/audit/export` | Exporta la auditoría de hallazgos filtrada a CSV | `ANALYST`, `ADMIN` |
+| `GET` | `/api/v1/organizations/{id}/status-audit` | Consulta los cambios de estado paginados | `ADMIN` |
 | `POST` | `/api/v1/organizations` | Crea una organización | `ADMIN` |
 | `PATCH` | `/api/v1/organizations/{id}` | Actualiza el nombre visible de una organización | `ADMIN` |
 | `PATCH` | `/api/v1/organizations/current` | Actualiza el nombre visible de la organización | `ADMIN` |
@@ -892,6 +893,19 @@ global.
 {
   "status": "SUSPENDED"
 }
+```
+
+#### Auditoría de estado de organizaciones
+
+`GET /api/v1/organizations/{id}/status-audit` devuelve los eventos de
+suspensión y reactivación de una organización. Requiere el rol `ADMIN`.
+Los resultados se ordenan por fecha e identificador descendentes.
+
+Admite `page` desde `0` y `size` entre `1` y `100`. Cada evento incluye la
+acción, el actor, la fecha y el `requestId` si estaba disponible.
+
+```text
+GET /api/v1/organizations/00000000-0000-0000-0000-000000000001/status-audit?page=0&size=20
 ```
 
 ### Parámetros del listado
