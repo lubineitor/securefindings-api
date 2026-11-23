@@ -1090,6 +1090,11 @@ El proyecto incluye pruebas para comprobar:
 - Restricción de eliminación de activos asociados a hallazgos.
 - Clave foránea compuesta contra asociaciones entre organizaciones.
 - Unicidad del identificador de activo sin distinguir mayúsculas.
+- Suspensión y reactivación de organizaciones reservadas a `ADMIN`.
+- Rechazo de operaciones de organización para tokens de organizaciones suspendidas.
+- Consulta de auditoría de estado reservada a `ADMIN`, incluso para organizaciones suspendidas.
+- Persistencia del actor, la fecha y el `requestId` en las transiciones de estado.
+- Ausencia de eventos de auditoría cuando se solicita el estado que ya tiene la organización.
 
 Las pruebas de integración utilizan PostgreSQL para verificar el comportamiento real de las consultas y restricciones de persistencia.
 
