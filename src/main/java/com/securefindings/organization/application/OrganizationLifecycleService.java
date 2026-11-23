@@ -92,8 +92,10 @@ public class OrganizationLifecycleService {
 
                 String checkedReason = reason.strip();
 
-                if (checkedReason.length() < OrganizationStatusAuditEvent.MIN_REASON_LENGTH
-                                || checkedReason.length() > OrganizationStatusAuditEvent.MAX_REASON_LENGTH) {
+                int reasonLength = checkedReason.codePointCount(0, checkedReason.length());
+
+                if (reasonLength < OrganizationStatusAuditEvent.MIN_REASON_LENGTH
+                                || reasonLength > OrganizationStatusAuditEvent.MAX_REASON_LENGTH) {
                         throw new IllegalArgumentException(
                                         "El motivo debe tener entre 10 y 500 caracteres");
                 }

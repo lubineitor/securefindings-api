@@ -49,8 +49,10 @@ public record OrganizationStatusAuditEvent(
         if (reason != null) {
             reason = reason.strip();
 
-            if (reason.length() < MIN_REASON_LENGTH
-                    || reason.length() > MAX_REASON_LENGTH) {
+            int reasonLength = reason.codePointCount(0, reason.length());
+
+            if (reasonLength < MIN_REASON_LENGTH
+                    || reasonLength > MAX_REASON_LENGTH) {
                 throw new IllegalArgumentException(
                         "El motivo debe tener entre 10 y 500 caracteres");
             }
