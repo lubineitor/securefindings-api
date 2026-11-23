@@ -85,11 +85,11 @@ class OrganizationStatusAuditExportControllerTest {
                                                 "status-request-1"));
 
                 List<OrganizationStatusAuditEntity> events = List.of(event);
-                String csv = "\"id\",\"organizationId\",\"action\",\"actor\",\"occurredAt\",\"requestId\"\r\n"
+                String csv = "\"id\",\"organizationId\",\"action\",\"actor\",\"occurredAt\",\"requestId\",\"reason\"\r\n"
                                 + "\"00000000-0000-0000-0000-000000000401\","
                                 + "\"00000000-0000-0000-0000-000000000001\","
                                 + "\"SUSPENDED\",\"administrador\","
-                                + "\"2026-11-10T10:00:00Z\",\"status-request-1\"\r\n";
+                                + "\"2026-11-10T10:00:00Z\",\"status-request-1\",\"\"\r\n";
 
                 when(queryService.findForExport(
                                 ORGANIZATION_ID,
