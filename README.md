@@ -809,7 +809,7 @@ Ejemplo de respuesta `201` al importar:
 | `GET` | `/api/v1/organizations/current/audit/assets/export` | Exporta la auditoría filtrada de activos a CSV | `ANALYST`, `ADMIN` |
 | `GET` | `/api/v1/organizations/current/audit` | Consulta la auditoría de hallazgos de la organización actual | `ANALYST`, `ADMIN` |
 | `GET` | `/api/v1/organizations/current/audit/export` | Exporta la auditoría de hallazgos filtrada a CSV | `ANALYST`, `ADMIN` |
-| `GET` | `/api/v1/organizations/{id}/status-audit` | Consulta los cambios de estado paginados | `ADMIN` |
+| `GET` | `/api/v1/organizations/{id}/status-audit` | Consulta los cambios de estado con filtros y paginación | `ADMIN` |
 | `POST` | `/api/v1/organizations` | Crea una organización | `ADMIN` |
 | `PATCH` | `/api/v1/organizations/{id}` | Actualiza el nombre visible de una organización | `ADMIN` |
 | `PATCH` | `/api/v1/organizations/current` | Actualiza el nombre visible de la organización | `ADMIN` |
@@ -901,11 +901,24 @@ global.
 suspensión y reactivación de una organización. Requiere el rol `ADMIN`.
 Los resultados se ordenan por fecha e identificador descendentes.
 
-Admite `page` desde `0` y `size` entre `1` y `100`. Cada evento incluye la
-acción, el actor, la fecha y el `requestId` si estaba disponible.
+| Parámetro | Descripción |
+|---|---|
+| `page` | Número de página desde `0`. |
+| `size` | Eventos por página, entre `1` y `100`. |
+| `action` | Filtra por `SUSPENDED` o `REACTIVATED`. |
+| `requestId` | Filtra por identificador de petición; hasta 64 caracteres. |
+| `actor` | Filtra por actor; hasta 255 caracteres. |
+| `occurredFrom` | Fecha inicial inclusiva en formato ISO-8601. |
+| `occurredTo` | Fecha final inclusiva en formato ISO-8601. |
+
+Si se indican ambas fechas, `occurredFrom` debe ser anterior o igual a
+`occurredTo`. Los filtros inválidos responden `400 VALIDATION_ERROR`.
+
+Cada evento incluye la acción, el actor, la fecha y el `requestId`, si estaba
+disponible.
 
 ```text
-GET /api/v1/organizations/00000000-0000-0000-0000-000000000001/status-audit?page=0&size=20
+GET /api/v1/organizations/00000000-0000-0000-0000-000000000001/status-audit?action=SUSPENDED&actor=admin&occurredFrom=2026-11-01T00:00:00Z&occurredTo=2026-11-30T23:59:59Z&page=0&size=20
 ```
 
 ### Parámetros del listado
