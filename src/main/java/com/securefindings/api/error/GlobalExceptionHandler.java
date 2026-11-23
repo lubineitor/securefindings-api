@@ -32,6 +32,7 @@ import com.securefindings.finding.application.FindingStatusTransitionException;
 import com.securefindings.organization.application.OrganizationHasAssociatedDataException;
 import com.securefindings.organization.application.OrganizationNotFoundException;
 import com.securefindings.organization.application.OrganizationSlugAlreadyExistsException;
+import com.securefindings.organization.application.OrganizationStatusAuditExportLimitExceededException;
 
 import jakarta.validation.ConstraintViolationException;
 
@@ -351,6 +352,17 @@ public class GlobalExceptionHandler {
 
                 return new ApiErrorResponse(
                                 "AUDIT_EXPORT_LIMIT_EXCEEDED",
+                                exception.getMessage(),
+                                Map.of("limit", String.valueOf(exception.maximumRows())));
+        }
+
+        @ExceptionHandler(OrganizationStatusAuditExportLimitExceededException.class)
+        @ResponseStatus(HttpStatus.CONTENT_TOO_LARGE)
+        public ApiErrorResponse handleOrganizationStatusAuditExportLimitExceeded(
+                        OrganizationStatusAuditExportLimitExceededException exception) {
+
+                return new ApiErrorResponse(
+                                "ORGANIZATION_STATUS_AUDIT_EXPORT_LIMIT_EXCEEDED",
                                 exception.getMessage(),
                                 Map.of("limit", String.valueOf(exception.maximumRows())));
         }
