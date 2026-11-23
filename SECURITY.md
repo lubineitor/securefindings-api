@@ -852,6 +852,14 @@ forma paginada y requiere el rol `ADMIN`. Es una operación global: utiliza el
 UUID de la ruta y no el claim `organization_id` del token. Esto permite consultar
 el historial de una organización suspendida.
 
+La consulta admite `page` y `size`, además de filtros por `action`,
+`requestId`, `actor`, `occurredFrom` y `occurredTo`. Las acciones válidas son
+`SUSPENDED` y `REACTIVATED`. `requestId` debe cumplir el formato de
+`X-Request-ID` y no superar los 64 caracteres; `actor` se compara exactamente
+y admite hasta 255 caracteres. Las fechas ISO-8601 son inclusivas. Si se envían
+ambas, `occurredFrom` debe ser anterior o igual a `occurredTo`; si no, la API
+responde `400 VALIDATION_ERROR`.
+
 ### Historial de activos
 
 Los eventos de activos registran las acciones `CREATED`, `UPDATED`, `ARCHIVED`,

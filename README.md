@@ -748,6 +748,7 @@ Antes de importar, puedes validar el fichero sin guardar datos usando
 curl.exe --request POST "http://localhost:8080/api/v1/findings/import?dryRun=true" `
   --header "Authorization: Bearer $env:TOKEN" `
   --form "file=@hallazgos.csv;type=text/csv"
+```
 
 Ejemplo de respuesta `201`:
 
@@ -908,11 +909,19 @@ Los resultados se ordenan por fecha e identificador descendentes.
 
 | Parámetro | Descripción |
 |---|---|
-| `page` | Número de página desde `0`. |
-| `size` | Eventos por página, entre `1` y `100`. |
+| `page` | Página desde `0`; predeterminado `0`. |
+| `size` | Eventos por página, entre `1` y `100`; predeterminado `20`. |
+| `action` | `SUSPENDED` o `REACTIVATED`. |
+| `requestId` | Coincidencia exacta; entre 1 y 64 caracteres, empieza por una letra o número y admite letras, números, `.`, `_` y `-`. |
+| `actor` | Coincidencia exacta; máximo 255 caracteres. |
+| `occurredFrom` | Fecha y hora ISO-8601 inclusiva. |
+| `occurredTo` | Fecha y hora ISO-8601 inclusiva. |
+
+Si se envían ambas fechas, `occurredFrom` debe ser anterior o igual a
+`occurredTo`; en caso contrario, la API responde `400 VALIDATION_ERROR`.
 
 ```text
-GET /api/v1/organizations/00000000-0000-0000-0000-000000000001/status-audit?page=0&size=20
+GET /api/v1/organizations/00000000-0000-0000-0000-000000000001/status-audit?action=SUSPENDED&actor=admin&occurredFrom=2026-10-01T00:00:00Z&occurredTo=2026-10-31T23:59:59Z
 ```
 
 ### Parámetros del listado
