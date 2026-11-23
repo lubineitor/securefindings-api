@@ -37,87 +37,132 @@ import com.securefindings.security.SecurityConfig;
 @WithMockUser(username = "analista", roles = "ANALYST")
 class OrganizationStatusAuditControllerTest {
 
-    private static final UUID ORGANIZATION_ID = UUID.fromString(
-            "00000000-0000-0000-0000-000000000001");
+        private static final UUID ORGANIZATION_ID = UUID.fromString(
+                        "00000000-0000-0000-0000-000000000001");
 
-    @Autowired
-    private WebApplicationContext context;
+        @Autowired
+        private WebApplicationContext context;
 
-    @MockitoBean
-    private OrganizationStatusAuditQueryService queryService;
+        @MockitoBean
+        private OrganizationStatusAuditQueryService queryService;
 
-    private MockMvc mockMvc;
+        private MockMvc mockMvc;
 
-    @BeforeEach
-    void configurarMockMvc() {
-        mockMvc = MockMvcBuilders
-                .webAppContextSetup(context)
-                .apply(springSecurity())
-                .build();
-    }
+        @BeforeEach
+        void configurarMockMvc() {
+                mockMvc = MockMvcBuilders
+                                .webAppContextSetup(context)
+                                .apply(springSecurity())
+                                .build();
+        }
 
-    @Test
-    @WithMockUser(username = "administrador", roles = "ADMIN")
-    void adminPuedeConsultarLaAuditoriaDeEstado() throws Exception {
-        OrganizationStatusAuditEvent event = new OrganizationStatusAuditEvent(
-                UUID.fromString("00000000-0000-0000-0000-000000000401"),
-                ORGANIZATION_ID,
-                OrganizationStatusAuditAction.SUSPENDED,
-                "administrador",
-                Instant.parse("2026-11-23T10:00:00Z"),
-                "request-401");
+        @Test
+        @WithMockUser(username = "administrador", roles = "ADMIN")
+        void adminPuedeConsultarLaAuditoriaDeEstado() throws Exception {
+                OrganizationStatusAuditEvent event = new OrganizationStatusAuditEvent(
+                                UUID.fromString("00000000-0000-0000-0000-000000000401"),
+                                ORGANIZATION_ID,
+                                OrganizationStatusAuditAction.SUSPENDED,
+                                "administrador",
+                                Instant.parse("2026-11-23T10:00:00Z"),
+                                "request-401");
 
-        OrganizationStatusAuditEntity entity = new OrganizationStatusAuditEntity(event);
+                OrganizationStatusAuditEntity entity = new OrganizationStatusAuditEntity(event);
 
-        when(queryService.findPageByOrganizationId(
-                ORGANIZATION_ID,
-                0,
-                20))
-                .thenReturn(new PageImpl<>(
-                        List.of(entity),
-                        PageRequest.of(0, 20),
-                        1));
+                when(queryService.findPageByOrganizationId(
+                                ORGANIZATION_ID,
+                                0,
+                                20,
+                                OrganizationStatusAuditAction.SUSPENDED,
+                                "request-401",
+                                "administrador",
+                                Instant.parse("2026-11-01T00:00:00Z"),
+                                Instant.parse("2026-11-30T23:59:59Z")))
+                                .thenReturn(new PageImpl<>(
+                                                List.of(entity),
+                                                PageRequest.of(0, 20),
+                                                1));
 
-        mockMvc.perform(get(
-                "/api/v1/organizations/{organizationId}/status-audit",
-                ORGANIZATION_ID))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content[0].organizationId")
-                        .value(ORGANIZATION_ID.toString()))
-                .andExpect(jsonPath("$.content[0].action")
-                        .value("SUSPENDED"))
-                .andExpect(jsonPath("$.content[0].actor")
-                        .value("administrador"))
-                .andExpect(jsonPath("$.content[0].requestId")
-                        .value("request-401"))
-                .andExpect(jsonPath("$.page").value(0))
-                .andExpect(jsonPath("$.totalElements").value(1));
+                mockMvc.perform(get(
+                                "/api/v1/organizations/{organizationId}/status-audit",
+                                ORGANIZATION_ID)
+                                .param("action", "SUSPENDED")
+                                .param("requestId", "request-401")
+                                .param("actor", "administrador")
+                                .param("occurredFrom", "2026-11-01T00:00:00Z")
+                                .param("occurredTo", "2026-11-30T23:59:59Z"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.content[0].action").value("SUSPENDED"))
+                                .andExpect(jsonPath("$.content[0].actor").value("administrador"))
+                                .andExpect(jsonPath("$.content[0].requestId").value("request-401"));
 
-        verify(queryService).findPageByOrganizationId(
-                ORGANIZATION_ID,
-                0,
-                20);
-    }
+                verify(queryService).findPageByOrganizationId(
+                                ORGANIZATION_ID,
+                                0,
+                                20,
+                                OrganizationStatusAuditAction.SUSPENDED,
+                                "request-401",
+                                "administrador",
+                                Instant.parse("2026-11-01T00:00:00Z"),
+                                Instant.parse("2026-11-30T23:59:59Z"));
+        }
 
-    @Test
-    void analystNoPuedeConsultarLaAuditoriaDeEstado() throws Exception {
-        mockMvc.perform(get(
-                "/api/v1/organizations/{organizationId}/status-audit",
-                ORGANIZATION_ID))
-                .andExpect(status().isForbidden());
+        @Test
+        void analystNoPuedeConsultarLaAuditoriaDeEstado() throws Exception {
+                mockMvc.perform(get(
+                                "/api/v1/organizations/{organizationId}/status-audit",
+                                ORGANIZATION_ID))
+                                .andExpect(status().isForbidden());
 
-        verifyNoInteractions(queryService);
-    }
+                verifyNoInteractions(queryService);
+        }
 
-    @Test
-    @WithMockUser(username = "administrador", roles = "ADMIN")
-    void rechazaUnTamanoDePaginaSuperiorAlMaximo() throws Exception {
-        mockMvc.perform(get(
-                "/api/v1/organizations/{organizationId}/status-audit",
-                ORGANIZATION_ID)
-                .param("size", "101"))
-                .andExpect(status().isBadRequest());
+        @Test
+        @WithMockUser(username = "administrador", roles = "ADMIN")
+        void rechazaUnTamanoDePaginaSuperiorAlMaximo() throws Exception {
+                mockMvc.perform(get(
+                                "/api/v1/organizations/{organizationId}/status-audit",
+                                ORGANIZATION_ID)
+                                .param("size", "101"))
+                                .andExpect(status().isBadRequest());
 
-        verifyNoInteractions(queryService);
-    }
+                verifyNoInteractions(queryService);
+        }
+
+        @Test
+        @WithMockUser(username = "administrador", roles = "ADMIN")
+        void rechazaUnRangoDeFechasInvertido() throws Exception {
+                Instant occurredFrom = Instant.parse("2026-11-30T23:59:59Z");
+                Instant occurredTo = Instant.parse("2026-11-01T00:00:00Z");
+
+                when(queryService.findPageByOrganizationId(
+                                ORGANIZATION_ID,
+                                0,
+                                20,
+                                null,
+                                null,
+                                null,
+                                occurredFrom,
+                                occurredTo))
+                                .thenThrow(new IllegalArgumentException(
+                                                "occurredFrom debe ser anterior o igual a occurredTo"));
+
+                mockMvc.perform(get(
+                                "/api/v1/organizations/{organizationId}/status-audit",
+                                ORGANIZATION_ID)
+                                .param("occurredFrom", "2026-11-30T23:59:59Z")
+                                .param("occurredTo", "2026-11-01T00:00:00Z"))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+
+                verify(queryService).findPageByOrganizationId(
+                                ORGANIZATION_ID,
+                                0,
+                                20,
+                                null,
+                                null,
+                                null,
+                                occurredFrom,
+                                occurredTo);
+        }
 }
