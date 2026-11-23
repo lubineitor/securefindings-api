@@ -88,7 +88,7 @@ Los principales riesgos considerados son:
 | API REST | Acceso sin autenticación | OAuth2 Resource Server y JWT |
 | API REST | Abuso automatizado o exceso de solicitudes | Rate limiting configurable |
 | Tokens | Manipulación o falsificación | Validación de firma, emisor y expiración |
-| Directorio de organizaciones | Enumeración, modificación o eliminación no autorizada de organizaciones | El listado, la consulta, la actualización, el alta y la eliminación requieren `ADMIN`; la paginación limita cada respuesta a 100 organizaciones, la búsqueda a 100 caracteres, el slug es único y solo se eliminan organizaciones sin datos asociados |
+| Directorio de organizaciones | Enumeración, modificación o eliminación no autorizada de organizaciones | El listado, la consulta, la actualización, el alta, la eliminación, la suspensión o reactivación y la consulta o exportación de su auditoría requieren `ADMIN`; la paginación limita cada respuesta a 100 organizaciones, la búsqueda a 100 caracteres, el slug es único y solo se eliminan organizaciones sin datos asociados |
 | Parámetros de búsqueda | Inyección o consultas no controladas | Parámetros enlazados mediante JPA |
 | Ordenación | Manipulación de propiedades internas | Lista blanca de campos permitidos |
 | Filtros de auditoría | Acceso a eventos de otra organización o filtros arbitrarios | Organización derivada del token, enums y parámetros enlazados |
@@ -213,6 +213,12 @@ La petición debe rechazarse. Las operaciones globales del directorio de
 organizaciones requieren `ADMIN` y no utilizan `organization_id`, porque
 gestionan el directorio completo o una organización seleccionada por UUID.
 
+La suspensión de una organización impide las operaciones que requieren una
+organización activa en el token. El contexto de organización comprueba el estado
+antes de permitir el acceso. Las operaciones globales de `ADMIN` para consultar
+la auditoría o reactivar la organización siguen disponibles aunque esté
+suspendida.
+
 La organización nunca debe aceptarse desde un parámetro enviado por el cliente
 como mecanismo de autorización.
 
@@ -248,6 +254,8 @@ Los permisos se aplican por endpoint:
 | Crear organizaciones | No | Sí |
 | Consultar la organización actual | Sí | Sí |
 | Actualizar el nombre de la organización actual | No | Sí |
+| Suspender o reactivar organizaciones | No | Sí |
+| Consultar la auditoría de estado de una organización | No | Sí |
 
 La aplicación responde:
 
@@ -295,10 +303,10 @@ El endpoint global `/actuator/health` requiere autenticación. Las demás rutas 
 
 ### Métricas de Actuator
 
-`/actuator/prometheus` requiere autenticación JWT y el rol `ADMIN`. Solo se exponen
-los endpoints `health` y `prometheus`. Las métricas del rate limiter utilizan
-etiquetas de valores limitados y no incorporan nombres de usuario, organizaciones
-ni huellas de clientes.
+`/actuator/prometheus` requiere autenticación JWT y uno de los roles `ADMIN` o
+`METRICS_READER`. Solo se exponen los endpoints `health` y `prometheus`. Las
+métricas del rate limiter utilizan etiquetas de valores limitados y no incorporan
+nombres de usuario, organizaciones ni huellas de clientes.
 
 ### Limitación distribuida de peticiones
 
@@ -699,7 +707,7 @@ No se permite que el cliente proporcione directamente:
 
 Esta validación evita utilizar el parámetro de ordenación como vector para manipular consultas o acceder a propiedades internas de persistencia.
 
-## Filtros del historial de auditoría
+## Filtros de auditoría de hallazgos
 
 El historial de auditoría permite filtrar por:
 
@@ -750,6 +758,11 @@ Una acción inválida, un `requestId` con formato incorrecto o un `actor` que su
 ```http
 400 Bad Request
 ```
+
+Los parámetros `occurredFrom` y `occurredTo` filtran por fecha y hora en formato
+ISO-8601. Ambos límites son inclusivos. Si se envían los dos, `occurredFrom` debe
+ser anterior o igual a `occurredTo`; de lo contrario, la API responde
+`400 VALIDATION_ERROR`.
 
 ## Protección frente a inyección SQL
 
@@ -816,6 +829,60 @@ Esto permite relacionar el evento con:
 - Otros eventos de la misma operación.
 
 En eventos técnicos o registros históricos puede ser `null`.
+
+### Cambios de estado de organizaciones
+
+Las transiciones entre `ACTIVE` y `SUSPENDED` generan un evento de auditoría
+cuando el estado cambia. Repetir el estado actual no crea un evento.
+
+Cada evento contiene:
+
+- Identificador de la organización.
+- Acción `SUSPENDED` o `REACTIVATED`.
+- Actor autenticado.
+- Fecha de ocurrencia.
+- `requestId`, cuando está disponible.
+- Motivo del cambio, obligatorio para las nuevas transiciones y limitado a entre
+  10 y 500 caracteres.
+
+El endpoint `PATCH /api/v1/organizations/{id}/status` exige que `ADMIN` envíe
+el motivo junto con el nuevo estado. La actualización y el evento que conserva
+ese motivo se guardan en la misma transacción. Los eventos anteriores a la
+migración pueden tener `reason` nulo.
+
+El cambio de estado y el registro de auditoría se guardan en la misma
+transacción. La clave foránea conserva la relación con la organización e impide
+eliminarla mientras tenga eventos asociados.
+
+`GET /api/v1/organizations/{id}/status-audit` permite consultar los eventos de
+forma paginada y requiere el rol `ADMIN`. Es una operación global: utiliza el
+UUID de la ruta y no el claim `organization_id` del token. Esto permite consultar
+el historial de una organización suspendida.
+
+La consulta admite `page` y `size`, además de filtros por `action`,
+`requestId`, `actor`, `occurredFrom` y `occurredTo`. Las acciones válidas son
+`SUSPENDED` y `REACTIVATED`. `requestId` debe cumplir el formato de
+`X-Request-ID` y no superar los 64 caracteres; `actor` se compara exactamente
+y admite hasta 255 caracteres. Las fechas ISO-8601 son inclusivas. Si se envían
+ambas, `occurredFrom` debe ser anterior o igual a `occurredTo`; si no, la API
+responde `400 VALIDATION_ERROR`.
+
+#### Exportación CSV de la auditoría de estado
+
+`GET /api/v1/organizations/{id}/status-audit/export` permite exportar los
+eventos de estado de una organización. Requiere el rol `ADMIN` y utiliza el UUID
+de la ruta; no deriva la organización del claim `organization_id` del token.
+
+La exportación aplica los mismos filtros y validaciones descritos para la
+consulta paginada. Está limitada a 1.000 eventos; si supera ese límite, responde
+`413` con el código `ORGANIZATION_STATUS_AUDIT_EXPORT_LIMIT_EXCEEDED`.
+
+El CSV se genera en UTF-8. Los valores se escapan y neutralizan para evitar la
+inyección de fórmulas en hojas de cálculo. La respuesta incluye
+`Cache-Control: no-store`.
+
+El CSV incluye el motivo del cambio en la columna `reason`; para los eventos
+históricos sin ese dato, la celda queda vacía.
 
 ### Historial de activos
 
@@ -905,6 +972,12 @@ Las migraciones actuales incluyen cambios relacionados con:
 - Persistencia del identificador de petición en auditoría mediante `V6__registrar_request_id_en_auditoria.sql`.
 - Relación de organización en activos.
 - Clave externa compuesta para impedir que un hallazgo se asocie a un activo de otra organización.
+- Fecha límite opcional para hallazgos mediante
+  `V11__agregar_fecha_limite_a_hallazgos.sql`.
+- Estado de las organizaciones mediante
+  `V12__agregar_estado_a_organizaciones.sql`.
+- Auditoría de cambios de estado de organizaciones mediante
+  `V13__registrar_auditoria_de_estado_de_organizaciones.sql`.
 
 Los activos se buscan por UUID y por la organización del contexto; la organización
 no se acepta desde datos enviados por el cliente. Los activos archivados no
@@ -1060,6 +1133,11 @@ El proyecto incluye pruebas para comprobar:
 - Restricción de eliminación de activos asociados a hallazgos.
 - Clave foránea compuesta contra asociaciones entre organizaciones.
 - Unicidad del identificador de activo sin distinguir mayúsculas.
+- Suspensión y reactivación de organizaciones reservadas a `ADMIN`.
+- Rechazo de operaciones de organización para tokens de organizaciones suspendidas.
+- Consulta de auditoría de estado reservada a `ADMIN`, incluso para organizaciones suspendidas.
+- Persistencia del actor, la fecha y el `requestId` en las transiciones de estado.
+- Ausencia de eventos de auditoría cuando se solicita el estado que ya tiene la organización.
 
 Las pruebas de integración utilizan PostgreSQL para verificar el comportamiento real de las consultas y restricciones de persistencia.
 

@@ -26,7 +26,8 @@ en este documento y en `SECURITY.md`.
 - Identificador `X-Request-ID` para relacionar peticiones y logs.
 - Rate limiting distribuido mediante Redis, con respuestas `429` y `503` ante
   exceso de cuota o indisponibilidad de Redis.
-- Probes de liveness y readiness, y métricas Prometheus protegidas para `ADMIN`.
+- Probes de liveness y readiness, y métricas Prometheus protegidas para `ADMIN`
+  y `METRICS_READER`.
 - Migraciones PostgreSQL con Flyway, documentación OpenAPI y ejecución local con
   Docker Compose.
 - Resumen de hallazgos agrupados por estado y severidad, con filtros por fechas
@@ -56,6 +57,14 @@ en este documento y en `SECURITY.md`.
   a 1.000 filas, con validación previa sin persistencia y guardado transaccional.
 - Tendencia temporal de hallazgos por día, semana o mes, agrupada por severidad y filtrable por activo para la organización actual.
 - Panel local de Grafana y reglas Prometheus para disponibilidad, errores 5xx, latencia y fallos del rate limiter; el scraping usa OAuth2 con rol `METRICS_READER`.
+- Suspensión y reactivación de organizaciones por `ADMIN`, con un motivo
+  obligatorio de entre 10 y 500 caracteres; las organizaciones suspendidas no
+  pueden acceder a operaciones aisladas por organización.
+- Consulta paginada y exportación CSV de la auditoría de cambios de estado,
+  disponible para `ADMIN` incluso cuando la organización está suspendida.
+- Auditoría paginada de suspensiones y reactivaciones, consultable por `ADMIN`
+  mediante `GET /api/v1/organizations/{id}/status-audit`, incluso si la
+  organización está suspendida.
 
 ## Criterios de aceptación del MVP
 
@@ -73,8 +82,9 @@ en este documento y en `SECURITY.md`.
 ## Pendiente antes de considerar producción
 
 - Validar en el entorno desplegado la recopilación y entrega de alertas, y ajustar los umbrales para producción.
-- Ampliar la administración de organizaciones y revisar las reglas de
-  autorización necesarias.
+- Definir el procedimiento operativo de alta, suspensión y reactivación de
+  organizaciones en producción, incluidos responsables y recuperación del
+  servicio.
 - Revisar CORS, TLS, gestión centralizada y rotación de secretos.
 - Endurecer y escanear imágenes y contenedores.
 - Definir copias de seguridad, restauración y retención de auditoría.

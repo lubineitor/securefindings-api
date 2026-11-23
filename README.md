@@ -275,6 +275,11 @@ Los filtros:
 - No permiten expresiones SQL.
 - Mantienen la paginación y el orden cronológico.
 
+Los parámetros `occurredFrom` y `occurredTo` filtran por fecha y hora en formato
+ISO-8601. Ambos límites son inclusivos. Si se envían los dos, `occurredFrom` debe
+ser anterior o igual a `occurredTo`; de lo contrario, la API responde
+`400 VALIDATION_ERROR`.
+
 ### Comentarios
 
 La API permite añadir comentarios a los hallazgos y consultarlos de forma paginada.
@@ -743,6 +748,7 @@ Antes de importar, puedes validar el fichero sin guardar datos usando
 curl.exe --request POST "http://localhost:8080/api/v1/findings/import?dryRun=true" `
   --header "Authorization: Bearer $env:TOKEN" `
   --form "file=@hallazgos.csv;type=text/csv"
+```
 
 Ejemplo de respuesta `201`:
 
@@ -809,9 +815,12 @@ Ejemplo de respuesta `201` al importar:
 | `GET` | `/api/v1/organizations/current/audit/assets/export` | Exporta la auditoría filtrada de activos a CSV | `ANALYST`, `ADMIN` |
 | `GET` | `/api/v1/organizations/current/audit` | Consulta la auditoría de hallazgos de la organización actual | `ANALYST`, `ADMIN` |
 | `GET` | `/api/v1/organizations/current/audit/export` | Exporta la auditoría de hallazgos filtrada a CSV | `ANALYST`, `ADMIN` |
+| `GET` | `/api/v1/organizations/{id}/status-audit` | Consulta los cambios de estado con filtros y paginación | `ADMIN` |
+| `GET` | `/api/v1/organizations/{id}/status-audit/export` | Exporta la auditoría de estado filtrada a CSV | `ADMIN` |
 | `POST` | `/api/v1/organizations` | Crea una organización | `ADMIN` |
 | `PATCH` | `/api/v1/organizations/{id}` | Actualiza el nombre visible de una organización | `ADMIN` |
 | `PATCH` | `/api/v1/organizations/current` | Actualiza el nombre visible de la organización | `ADMIN` |
+| `PATCH` | `/api/v1/organizations/{id}/status` | Suspende o reactiva una organización | `ADMIN` |
 | `DELETE` | `/api/v1/organizations/{id}` | Elimina una organización vacía | `ADMIN` |
 
 #### Listar organizaciones
@@ -825,6 +834,23 @@ solo está disponible para el rol `ADMIN`. La respuesta se pagina con orden
 | `page` | `0` | Mayor o igual que `0` |
 | `size` | `20` | Entre `1` y `100` |
 | `q` | Sin filtro | Hasta 100 caracteres; busca por nombre o slug sin distinguir mayúsculas |
+
+##### Exportar la auditoría de estado
+
+`GET /api/v1/organizations/{id}/status-audit/export` genera un CSV UTF-8 con los
+mismos filtros de acción, actor, `requestId` y fechas. La exportación admite
+hasta 1.000 eventos; si el resultado supera el límite, responde `413` con el
+código `ORGANIZATION_STATUS_AUDIT_EXPORT_LIMIT_EXCEEDED`. La respuesta usa
+`Cache-Control: no-store` y el nombre
+`securefindings-organization-status-audit.csv`.
+
+El CSV incluye las columnas `id`, `organizationId`, `action`, `actor`,
+`occurredAt`, `requestId` y `reason`. El motivo aparece vacío en los eventos
+históricos que no lo tenían registrado.
+
+```text
+GET /api/v1/organizations/00000000-0000-0000-0000-000000000001/status-audit/export?action=SUSPENDED&occurredFrom=2026-11-01T00:00:00Z&occurredTo=2026-11-30T23:59:59Z
+```
 
 #### Consultar una organización
 
@@ -878,6 +904,51 @@ El cuerpo de la petición PATCH contiene el nombre, con un máximo de 150 caract
 {
   "name": "Secure Findings Europe"
 }
+```
+
+#### Suspender o reactivar una organización
+
+`PATCH /api/v1/organizations/{id}/status` requiere el rol `ADMIN`. Suspender una
+organización bloquea las peticiones que usan su claim `organization_id`. Sus
+datos se conservan. Un administrador puede reactivarla desde la administración
+global.
+
+El cuerpo debe incluir `status` y `reason`. El motivo es obligatorio, debe
+tener entre 10 y 500 caracteres después de eliminar los espacios exteriores y
+queda registrado en la auditoría del cambio.
+
+```json
+{
+  "status": "SUSPENDED",
+  "reason": "Incidente confirmado por revisión"
+}
+```
+
+#### Auditoría de estado de organizaciones
+
+`GET /api/v1/organizations/{id}/status-audit` devuelve los eventos de
+suspensión y reactivación de una organización. Requiere el rol `ADMIN`.
+Los resultados se ordenan por fecha e identificador descendentes.
+
+Cada evento incluye la acción, el actor, la fecha, el `requestId` cuando está
+disponible y el motivo del cambio. Los eventos creados antes de guardar motivos
+pueden devolver `reason` como `null`.
+
+| Parámetro | Descripción |
+|---|---|
+| `page` | Página desde `0`; predeterminado `0`. |
+| `size` | Eventos por página, entre `1` y `100`; predeterminado `20`. |
+| `action` | `SUSPENDED` o `REACTIVATED`. |
+| `requestId` | Coincidencia exacta; entre 1 y 64 caracteres, empieza por una letra o número y admite letras, números, `.`, `_` y `-`. |
+| `actor` | Coincidencia exacta; máximo 255 caracteres. |
+| `occurredFrom` | Fecha y hora ISO-8601 inclusiva. |
+| `occurredTo` | Fecha y hora ISO-8601 inclusiva. |
+
+Si se envían ambas fechas, `occurredFrom` debe ser anterior o igual a
+`occurredTo`; en caso contrario, la API responde `400 VALIDATION_ERROR`.
+
+```text
+GET /api/v1/organizations/00000000-0000-0000-0000-000000000001/status-audit?action=SUSPENDED&actor=admin&occurredFrom=2026-10-01T00:00:00Z&occurredTo=2026-10-31T23:59:59Z
 ```
 
 ### Parámetros del listado

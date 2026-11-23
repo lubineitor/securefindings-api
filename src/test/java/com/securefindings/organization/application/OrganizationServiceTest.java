@@ -32,6 +32,7 @@ import com.securefindings.audit.persistence.FindingAuditRepository;
 import com.securefindings.comment.persistence.FindingCommentRepository;
 import com.securefindings.finding.persistence.FindingRepository;
 import com.securefindings.organization.domain.Organization;
+import com.securefindings.organization.domain.OrganizationStatus;
 import com.securefindings.organization.persistence.OrganizationEntity;
 import com.securefindings.organization.persistence.OrganizationRepository;
 import com.securefindings.security.OrganizationContext;
@@ -373,5 +374,30 @@ class OrganizationServiceTest {
 
                 assertEquals(ORGANIZATION_ID, exception.organizationId());
                 assertNotNull(exception.getCause());
+        }
+
+        @Test
+        void deberiaConservarElEstadoSuspendidoAlActualizarElNombre() {
+                Instant createdAt = Instant.parse("2026-10-01T10:00:00Z");
+                Organization original = new Organization(
+                                ORGANIZATION_ID,
+                                "Secure Findings",
+                                "secure-findings",
+                                createdAt,
+                                OrganizationStatus.SUSPENDED);
+
+                when(organizationRepository.findById(ORGANIZATION_ID))
+                                .thenReturn(Optional.of(new OrganizationEntity(original)));
+                when(organizationRepository.save(any(OrganizationEntity.class)))
+                                .thenAnswer(invocation -> invocation.getArgument(0));
+
+                Organization actual = organizationService.updateOrganization(
+                                ORGANIZATION_ID,
+                                "Secure Findings Europe");
+
+                assertEquals("Secure Findings Europe", actual.name());
+                assertEquals("secure-findings", actual.slug());
+                assertEquals(createdAt, actual.createdAt());
+                assertEquals(OrganizationStatus.SUSPENDED, actual.status());
         }
 }

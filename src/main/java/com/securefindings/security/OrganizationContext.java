@@ -8,6 +8,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Component;
 
+import com.securefindings.organization.domain.OrganizationStatus;
 import com.securefindings.organization.persistence.OrganizationRepository;
 
 @Component
@@ -20,9 +21,7 @@ public class OrganizationContext {
 
     private final OrganizationRepository organizationRepository;
 
-    public OrganizationContext(
-            OrganizationRepository organizationRepository) {
-
+    public OrganizationContext(OrganizationRepository organizationRepository) {
         this.organizationRepository = organizationRepository;
     }
 
@@ -31,8 +30,7 @@ public class OrganizationContext {
                 .getContext()
                 .getAuthentication();
 
-        if (authentication == null
-                || !authentication.isAuthenticated()) {
+        if (authentication == null || !authentication.isAuthenticated()) {
             return SYSTEM_ORGANIZATION_ID;
         }
 
@@ -45,8 +43,7 @@ public class OrganizationContext {
                 .getToken()
                 .getClaimAsString(ORGANIZATION_CLAIM);
 
-        if (rawOrganizationId == null
-                || rawOrganizationId.isBlank()) {
+        if (rawOrganizationId == null || rawOrganizationId.isBlank()) {
             throw new AccessDeniedException(
                     "El token no contiene el claim organization_id");
         }
@@ -61,9 +58,13 @@ public class OrganizationContext {
                     exception);
         }
 
-        if (!organizationRepository.existsById(organizationId)) {
+        boolean organizationIsActive = organizationRepository.existsByIdAndStatus(
+                organizationId,
+                OrganizationStatus.ACTIVE);
+
+        if (!organizationIsActive) {
             throw new AccessDeniedException(
-                    "La organización del token no existe");
+                    "La organización del token no existe o está suspendida");
         }
 
         return organizationId;

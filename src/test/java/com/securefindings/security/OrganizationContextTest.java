@@ -22,134 +22,142 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 
+import com.securefindings.organization.domain.OrganizationStatus;
 import com.securefindings.organization.persistence.OrganizationRepository;
 
 @ExtendWith(MockitoExtension.class)
 class OrganizationContextTest {
 
-    private static final UUID ORGANIZATION_ID = UUID.fromString(
-            "00000000-0000-0000-0000-000000000001");
+        private static final UUID ORGANIZATION_ID = UUID.fromString(
+                        "00000000-0000-0000-0000-000000000001");
 
-    @Mock
-    private OrganizationRepository organizationRepository;
+        @Mock
+        private OrganizationRepository organizationRepository;
 
-    @InjectMocks
-    private OrganizationContext organizationContext;
+        @InjectMocks
+        private OrganizationContext organizationContext;
 
-    @AfterEach
-    void limpiarContextoDeSeguridad() {
-        SecurityContextHolder.clearContext();
-    }
+        @AfterEach
+        void limpiarContextoDeSeguridad() {
+                SecurityContextHolder.clearContext();
+        }
 
-    @Test
-    void deberiaObtenerLaOrganizacionDesdeElToken() {
-        when(organizationRepository.existsById(ORGANIZATION_ID))
-                .thenReturn(true);
+        @Test
+        void deberiaObtenerLaOrganizacionActivaDesdeElToken() {
+                when(organizationRepository.existsByIdAndStatus(
+                                ORGANIZATION_ID,
+                                OrganizationStatus.ACTIVE))
+                                .thenReturn(true);
 
-        autenticarConClaim(
-                ORGANIZATION_ID.toString());
+                autenticarConClaim(ORGANIZATION_ID.toString());
 
-        UUID organizationId = organizationContext.currentOrganizationId();
+                UUID organizationId = organizationContext.currentOrganizationId();
 
-        assertEquals(ORGANIZATION_ID, organizationId);
+                assertEquals(ORGANIZATION_ID, organizationId);
+                verify(organizationRepository).existsByIdAndStatus(
+                                ORGANIZATION_ID,
+                                OrganizationStatus.ACTIVE);
+        }
 
-        verify(organizationRepository)
-                .existsById(ORGANIZATION_ID);
-    }
+        @Test
+        void deberiaRechazarUnaOrganizacionSuspendida() {
+                when(organizationRepository.existsByIdAndStatus(
+                                ORGANIZATION_ID,
+                                OrganizationStatus.ACTIVE))
+                                .thenReturn(false);
 
-    @Test
-    void deberiaRechazarUnTokenSinOrganizacion() {
-        autenticarSinClaimDeOrganizacion();
+                autenticarConClaim(ORGANIZATION_ID.toString());
 
-        assertThrows(
-                AccessDeniedException.class,
-                () -> organizationContext.currentOrganizationId());
+                assertThrows(
+                                AccessDeniedException.class,
+                                () -> organizationContext.currentOrganizationId());
 
-        verifyNoInteractions(organizationRepository);
-    }
+                verify(organizationRepository).existsByIdAndStatus(
+                                ORGANIZATION_ID,
+                                OrganizationStatus.ACTIVE);
+        }
 
-    @Test
-    void deberiaRechazarUnClaimConFormatoInvalido() {
-        autenticarConClaim("organizacion-invalida");
+        @Test
+        void deberiaRechazarUnTokenSinOrganizacion() {
+                autenticarSinClaimDeOrganizacion();
 
-        assertThrows(
-                AccessDeniedException.class,
-                () -> organizationContext.currentOrganizationId());
+                assertThrows(
+                                AccessDeniedException.class,
+                                () -> organizationContext.currentOrganizationId());
 
-        verifyNoInteractions(organizationRepository);
-    }
+                verifyNoInteractions(organizationRepository);
+        }
 
-    @Test
-    void deberiaRechazarUnaOrganizacionInexistente() {
-        UUID unknownOrganizationId = UUID.randomUUID();
+        @Test
+        void deberiaRechazarUnClaimConFormatoInvalido() {
+                autenticarConClaim("organizacion-invalida");
 
-        when(organizationRepository
-                .existsById(unknownOrganizationId))
-                .thenReturn(false);
+                assertThrows(
+                                AccessDeniedException.class,
+                                () -> organizationContext.currentOrganizationId());
 
-        autenticarConClaim(
-                unknownOrganizationId.toString());
+                verifyNoInteractions(organizationRepository);
+        }
 
-        assertThrows(
-                AccessDeniedException.class,
-                () -> organizationContext.currentOrganizationId());
+        @Test
+        void deberiaRechazarUnaOrganizacionInexistente() {
+                UUID unknownOrganizationId = UUID.randomUUID();
 
-        verify(organizationRepository)
-                .existsById(unknownOrganizationId);
-    }
+                when(organizationRepository.existsByIdAndStatus(
+                                unknownOrganizationId,
+                                OrganizationStatus.ACTIVE))
+                                .thenReturn(false);
 
-    @Test
-    void deberiaUsarLaOrganizacionDelSistemaSinAutenticacion() {
-        SecurityContextHolder.clearContext();
+                autenticarConClaim(unknownOrganizationId.toString());
 
-        UUID organizationId = organizationContext.currentOrganizationId();
+                assertThrows(
+                                AccessDeniedException.class,
+                                () -> organizationContext.currentOrganizationId());
 
-        assertEquals(
-                ORGANIZATION_ID,
-                organizationId);
+                verify(organizationRepository).existsByIdAndStatus(
+                                unknownOrganizationId,
+                                OrganizationStatus.ACTIVE);
+        }
 
-        verifyNoInteractions(organizationRepository);
-    }
+        @Test
+        void deberiaUsarLaOrganizacionDelSistemaSinAutenticacion() {
+                SecurityContextHolder.clearContext();
 
-    private void autenticarConClaim(String organizationId) {
-        Jwt jwt = Jwt.withTokenValue("token-de-prueba")
-                .header("alg", "RS256")
-                .claim("organization_id", organizationId)
-                .issuedAt(Instant.now())
-                .expiresAt(
-                        Instant.now().plusSeconds(300))
-                .build();
+                UUID organizationId = organizationContext.currentOrganizationId();
 
-        JwtAuthenticationToken authentication = new JwtAuthenticationToken(jwt);
+                assertEquals(ORGANIZATION_ID, organizationId);
+                verifyNoInteractions(organizationRepository);
+        }
 
-        authentication.setAuthenticated(true);
+        private void autenticarConClaim(String organizationId) {
+                Jwt jwt = Jwt.withTokenValue("token-de-prueba")
+                                .header("alg", "RS256")
+                                .claim("organization_id", organizationId)
+                                .issuedAt(Instant.now())
+                                .expiresAt(Instant.now().plusSeconds(300))
+                                .build();
 
-        establecerAutenticacion(authentication);
-    }
+                JwtAuthenticationToken authentication = new JwtAuthenticationToken(jwt);
+                authentication.setAuthenticated(true);
+                establecerAutenticacion(authentication);
+        }
 
-    private void autenticarSinClaimDeOrganizacion() {
-        Jwt jwt = Jwt.withTokenValue("token-de-prueba")
-                .header("alg", "RS256")
-                .claim("preferred_username", "analista")
-                .issuedAt(Instant.now())
-                .expiresAt(
-                        Instant.now().plusSeconds(300))
-                .build();
+        private void autenticarSinClaimDeOrganizacion() {
+                Jwt jwt = Jwt.withTokenValue("token-de-prueba")
+                                .header("alg", "RS256")
+                                .claim("preferred_username", "analista")
+                                .issuedAt(Instant.now())
+                                .expiresAt(Instant.now().plusSeconds(300))
+                                .build();
 
-        JwtAuthenticationToken authentication = new JwtAuthenticationToken(jwt);
+                JwtAuthenticationToken authentication = new JwtAuthenticationToken(jwt);
+                authentication.setAuthenticated(true);
+                establecerAutenticacion(authentication);
+        }
 
-        authentication.setAuthenticated(true);
-
-        establecerAutenticacion(authentication);
-    }
-
-    private void establecerAutenticacion(
-            Authentication authentication) {
-
-        SecurityContext securityContext = SecurityContextHolder.createEmptyContext();
-
-        securityContext.setAuthentication(authentication);
-
-        SecurityContextHolder.setContext(securityContext);
-    }
+        private void establecerAutenticacion(Authentication authentication) {
+                SecurityContext securityContext = SecurityContextHolder.createEmptyContext();
+                securityContext.setAuthentication(authentication);
+                SecurityContextHolder.setContext(securityContext);
+        }
 }

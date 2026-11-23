@@ -203,6 +203,17 @@ public class SecurityConfig {
                                                                 "/api/v1/organizations/current/audit/assets/**")
                                                 .hasAnyRole("ANALYST", "ADMIN")
 
+                                                .requestMatchers(
+                                                                HttpMethod.PATCH,
+                                                                "/api/v1/organizations/*/status")
+                                                .hasRole("ADMIN")
+
+                                                .requestMatchers(
+                                                                HttpMethod.GET,
+                                                                "/api/v1/organizations/*/status-audit",
+                                                                "/api/v1/organizations/*/status-audit/export")
+                                                .hasRole("ADMIN")
+
                                                 .anyRequest()
                                                 .hasAnyRole("ANALYST", "ADMIN"))
 
