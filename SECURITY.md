@@ -88,7 +88,7 @@ Los principales riesgos considerados son:
 | API REST | Acceso sin autenticación | OAuth2 Resource Server y JWT |
 | API REST | Abuso automatizado o exceso de solicitudes | Rate limiting configurable |
 | Tokens | Manipulación o falsificación | Validación de firma, emisor y expiración |
-| Directorio de organizaciones | Enumeración, modificación o eliminación no autorizada de organizaciones | El listado, la consulta, la actualización, el alta y la eliminación requieren `ADMIN`; la paginación limita cada respuesta a 100 organizaciones, la búsqueda a 100 caracteres, el slug es único y solo se eliminan organizaciones sin datos asociados |
+| Directorio de organizaciones | Enumeración, modificación o eliminación no autorizada de organizaciones | El listado, la consulta, la actualización, el alta, la eliminación, la suspensión o reactivación y la consulta o exportación de su auditoría requieren `ADMIN`; la paginación limita cada respuesta a 100 organizaciones, la búsqueda a 100 caracteres, el slug es único y solo se eliminan organizaciones sin datos asociados |
 | Parámetros de búsqueda | Inyección o consultas no controladas | Parámetros enlazados mediante JPA |
 | Ordenación | Manipulación de propiedades internas | Lista blanca de campos permitidos |
 | Filtros de auditoría | Acceso a eventos de otra organización o filtros arbitrarios | Organización derivada del token, enums y parámetros enlazados |
@@ -859,6 +859,20 @@ La consulta admite `page` y `size`, además de filtros por `action`,
 y admite hasta 255 caracteres. Las fechas ISO-8601 son inclusivas. Si se envían
 ambas, `occurredFrom` debe ser anterior o igual a `occurredTo`; si no, la API
 responde `400 VALIDATION_ERROR`.
+
+#### Exportación CSV de la auditoría de estado
+
+`GET /api/v1/organizations/{id}/status-audit/export` permite exportar los
+eventos de estado de una organización. Requiere el rol `ADMIN` y utiliza el UUID
+de la ruta; no deriva la organización del claim `organization_id` del token.
+
+La exportación aplica los mismos filtros y validaciones descritos para la
+consulta paginada. Está limitada a 1.000 eventos; si supera ese límite, responde
+`413` con el código `ORGANIZATION_STATUS_AUDIT_EXPORT_LIMIT_EXCEEDED`.
+
+El CSV se genera en UTF-8. Los valores se escapan y neutralizan para evitar la
+inyección de fórmulas en hojas de cálculo. La respuesta incluye
+`Cache-Control: no-store`.
 
 ### Historial de activos
 

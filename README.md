@@ -816,6 +816,7 @@ Ejemplo de respuesta `201` al importar:
 | `GET` | `/api/v1/organizations/current/audit` | Consulta la auditoría de hallazgos de la organización actual | `ANALYST`, `ADMIN` |
 | `GET` | `/api/v1/organizations/current/audit/export` | Exporta la auditoría de hallazgos filtrada a CSV | `ANALYST`, `ADMIN` |
 | `GET` | `/api/v1/organizations/{id}/status-audit` | Consulta los cambios de estado con filtros y paginación | `ADMIN` |
+| `GET` | `/api/v1/organizations/{id}/status-audit/export` | Exporta la auditoría de estado filtrada a CSV | `ADMIN` |
 | `POST` | `/api/v1/organizations` | Crea una organización | `ADMIN` |
 | `PATCH` | `/api/v1/organizations/{id}` | Actualiza el nombre visible de una organización | `ADMIN` |
 | `PATCH` | `/api/v1/organizations/current` | Actualiza el nombre visible de la organización | `ADMIN` |
@@ -833,6 +834,19 @@ solo está disponible para el rol `ADMIN`. La respuesta se pagina con orden
 | `page` | `0` | Mayor o igual que `0` |
 | `size` | `20` | Entre `1` y `100` |
 | `q` | Sin filtro | Hasta 100 caracteres; busca por nombre o slug sin distinguir mayúsculas |
+
+##### Exportar la auditoría de estado
+
+`GET /api/v1/organizations/{id}/status-audit/export` genera un CSV UTF-8 con los
+mismos filtros de acción, actor, `requestId` y fechas. La exportación admite
+hasta 1.000 eventos; si el resultado supera el límite, responde `413` con el
+código `ORGANIZATION_STATUS_AUDIT_EXPORT_LIMIT_EXCEEDED`. La respuesta usa
+`Cache-Control: no-store` y el nombre
+`securefindings-organization-status-audit.csv`.
+
+```text
+GET /api/v1/organizations/00000000-0000-0000-0000-000000000001/status-audit/export?action=SUSPENDED&occurredFrom=2026-11-01T00:00:00Z&occurredTo=2026-11-30T23:59:59Z
+```
 
 #### Consultar una organización
 
