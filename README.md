@@ -275,6 +275,11 @@ Los filtros:
 - No permiten expresiones SQL.
 - Mantienen la paginación y el orden cronológico.
 
+Los parámetros `occurredFrom` y `occurredTo` filtran por fecha y hora en formato
+ISO-8601. Ambos límites son inclusivos. Si se envían los dos, `occurredFrom` debe
+ser anterior o igual a `occurredTo`; de lo contrario, la API responde
+`400 VALIDATION_ERROR`.
+
 ### Comentarios
 
 La API permite añadir comentarios a los hallazgos y consultarlos de forma paginada.
@@ -905,20 +910,9 @@ Los resultados se ordenan por fecha e identificador descendentes.
 |---|---|
 | `page` | Número de página desde `0`. |
 | `size` | Eventos por página, entre `1` y `100`. |
-| `action` | Filtra por `SUSPENDED` o `REACTIVATED`. |
-| `requestId` | Filtra por identificador de petición; hasta 64 caracteres. |
-| `actor` | Filtra por actor; hasta 255 caracteres. |
-| `occurredFrom` | Fecha inicial inclusiva en formato ISO-8601. |
-| `occurredTo` | Fecha final inclusiva en formato ISO-8601. |
-
-Si se indican ambas fechas, `occurredFrom` debe ser anterior o igual a
-`occurredTo`. Los filtros inválidos responden `400 VALIDATION_ERROR`.
-
-Cada evento incluye la acción, el actor, la fecha y el `requestId`, si estaba
-disponible.
 
 ```text
-GET /api/v1/organizations/00000000-0000-0000-0000-000000000001/status-audit?action=SUSPENDED&actor=admin&occurredFrom=2026-11-01T00:00:00Z&occurredTo=2026-11-30T23:59:59Z&page=0&size=20
+GET /api/v1/organizations/00000000-0000-0000-0000-000000000001/status-audit?page=0&size=20
 ```
 
 ### Parámetros del listado
