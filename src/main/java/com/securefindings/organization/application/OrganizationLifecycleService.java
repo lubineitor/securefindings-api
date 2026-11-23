@@ -36,10 +36,12 @@ public class OrganizationLifecycleService {
         @Transactional
         public Organization changeStatus(
                         UUID organizationId,
-                        OrganizationStatus status) {
+                        OrganizationStatus status,
+                        String reason) {
 
                 UUID checkedId = Objects.requireNonNull(organizationId);
                 OrganizationStatus checkedStatus = Objects.requireNonNull(status);
+                String checkedReason = validateReason(reason);
 
                 Organization current = organizationRepository.findById(checkedId)
                                 .map(entity -> Objects.requireNonNull(
@@ -72,7 +74,8 @@ public class OrganizationLifecycleService {
                                 action,
                                 currentActor(),
                                 Instant.now(),
-                                RequestCorrelationFilter.currentRequestId());
+                                RequestCorrelationFilter.currentRequestId(),
+                                checkedReason);
 
                 auditRepository.save(new OrganizationStatusAuditEntity(event));
 
@@ -80,6 +83,22 @@ public class OrganizationLifecycleService {
                                 saved,
                                 "El repositorio devolvió una organización nula")
                                 .toDomain();
+        }
+
+        private String validateReason(String reason) {
+                if (reason == null) {
+                        throw new IllegalArgumentException("El motivo del cambio es obligatorio");
+                }
+
+                String checkedReason = reason.strip();
+
+                if (checkedReason.length() < OrganizationStatusAuditEvent.MIN_REASON_LENGTH
+                                || checkedReason.length() > OrganizationStatusAuditEvent.MAX_REASON_LENGTH) {
+                        throw new IllegalArgumentException(
+                                        "El motivo debe tener entre 10 y 500 caracteres");
+                }
+
+                return checkedReason;
         }
 
         private String currentActor() {

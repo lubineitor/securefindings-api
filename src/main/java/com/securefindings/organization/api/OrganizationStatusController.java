@@ -38,6 +38,7 @@ public class OrganizationStatusController {
         return OrganizationResponse.from(
                 lifecycleService.changeStatus(
                         organizationId,
-                        request.status()));
+                        request.status(),
+                        request.reason()));
     }
 }

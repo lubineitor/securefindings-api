@@ -15,7 +15,8 @@ public class OrganizationStatusAuditCsvExporter {
             "action",
             "actor",
             "occurredAt",
-            "requestId");
+            "requestId",
+            "reason");
 
     public String toCsv(List<OrganizationStatusAuditEntity> events) {
         StringBuilder csv = new StringBuilder();
@@ -28,7 +29,8 @@ public class OrganizationStatusAuditCsvExporter {
                     event.getAction().name(),
                     event.getActor(),
                     event.getOccurredAt().toString(),
-                    event.getRequestId() == null ? "" : event.getRequestId()));
+                    event.getRequestId() == null ? "" : event.getRequestId(),
+                    event.getReason() == null ? "" : event.getReason()));
         }
 
         return csv.toString();

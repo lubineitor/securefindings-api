@@ -37,6 +37,9 @@ public class OrganizationStatusAuditEntity {
     @Column(name = "request_id", length = 64, updatable = false)
     private String requestId;
 
+    @Column(name = "reason", length = 500, updatable = false)
+    private String reason;
+
     protected OrganizationStatusAuditEntity() {
     }
 
@@ -47,6 +50,7 @@ public class OrganizationStatusAuditEntity {
         this.actor = event.actor();
         this.occurredAt = event.occurredAt();
         this.requestId = event.requestId();
+        this.reason = event.reason();
     }
 
     public UUID getId() {
@@ -71,5 +75,9 @@ public class OrganizationStatusAuditEntity {
 
     public String getRequestId() {
         return requestId;
+    }
+
+    public String getReason() {
+        return reason;
     }
 }
