@@ -7,6 +7,7 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -49,6 +50,7 @@ public class FindingService {
 
         private static final String SYSTEM_ACTOR = "system";
         private static final Duration MAX_TREND_RANGE = Duration.ofDays(366);
+        public static final int MAX_BULK_STATUS_ITEMS = 100;
 
         public static final int MAX_EXPORT_ROWS = 1_000;
 
@@ -822,5 +824,91 @@ public class FindingService {
                                 total,
                                 byStatus,
                                 bySeverity);
+        }
+
+        @Transactional
+        public List<Finding> updateStatuses(
+                        List<UUID> findingIds,
+                        FindingStatus targetStatus) {
+
+                if (findingIds == null || findingIds.isEmpty()) {
+                        throw new IllegalArgumentException(
+                                        "Debe indicarse al menos un hallazgo");
+                }
+
+                if (findingIds.size() > MAX_BULK_STATUS_ITEMS) {
+                        throw new IllegalArgumentException(
+                                        "No se pueden actualizar más de 100 hallazgos en una operación");
+                }
+
+                if (findingIds.stream().anyMatch(Objects::isNull)) {
+                        throw new IllegalArgumentException(
+                                        "Los identificadores de hallazgos no pueden ser nulos");
+                }
+
+                if (targetStatus == null) {
+                        throw new IllegalArgumentException(
+                                        "El estado de destino es obligatorio");
+                }
+
+                LinkedHashSet<UUID> uniqueIds = new LinkedHashSet<>(findingIds);
+
+                if (uniqueIds.size() != findingIds.size()) {
+                        throw new IllegalArgumentException(
+                                        "La lista contiene identificadores duplicados");
+                }
+
+                List<UUID> orderedIds = List.copyOf(uniqueIds);
+                UUID organizationId = organizationContext.currentOrganizationId();
+
+                List<FindingEntity> entities = findingRepository.findAllByIdsAndOrganizationId(
+                                orderedIds,
+                                organizationId);
+
+                Map<UUID, Finding> currentFindings = new LinkedHashMap<>();
+
+                for (FindingEntity entity : entities) {
+                        Finding finding = Objects.requireNonNull(
+                                        entity,
+                                        "El repositorio devolvió una entidad nula")
+                                        .toDomain();
+
+                        currentFindings.put(finding.id(), finding);
+                }
+
+                // Validar todo el lote antes de escribir o generar auditoría.
+                for (UUID id : orderedIds) {
+                        Finding currentFinding = currentFindings.get(id);
+
+                        if (currentFinding == null) {
+                                throw new FindingNotFoundException(id);
+                        }
+
+                        if (!currentFinding.status().canTransitionTo(targetStatus)) {
+                                throw new FindingStatusTransitionException(
+                                                id,
+                                                currentFinding.status(),
+                                                targetStatus);
+                        }
+                }
+
+                String actor = currentActor();
+                List<Finding> updatedFindings = new ArrayList<>();
+
+                for (UUID id : orderedIds) {
+                        Finding updatedFinding = currentFindings.get(id)
+                                        .withStatus(targetStatus);
+
+                        Finding savedFinding = save(updatedFinding, organizationId);
+
+                        auditService.register(
+                                        savedFinding.id(),
+                                        AuditAction.UPDATED,
+                                        actor);
+
+                        updatedFindings.add(savedFinding);
+                }
+
+                return List.copyOf(updatedFindings);
         }
 }
