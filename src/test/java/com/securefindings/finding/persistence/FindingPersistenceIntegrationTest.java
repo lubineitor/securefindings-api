@@ -1,6 +1,7 @@
 package com.securefindings.finding.persistence;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Instant;
@@ -34,6 +35,7 @@ import com.securefindings.audit.persistence.FindingAuditRepository;
 import com.securefindings.finding.api.FindingSortDirection;
 import com.securefindings.finding.api.FindingSortField;
 import com.securefindings.finding.application.FindingService;
+import com.securefindings.finding.application.FindingStatusTransitionException;
 import com.securefindings.finding.domain.Finding;
 import com.securefindings.finding.domain.FindingOverdueSummary;
 import com.securefindings.finding.domain.FindingSeverity;
@@ -952,5 +954,81 @@ class FindingPersistenceIntegrationTest {
                 assertEquals(
                                 1L,
                                 trend.points().get(2).bySeverity().get(FindingSeverity.CRITICAL));
+        }
+
+        @Test
+        void deberiaActualizarVariosHallazgosYRegistrarCadaEvento() {
+                Finding first = findingService.create(
+                                "Hallazgo masivo 1",
+                                "Descripción del primer hallazgo",
+                                FindingSeverity.HIGH);
+
+                Finding second = findingService.create(
+                                "Hallazgo masivo 2",
+                                "Descripción del segundo hallazgo",
+                                FindingSeverity.MEDIUM);
+
+                List<Finding> updated = findingService.updateStatuses(
+                                List.of(first.id(), second.id()),
+                                FindingStatus.IN_PROGRESS);
+
+                assertEquals(2, updated.size());
+                assertEquals(
+                                first.id(),
+                                Objects.requireNonNull(updated.get(0)).id());
+                assertEquals(
+                                second.id(),
+                                Objects.requireNonNull(updated.get(1)).id());
+
+                for (UUID findingId : List.of(first.id(), second.id())) {
+                        Page<FindingAuditEntity> events = findingAuditRepository
+                                        .findByFindingIdAndOrganizationIdOrderByOccurredAtAsc(
+                                                        findingId,
+                                                        ORGANIZATION_ID,
+                                                        PageRequest.of(0, 10));
+
+                        assertEquals(2, events.getTotalElements());
+                        assertEquals(
+                                        AuditAction.UPDATED,
+                                        events.getContent().get(1).getAction());
+                }
+        }
+
+        @Test
+        void deberiaMantenerElLoteSinCambiosSiUnaTransicionNoEsValida() {
+                Finding open = findingService.create(
+                                "Hallazgo que debe quedar abierto",
+                                "Descripción del hallazgo abierto",
+                                FindingSeverity.HIGH);
+
+                Finding resolved = findingService.create(
+                                "Hallazgo resuelto",
+                                "Descripción del hallazgo resuelto",
+                                FindingSeverity.MEDIUM);
+
+                findingService.updateStatus(
+                                resolved.id(),
+                                FindingStatus.RESOLVED);
+
+                assertThrows(
+                                FindingStatusTransitionException.class,
+                                () -> findingService.updateStatuses(
+                                                List.of(open.id(), resolved.id()),
+                                                FindingStatus.FALSE_POSITIVE));
+
+                assertEquals(
+                                FindingStatus.OPEN,
+                                findingService.getById(open.id()).status());
+
+                Page<FindingAuditEntity> openEvents = findingAuditRepository
+                                .findByFindingIdAndOrganizationIdOrderByOccurredAtAsc(
+                                                open.id(),
+                                                ORGANIZATION_ID,
+                                                PageRequest.of(0, 10));
+
+                assertEquals(1, openEvents.getTotalElements());
+                assertEquals(
+                                AuditAction.CREATED,
+                                openEvents.getContent().get(0).getAction());
         }
 }
