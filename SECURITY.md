@@ -101,6 +101,7 @@ Los principales riesgos considerados son:
 | Exportaciones CSV | Inyección de fórmulas al abrir el archivo en una hoja de cálculo | Escape de campos, neutralización de prefijos de fórmula y límite de filas |
 | Activos | Cambios sin trazabilidad | Auditoría persistida por organización con actor, acción, fecha y `requestId`; se conserva tras eliminar el activo |
 | Métricas de Actuator | Exposición de información operacional | `/actuator/prometheus` exige `ADMIN` o el service account limitado a `METRICS_READER`; Prometheus solo se publica en localhost en el entorno local |
+| Actualización masiva | Acceso entre organizaciones o cambios parciales | Consulta limitada a la organización del token, máximo de 100 IDs, validación previa de todo el lote y transacción atómica |
 
 ## Autenticación
 
@@ -256,6 +257,7 @@ Los permisos se aplican por endpoint:
 | Actualizar el nombre de la organización actual | No | Sí |
 | Suspender o reactivar organizaciones | No | Sí |
 | Consultar la auditoría de estado de una organización | No | Sí |
+| Actualizar en lote el estado de hallazgos | Sí | Sí |
 
 La aplicación responde:
 

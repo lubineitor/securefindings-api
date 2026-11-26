@@ -821,6 +821,7 @@ Ejemplo de respuesta `201` al importar:
 | `PATCH` | `/api/v1/organizations/{id}` | Actualiza el nombre visible de una organización | `ADMIN` |
 | `PATCH` | `/api/v1/organizations/current` | Actualiza el nombre visible de la organización | `ADMIN` |
 | `PATCH` | `/api/v1/organizations/{id}/status` | Suspende o reactiva una organización | `ADMIN` |
+| `PATCH` | `/api/v1/findings/status/bulk` | Actualiza en una operación atómica el estado de hasta 100 hallazgos | `ANALYST`, `ADMIN` |
 | `DELETE` | `/api/v1/organizations/{id}` | Elimina una organización vacía | `ADMIN` |
 
 #### Listar organizaciones
@@ -998,6 +999,22 @@ La respuesta paginada contiene:
   "totalPages": 0,
   "first": true,
   "last": true
+}
+```
+
+#### Actualización masiva de estados
+
+`PATCH /api/v1/findings/status/bulk` permite actualizar entre 1 y 100 hallazgos
+de la organización actual. El lote se procesa de forma atómica: si falta un
+hallazgo o alguna transición no está permitida, no se actualiza ninguno.
+
+```json
+{
+  "findingIds": [
+    "11111111-1111-1111-1111-111111111111",
+    "22222222-2222-2222-2222-222222222222"
+  ],
+  "status": "IN_PROGRESS"
 }
 ```
 

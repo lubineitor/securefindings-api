@@ -65,6 +65,7 @@ en este documento y en `SECURITY.md`.
 - Auditoría paginada de suspensiones y reactivaciones, consultable por `ADMIN`
   mediante `GET /api/v1/organizations/{id}/status-audit`, incluso si la
   organización está suspendida.
+- Actualización masiva y atómica del estado de hasta 100 hallazgos, con validación de transiciones y auditoría individual.
 
 ## Criterios de aceptación del MVP
 
