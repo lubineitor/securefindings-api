@@ -25,53 +25,59 @@ import com.securefindings.security.OrganizationContext;
 @ExtendWith(MockitoExtension.class)
 class AuditStatusChangeServiceTest {
 
-    private static final UUID ORGANIZATION_ID = UUID.fromString(
-            "00000000-0000-0000-0000-000000000001");
+        private static final UUID ORGANIZATION_ID = UUID.fromString(
+                        "00000000-0000-0000-0000-000000000001");
 
-    private static final UUID FINDING_ID = UUID.fromString(
-            "11111111-1111-1111-1111-111111111111");
+        private static final UUID FINDING_ID = UUID.fromString(
+                        "11111111-1111-1111-1111-111111111111");
 
-    @Mock
-    private FindingAuditRepository auditRepository;
+        @Mock
+        private FindingAuditRepository auditRepository;
 
-    @Mock
-    private FindingRepository findingRepository;
+        @Mock
+        private FindingRepository findingRepository;
 
-    @Mock
-    private OrganizationContext organizationContext;
+        @Mock
+        private OrganizationContext organizationContext;
 
-    @Test
-    void deberiaGuardarLosEstadosAnteriorYNuevo() {
-        when(organizationContext.currentOrganizationId())
-                .thenReturn(ORGANIZATION_ID);
+        @Test
+        void deberiaGuardarLosEstadosAnteriorYNuevo() {
+                when(organizationContext.currentOrganizationId())
+                                .thenReturn(ORGANIZATION_ID);
 
-        when(findingRepository.findByIdAndOrganizationId(
-                FINDING_ID,
-                ORGANIZATION_ID))
-                .thenReturn(Optional.of(mock(FindingEntity.class)));
+                when(findingRepository.findByIdAndOrganizationId(
+                                FINDING_ID,
+                                ORGANIZATION_ID))
+                                .thenReturn(Optional.of(mock(FindingEntity.class)));
 
-        AuditService auditService = new AuditService(
-                auditRepository,
-                findingRepository,
-                organizationContext);
+                AuditService auditService = new AuditService(
+                                auditRepository,
+                                findingRepository,
+                                organizationContext);
 
-        auditService.registerStatusChange(
-                FINDING_ID,
-                FindingStatus.OPEN,
-                FindingStatus.IN_PROGRESS,
-                "analista");
+                String reason = "Se confirmó la vulnerabilidad durante la prueba manual";
 
-        ArgumentCaptor<FindingAuditEntity> captor = ArgumentCaptor.forClass(FindingAuditEntity.class);
+                auditService.registerStatusChange(
+                                FINDING_ID,
+                                FindingStatus.OPEN,
+                                FindingStatus.IN_PROGRESS,
+                                "analista",
+                                reason);
 
-        verify(auditRepository).save(captor.capture());
+                ArgumentCaptor<FindingAuditEntity> captor = ArgumentCaptor.forClass(FindingAuditEntity.class);
 
-        FindingAuditEntity event = captor.getValue();
+                verify(auditRepository).save(captor.capture());
 
-        assertEquals(FINDING_ID, event.getFindingId());
-        assertEquals(ORGANIZATION_ID, event.getOrganizationId());
-        assertEquals(AuditAction.STATUS_CHANGED, event.getAction());
-        assertEquals("analista", event.getActor());
-        assertEquals(FindingStatus.OPEN, event.getPreviousStatus());
-        assertEquals(FindingStatus.IN_PROGRESS, event.getNewStatus());
-    }
+                FindingAuditEntity event = captor.getValue();
+
+                assertEquals(FINDING_ID, event.getFindingId());
+                assertEquals(ORGANIZATION_ID, event.getOrganizationId());
+                assertEquals(AuditAction.STATUS_CHANGED, event.getAction());
+                assertEquals("analista", event.getActor());
+                assertEquals(FindingStatus.OPEN, event.getPreviousStatus());
+                assertEquals(FindingStatus.IN_PROGRESS, event.getNewStatus());
+                assertEquals(
+                                "Se confirmó la vulnerabilidad durante la prueba manual",
+                                event.getReason());
+        }
 }

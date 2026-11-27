@@ -32,13 +32,13 @@ class FindingAuditCsvExporterTest {
 
                 String csv = exporter.toCsv(List.of(event));
 
-                String expected = "\"id\",\"findingId\",\"action\",\"actor\",\"occurredAt\",\"requestId\",\"previousStatus\",\"newStatus\"\r\n"
+                String expected = "\"id\",\"findingId\",\"action\",\"actor\",\"occurredAt\",\"requestId\",\"previousStatus\",\"newStatus\",\"reason\"\r\n"
                                 + "\"11111111-1111-1111-1111-111111111111\","
                                 + "\"22222222-2222-2222-2222-222222222222\","
                                 + "\"UPDATED\","
                                 + "\"usuario, \"\"externo\"\"\","
                                 + "\"2026-10-10T08:00:00Z\","
-                                + "\"audit-request-123\",\"\",\"\"\r\n";
+                                + "\"audit-request-123\",\"\",\"\",\"\"\r\n";
 
                 assertEquals(expected, csv);
         }
@@ -78,7 +78,7 @@ class FindingAuditCsvExporterTest {
         @Test
         void deberiaDevolverLaCabeceraCuandoNoHayEventos() {
                 assertEquals(
-                                "\"id\",\"findingId\",\"action\",\"actor\",\"occurredAt\",\"requestId\",\"previousStatus\",\"newStatus\"\r\n",
+                                "\"id\",\"findingId\",\"action\",\"actor\",\"occurredAt\",\"requestId\",\"previousStatus\",\"newStatus\",\"reason\"\r\n",
                                 exporter.toCsv(List.of()));
         }
 
@@ -93,12 +93,14 @@ class FindingAuditCsvExporterTest {
                                 Instant.parse("2026-11-27T10:00:00Z"),
                                 "status-request-1",
                                 com.securefindings.finding.domain.FindingStatus.OPEN,
-                                com.securefindings.finding.domain.FindingStatus.IN_PROGRESS);
+                                com.securefindings.finding.domain.FindingStatus.IN_PROGRESS,
+                                "Motivo registrado para esta transición");
 
                 String csv = exporter.toCsv(List.of(event));
 
                 assertTrue(csv.contains(
                                 "\"STATUS_CHANGED\",\"analista\",\"2026-11-27T10:00:00Z\","
-                                                + "\"status-request-1\",\"OPEN\",\"IN_PROGRESS\""));
+                                                + "\"status-request-1\",\"OPEN\",\"IN_PROGRESS\","
+                                                + "\"Motivo registrado para esta transición\""));
         }
 }

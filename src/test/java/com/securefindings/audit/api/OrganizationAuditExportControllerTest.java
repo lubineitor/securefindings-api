@@ -71,11 +71,11 @@ class OrganizationAuditExportControllerTest {
         void deberiaExportarCsvAplicandoFiltros() throws Exception {
                 FindingAuditEntity event = mock(FindingAuditEntity.class);
                 List<FindingAuditEntity> events = List.of(event);
-                String csv = "\"id\",\"findingId\",\"action\",\"actor\",\"occurredAt\",\"requestId\",\"previousStatus\",\"newStatus\"\r\n"
+                String csv = "\"id\",\"findingId\",\"action\",\"actor\",\"occurredAt\",\"requestId\",\"previousStatus\",\"newStatus\",\"reason\"\r\n"
                                 + "\"11111111-1111-1111-1111-111111111111\","
                                 + "\"00000000-0000-0000-0000-000000000101\","
                                 + "\"UPDATED\",\"analista\",\"2026-10-10T08:00:00Z\","
-                                + "\"audit-request-123\",\"\",\"\"\r\n";
+                                + "\"audit-request-123\",\"\",\"\",\"\"\r\n";
 
                 when(event.getId()).thenReturn(
                                 UUID.fromString("11111111-1111-1111-1111-111111111111"));

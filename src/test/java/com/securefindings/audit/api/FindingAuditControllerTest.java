@@ -440,7 +440,8 @@ class FindingAuditControllerTest {
                                 Instant.parse("2026-11-27T10:00:00Z"),
                                 "status-request-1",
                                 com.securefindings.finding.domain.FindingStatus.OPEN,
-                                com.securefindings.finding.domain.FindingStatus.IN_PROGRESS);
+                                com.securefindings.finding.domain.FindingStatus.IN_PROGRESS,
+                                "Motivo registrado para esta transición");
 
                 Page<FindingAuditEntity> auditPage = new PageImpl<>(
                                 List.of(statusEvent),
@@ -459,6 +460,8 @@ class FindingAuditControllerTest {
                                 .andExpect(jsonPath("$.content[0].previousStatus")
                                                 .value("OPEN"))
                                 .andExpect(jsonPath("$.content[0].newStatus")
-                                                .value("IN_PROGRESS"));
+                                                .value("IN_PROGRESS"))
+                                .andExpect(jsonPath("$.content[0].reason")
+                                                .value("Motivo registrado para esta transición"));
         }
 }
