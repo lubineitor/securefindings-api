@@ -1028,4 +1028,29 @@ class FindingPersistenceIntegrationTest {
                                 AuditAction.CREATED,
                                 openEvents.getContent().get(0).getAction());
         }
+
+        @Test
+        void deberiaPersistirElMotivoDeLaTransicionEnPostgreSQL() {
+                Finding createdFinding = findingService.create(
+                                "Hallazgo con motivo de transición",
+                                "Prueba de persistencia del motivo de auditoría",
+                                FindingSeverity.HIGH);
+                String reason = "Confirmado mediante una prueba de explotación controlada";
+
+                findingService.updateStatus(
+                                createdFinding.id(),
+                                FindingStatus.IN_PROGRESS,
+                                reason);
+
+                Page<FindingAuditEntity> events = findingAuditRepository
+                                .findByFindingIdAndOrganizationIdAndActionOrderByOccurredAtAsc(
+                                                createdFinding.id(),
+                                                ORGANIZATION_ID,
+                                                AuditAction.STATUS_CHANGED,
+                                                PageRequest.of(0, 10));
+
+                assertEquals(1, events.getTotalElements());
+                assertEquals(reason, events.getContent().get(0).getReason());
+        }
+
 }
