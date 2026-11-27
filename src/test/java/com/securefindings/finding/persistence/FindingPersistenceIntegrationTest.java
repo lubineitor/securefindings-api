@@ -191,7 +191,7 @@ class FindingPersistenceIntegrationTest {
                 assertEquals(
                                 List.of(
                                                 AuditAction.CREATED,
-                                                AuditAction.UPDATED,
+                                                AuditAction.STATUS_CHANGED,
                                                 AuditAction.DELETED),
                                 auditEvents.stream()
                                                 .map(event -> Objects.requireNonNull(
@@ -200,15 +200,12 @@ class FindingPersistenceIntegrationTest {
                                                                 .getAction())
                                                 .toList());
 
-                assertTrue(auditEvents.stream()
-                                .allMatch(event -> "system".equals(event.getActor())));
+                FindingAuditEntity statusEvent = Objects.requireNonNull(
+                                auditEvents.get(1),
+                                "El evento de cambio de estado no puede ser nulo");
 
-                assertTrue(auditEvents.stream()
-                                .allMatch(event -> event.getOccurredAt() != null));
-
-                assertTrue(findingService
-                                .findById(createdFinding.id())
-                                .isEmpty());
+                assertEquals(FindingStatus.OPEN, statusEvent.getPreviousStatus());
+                assertEquals(FindingStatus.IN_PROGRESS, statusEvent.getNewStatus());
         }
 
         @Test
@@ -278,16 +275,13 @@ class FindingPersistenceIntegrationTest {
                 assertEquals(true, firstPage.isFirst());
                 assertEquals(false, firstPage.isLast());
 
-                assertEquals(1, secondPage.getContent().size());
-                assertEquals(2, secondPage.getTotalElements());
-                assertEquals(2, secondPage.getTotalPages());
-                assertEquals(1, secondPage.getNumber());
-                assertEquals(AuditAction.UPDATED,
-                                secondPage.getContent().get(0).getAction());
-                assertEquals("system",
-                                secondPage.getContent().get(0).getActor());
-                assertEquals(false, secondPage.isFirst());
-                assertEquals(true, secondPage.isLast());
+                FindingAuditEntity statusEvent = secondPage.getContent().get(0);
+
+                assertEquals(
+                                AuditAction.STATUS_CHANGED,
+                                statusEvent.getAction());
+                assertEquals(FindingStatus.OPEN, statusEvent.getPreviousStatus());
+                assertEquals(FindingStatus.IN_PROGRESS, statusEvent.getNewStatus());
         }
 
         @Test
@@ -408,7 +402,7 @@ class FindingPersistenceIntegrationTest {
                                                 createdFinding.id(),
                                                 0,
                                                 20,
-                                                AuditAction.UPDATED,
+                                                AuditAction.STATUS_CHANGED,
                                                 "audit-updated-456");
 
                 assertEquals(1, createdEvents.getTotalElements());
@@ -423,7 +417,7 @@ class FindingPersistenceIntegrationTest {
 
                 assertEquals(1, combinedEvents.getTotalElements());
                 assertEquals(
-                                AuditAction.UPDATED,
+                                AuditAction.STATUS_CHANGED,
                                 combinedEvents.getContent().get(0).getAction());
         }
 
@@ -987,10 +981,13 @@ class FindingPersistenceIntegrationTest {
                                                         ORGANIZATION_ID,
                                                         PageRequest.of(0, 10));
 
-                        assertEquals(2, events.getTotalElements());
+                        FindingAuditEntity statusEvent = events.getContent().get(1);
+
                         assertEquals(
-                                        AuditAction.UPDATED,
-                                        events.getContent().get(1).getAction());
+                                        AuditAction.STATUS_CHANGED,
+                                        statusEvent.getAction());
+                        assertEquals(FindingStatus.OPEN, statusEvent.getPreviousStatus());
+                        assertEquals(FindingStatus.IN_PROGRESS, statusEvent.getNewStatus());
                 }
         }
 

@@ -424,4 +424,41 @@ class FindingAuditControllerTest {
 
                 verifyNoInteractions(auditService);
         }
+
+        @Test
+        void deberiaDevolverLosEstadosDeUnaTransicionDeEstado()
+                        throws Exception {
+
+                UUID findingId = UUID.randomUUID();
+
+                FindingAuditEntity statusEvent = new FindingAuditEntity(
+                                UUID.randomUUID(),
+                                findingId,
+                                ORGANIZATION_ID,
+                                AuditAction.STATUS_CHANGED,
+                                "analista",
+                                Instant.parse("2026-11-27T10:00:00Z"),
+                                "status-request-1",
+                                com.securefindings.finding.domain.FindingStatus.OPEN,
+                                com.securefindings.finding.domain.FindingStatus.IN_PROGRESS);
+
+                Page<FindingAuditEntity> auditPage = new PageImpl<>(
+                                List.of(statusEvent),
+                                PageRequest.of(0, 20),
+                                1);
+
+                when(auditService.findPageByFindingId(findingId, 0, 20))
+                                .thenReturn(auditPage);
+
+                mockMvc.perform(get(
+                                "/api/v1/findings/{findingId}/audit",
+                                findingId))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.content[0].action")
+                                                .value("STATUS_CHANGED"))
+                                .andExpect(jsonPath("$.content[0].previousStatus")
+                                                .value("OPEN"))
+                                .andExpect(jsonPath("$.content[0].newStatus")
+                                                .value("IN_PROGRESS"));
+        }
 }

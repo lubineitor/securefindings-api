@@ -199,6 +199,12 @@ class FindingServiceTest {
                                 updatedFinding.status());
 
                 verify(findingRepository).save(any(FindingEntity.class));
+
+                verify(auditService).registerStatusChange(
+                                eq(finding.id()),
+                                eq(FindingStatus.OPEN),
+                                eq(FindingStatus.RESOLVED),
+                                eq("system"));
         }
 
         @Test

@@ -14,71 +14,91 @@ import com.securefindings.audit.persistence.FindingAuditEntity;
 
 class FindingAuditCsvExporterTest {
 
-    private static final UUID ORGANIZATION_ID = UUID.fromString(
-            "00000000-0000-0000-0000-000000000001");
+        private static final UUID ORGANIZATION_ID = UUID.fromString(
+                        "00000000-0000-0000-0000-000000000001");
 
-    private final FindingAuditCsvExporter exporter = new FindingAuditCsvExporter();
+        private final FindingAuditCsvExporter exporter = new FindingAuditCsvExporter();
 
-    @Test
-    void deberiaEscaparComasYComillasEnLosValores() {
-        FindingAuditEntity event = new FindingAuditEntity(
-                UUID.fromString("11111111-1111-1111-1111-111111111111"),
-                UUID.fromString("22222222-2222-2222-2222-222222222222"),
-                ORGANIZATION_ID,
-                AuditAction.UPDATED,
-                "usuario, \"externo\"",
-                Instant.parse("2026-10-10T08:00:00Z"),
-                "audit-request-123");
+        @Test
+        void deberiaEscaparComasYComillasEnLosValores() {
+                FindingAuditEntity event = new FindingAuditEntity(
+                                UUID.fromString("11111111-1111-1111-1111-111111111111"),
+                                UUID.fromString("22222222-2222-2222-2222-222222222222"),
+                                ORGANIZATION_ID,
+                                AuditAction.UPDATED,
+                                "usuario, \"externo\"",
+                                Instant.parse("2026-10-10T08:00:00Z"),
+                                "audit-request-123");
 
-        String csv = exporter.toCsv(List.of(event));
+                String csv = exporter.toCsv(List.of(event));
 
-        String expected = "\"id\",\"findingId\",\"action\",\"actor\",\"occurredAt\",\"requestId\"\r\n"
-                + "\"11111111-1111-1111-1111-111111111111\","
-                + "\"22222222-2222-2222-2222-222222222222\","
-                + "\"UPDATED\","
-                + "\"usuario, \"\"externo\"\"\","
-                + "\"2026-10-10T08:00:00Z\","
-                + "\"audit-request-123\"\r\n";
+                String expected = "\"id\",\"findingId\",\"action\",\"actor\",\"occurredAt\",\"requestId\",\"previousStatus\",\"newStatus\"\r\n"
+                                + "\"11111111-1111-1111-1111-111111111111\","
+                                + "\"22222222-2222-2222-2222-222222222222\","
+                                + "\"UPDATED\","
+                                + "\"usuario, \"\"externo\"\"\","
+                                + "\"2026-10-10T08:00:00Z\","
+                                + "\"audit-request-123\",\"\",\"\"\r\n";
 
-        assertEquals(expected, csv);
-    }
+                assertEquals(expected, csv);
+        }
 
-    @Test
-    void deberiaNeutralizarValoresQuePodrianEjecutarseComoFormulas() {
-        FindingAuditEntity event = new FindingAuditEntity(
-                UUID.randomUUID(),
-                UUID.randomUUID(),
-                ORGANIZATION_ID,
-                AuditAction.UPDATED,
-                "=1+1",
-                Instant.parse("2026-10-10T08:00:00Z"),
-                "audit-request-123");
+        @Test
+        void deberiaNeutralizarValoresQuePodrianEjecutarseComoFormulas() {
+                FindingAuditEntity event = new FindingAuditEntity(
+                                UUID.randomUUID(),
+                                UUID.randomUUID(),
+                                ORGANIZATION_ID,
+                                AuditAction.UPDATED,
+                                "=1+1",
+                                Instant.parse("2026-10-10T08:00:00Z"),
+                                "audit-request-123");
 
-        String csv = exporter.toCsv(List.of(event));
+                String csv = exporter.toCsv(List.of(event));
 
-        assertTrue(csv.contains("\"'=1+1\""));
-    }
+                assertTrue(csv.contains("\"'=1+1\""));
+        }
 
-    @Test
-    void deberiaDejarRequestIdVacioCuandoEsNulo() {
-        FindingAuditEntity event = new FindingAuditEntity(
-                UUID.randomUUID(),
-                UUID.randomUUID(),
-                ORGANIZATION_ID,
-                AuditAction.CREATED,
-                "analista",
-                Instant.parse("2026-10-10T08:00:00Z"),
-                null);
+        @Test
+        void deberiaDejarRequestIdVacioCuandoEsNulo() {
+                FindingAuditEntity event = new FindingAuditEntity(
+                                UUID.randomUUID(),
+                                UUID.randomUUID(),
+                                ORGANIZATION_ID,
+                                AuditAction.CREATED,
+                                "analista",
+                                Instant.parse("2026-10-10T08:00:00Z"),
+                                null);
 
-        String csv = exporter.toCsv(List.of(event));
+                String csv = exporter.toCsv(List.of(event));
 
-        assertTrue(csv.endsWith("\"\"\r\n"));
-    }
+                assertTrue(csv.endsWith("\"\"\r\n"));
+        }
 
-    @Test
-    void deberiaDevolverLaCabeceraCuandoNoHayEventos() {
-        assertEquals(
-                "\"id\",\"findingId\",\"action\",\"actor\",\"occurredAt\",\"requestId\"\r\n",
-                exporter.toCsv(List.of()));
-    }
+        @Test
+        void deberiaDevolverLaCabeceraCuandoNoHayEventos() {
+                assertEquals(
+                                "\"id\",\"findingId\",\"action\",\"actor\",\"occurredAt\",\"requestId\",\"previousStatus\",\"newStatus\"\r\n",
+                                exporter.toCsv(List.of()));
+        }
+
+        @Test
+        void deberiaExportarLosEstadosDeUnaTransicion() {
+                FindingAuditEntity event = new FindingAuditEntity(
+                                UUID.randomUUID(),
+                                UUID.randomUUID(),
+                                ORGANIZATION_ID,
+                                AuditAction.STATUS_CHANGED,
+                                "analista",
+                                Instant.parse("2026-11-27T10:00:00Z"),
+                                "status-request-1",
+                                com.securefindings.finding.domain.FindingStatus.OPEN,
+                                com.securefindings.finding.domain.FindingStatus.IN_PROGRESS);
+
+                String csv = exporter.toCsv(List.of(event));
+
+                assertTrue(csv.contains(
+                                "\"STATUS_CHANGED\",\"analista\",\"2026-11-27T10:00:00Z\","
+                                                + "\"status-request-1\",\"OPEN\",\"IN_PROGRESS\""));
+        }
 }

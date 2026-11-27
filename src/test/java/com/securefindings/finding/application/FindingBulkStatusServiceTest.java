@@ -26,7 +26,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 
 import com.securefindings.asset.persistence.AssetRepository;
 import com.securefindings.audit.application.AuditService;
-import com.securefindings.audit.domain.AuditAction;
 import com.securefindings.finding.domain.Finding;
 import com.securefindings.finding.domain.FindingSeverity;
 import com.securefindings.finding.domain.FindingStatus;
@@ -37,165 +36,168 @@ import com.securefindings.security.OrganizationContext;
 @ExtendWith(MockitoExtension.class)
 class FindingBulkStatusServiceTest {
 
-    private static final UUID ORGANIZATION_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        private static final UUID ORGANIZATION_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
-    private static final UUID FIRST_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
+        private static final UUID FIRST_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
 
-    private static final UUID SECOND_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
+        private static final UUID SECOND_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
 
-    private static final Instant CREATED_AT = Instant.parse("2026-11-01T10:00:00Z");
+        private static final Instant CREATED_AT = Instant.parse("2026-11-01T10:00:00Z");
 
-    @Mock
-    private FindingRepository findingRepository;
+        @Mock
+        private FindingRepository findingRepository;
 
-    @Mock
-    private AssetRepository assetRepository;
+        @Mock
+        private AssetRepository assetRepository;
 
-    @Mock
-    private AuditService auditService;
+        @Mock
+        private AuditService auditService;
 
-    @Mock
-    private OrganizationContext organizationContext;
+        @Mock
+        private OrganizationContext organizationContext;
 
-    private FindingService findingService;
+        private FindingService findingService;
 
-    @BeforeEach
-    void crearServicio() {
-        findingService = new FindingService(
-                findingRepository,
-                assetRepository,
-                auditService,
-                organizationContext);
-    }
-
-    @AfterEach
-    void limpiarContexto() {
-        SecurityContextHolder.clearContext();
-    }
-
-    @Test
-    void deberiaActualizarYAuditarTodosLosHallazgosEnElOrdenSolicitado() {
-        List<UUID> ids = List.of(FIRST_ID, SECOND_ID);
-
-        when(organizationContext.currentOrganizationId())
-                .thenReturn(ORGANIZATION_ID);
-
-        when(findingRepository.findAllByIdsAndOrganizationId(
-                ids,
-                ORGANIZATION_ID))
-                .thenReturn(List.of(
-                        findingEntity(SECOND_ID, FindingStatus.IN_PROGRESS),
-                        findingEntity(FIRST_ID, FindingStatus.OPEN)));
-
-        when(findingRepository.save(any(FindingEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
-
-        List<Finding> result = findingService.updateStatuses(
-                ids,
-                FindingStatus.RESOLVED);
-
-        List<UUID> resultIds = new ArrayList<>(result.size());
-        List<FindingStatus> resultStatuses = new ArrayList<>(result.size());
-
-        for (Finding finding : result) {
-            Finding checkedFinding = Objects.requireNonNull(
-                    finding,
-                    "El resultado contiene un hallazgo nulo");
-
-            resultIds.add(checkedFinding.id());
-            resultStatuses.add(checkedFinding.status());
+        @BeforeEach
+        void crearServicio() {
+                findingService = new FindingService(
+                                findingRepository,
+                                assetRepository,
+                                auditService,
+                                organizationContext);
         }
 
-        assertEquals(ids, resultIds);
-        assertEquals(
-                List.of(FindingStatus.RESOLVED, FindingStatus.RESOLVED),
-                resultStatuses);
+        @AfterEach
+        void limpiarContexto() {
+                SecurityContextHolder.clearContext();
+        }
 
-        verify(findingRepository, org.mockito.Mockito.times(2))
-                .save(any(FindingEntity.class));
-        verify(auditService).register(
-                eq(FIRST_ID),
-                eq(AuditAction.UPDATED),
-                anyString());
-        verify(auditService).register(
-                eq(SECOND_ID),
-                eq(AuditAction.UPDATED),
-                anyString());
-    }
+        @Test
+        void deberiaActualizarYAuditarTodosLosHallazgosEnElOrdenSolicitado() {
+                List<UUID> ids = List.of(FIRST_ID, SECOND_ID);
 
-    @Test
-    void noDeberiaConsultarElRepositorioSiHayIdsDuplicados() {
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> findingService.updateStatuses(
-                        List.of(FIRST_ID, FIRST_ID),
-                        FindingStatus.IN_PROGRESS));
+                when(organizationContext.currentOrganizationId())
+                                .thenReturn(ORGANIZATION_ID);
 
-        verifyNoInteractions(
-                organizationContext,
-                findingRepository,
-                auditService);
-    }
+                when(findingRepository.findAllByIdsAndOrganizationId(
+                                ids,
+                                ORGANIZATION_ID))
+                                .thenReturn(List.of(
+                                                findingEntity(SECOND_ID, FindingStatus.IN_PROGRESS),
+                                                findingEntity(FIRST_ID, FindingStatus.OPEN)));
 
-    @Test
-    void noDeberiaActualizarSiFaltaUnHallazgoDeLaOrganizacion() {
-        List<UUID> ids = List.of(FIRST_ID, SECOND_ID);
+                when(findingRepository.save(any(FindingEntity.class)))
+                                .thenAnswer(invocation -> invocation.getArgument(0));
 
-        when(organizationContext.currentOrganizationId())
-                .thenReturn(ORGANIZATION_ID);
+                List<Finding> result = findingService.updateStatuses(
+                                ids,
+                                FindingStatus.RESOLVED);
 
-        when(findingRepository.findAllByIdsAndOrganizationId(
-                ids,
-                ORGANIZATION_ID))
-                .thenReturn(List.of(
-                        findingEntity(FIRST_ID, FindingStatus.OPEN)));
+                List<UUID> resultIds = new ArrayList<>(result.size());
+                List<FindingStatus> resultStatuses = new ArrayList<>(result.size());
 
-        assertThrows(
-                FindingNotFoundException.class,
-                () -> findingService.updateStatuses(
-                        ids,
-                        FindingStatus.IN_PROGRESS));
+                for (Finding finding : result) {
+                        Finding checkedFinding = Objects.requireNonNull(
+                                        finding,
+                                        "El resultado contiene un hallazgo nulo");
 
-        verify(findingRepository, never()).save(any(FindingEntity.class));
-        verifyNoInteractions(auditService);
-    }
+                        resultIds.add(checkedFinding.id());
+                        resultStatuses.add(checkedFinding.status());
+                }
 
-    @Test
-    void noDeberiaActualizarNingunHallazgoSiUnaTransicionNoEsValida() {
-        List<UUID> ids = List.of(FIRST_ID, SECOND_ID);
+                assertEquals(ids, resultIds);
+                assertEquals(
+                                List.of(FindingStatus.RESOLVED, FindingStatus.RESOLVED),
+                                resultStatuses);
 
-        when(organizationContext.currentOrganizationId())
-                .thenReturn(ORGANIZATION_ID);
+                verify(findingRepository, org.mockito.Mockito.times(2))
+                                .save(any(FindingEntity.class));
+                verify(auditService).registerStatusChange(
+                                eq(FIRST_ID),
+                                eq(FindingStatus.OPEN),
+                                eq(FindingStatus.RESOLVED),
+                                anyString());
 
-        when(findingRepository.findAllByIdsAndOrganizationId(
-                ids,
-                ORGANIZATION_ID))
-                .thenReturn(List.of(
-                        findingEntity(FIRST_ID, FindingStatus.OPEN),
-                        findingEntity(SECOND_ID, FindingStatus.RESOLVED)));
+                verify(auditService).registerStatusChange(
+                                eq(SECOND_ID),
+                                eq(FindingStatus.IN_PROGRESS),
+                                eq(FindingStatus.RESOLVED),
+                                anyString());
+        }
 
-        assertThrows(
-                FindingStatusTransitionException.class,
-                () -> findingService.updateStatuses(
-                        ids,
-                        FindingStatus.FALSE_POSITIVE));
+        @Test
+        void noDeberiaConsultarElRepositorioSiHayIdsDuplicados() {
+                assertThrows(
+                                IllegalArgumentException.class,
+                                () -> findingService.updateStatuses(
+                                                List.of(FIRST_ID, FIRST_ID),
+                                                FindingStatus.IN_PROGRESS));
 
-        verify(findingRepository, never()).save(any(FindingEntity.class));
-        verifyNoInteractions(auditService);
-    }
+                verifyNoInteractions(
+                                organizationContext,
+                                findingRepository,
+                                auditService);
+        }
 
-    private FindingEntity findingEntity(UUID id, FindingStatus status) {
-        Finding finding = new Finding(
-                id,
-                "Hallazgo " + id,
-                "Descripción del hallazgo",
-                FindingSeverity.HIGH,
-                status,
-                CREATED_AT,
-                CREATED_AT,
-                null,
-                null);
+        @Test
+        void noDeberiaActualizarSiFaltaUnHallazgoDeLaOrganizacion() {
+                List<UUID> ids = List.of(FIRST_ID, SECOND_ID);
 
-        return new FindingEntity(finding, ORGANIZATION_ID);
-    }
+                when(organizationContext.currentOrganizationId())
+                                .thenReturn(ORGANIZATION_ID);
+
+                when(findingRepository.findAllByIdsAndOrganizationId(
+                                ids,
+                                ORGANIZATION_ID))
+                                .thenReturn(List.of(
+                                                findingEntity(FIRST_ID, FindingStatus.OPEN)));
+
+                assertThrows(
+                                FindingNotFoundException.class,
+                                () -> findingService.updateStatuses(
+                                                ids,
+                                                FindingStatus.IN_PROGRESS));
+
+                verify(findingRepository, never()).save(any(FindingEntity.class));
+                verifyNoInteractions(auditService);
+        }
+
+        @Test
+        void noDeberiaActualizarNingunHallazgoSiUnaTransicionNoEsValida() {
+                List<UUID> ids = List.of(FIRST_ID, SECOND_ID);
+
+                when(organizationContext.currentOrganizationId())
+                                .thenReturn(ORGANIZATION_ID);
+
+                when(findingRepository.findAllByIdsAndOrganizationId(
+                                ids,
+                                ORGANIZATION_ID))
+                                .thenReturn(List.of(
+                                                findingEntity(FIRST_ID, FindingStatus.OPEN),
+                                                findingEntity(SECOND_ID, FindingStatus.RESOLVED)));
+
+                assertThrows(
+                                FindingStatusTransitionException.class,
+                                () -> findingService.updateStatuses(
+                                                ids,
+                                                FindingStatus.FALSE_POSITIVE));
+
+                verify(findingRepository, never()).save(any(FindingEntity.class));
+                verifyNoInteractions(auditService);
+        }
+
+        private FindingEntity findingEntity(UUID id, FindingStatus status) {
+                Finding finding = new Finding(
+                                id,
+                                "Hallazgo " + id,
+                                "Descripción del hallazgo",
+                                FindingSeverity.HIGH,
+                                status,
+                                CREATED_AT,
+                                CREATED_AT,
+                                null,
+                                null);
+
+                return new FindingEntity(finding, ORGANIZATION_ID);
+        }
 }
