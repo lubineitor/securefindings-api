@@ -7,6 +7,7 @@ import java.util.UUID;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.securefindings.audit.domain.AuditAction;
 import com.securefindings.audit.domain.AuditEvent;
+import com.securefindings.finding.domain.FindingStatus;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -41,13 +42,18 @@ public class FindingAuditEntity {
     @Column(name = "request_id", length = 64, updatable = false)
     private String requestId;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "previous_status", length = 20, updatable = false)
+    private FindingStatus previousStatus;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "new_status", length = 20, updatable = false)
+    private FindingStatus newStatus;
+
     protected FindingAuditEntity() {
     }
 
-    public FindingAuditEntity(
-            UUID id,
-            AuditEvent event) {
-
+    public FindingAuditEntity(UUID id, AuditEvent event) {
         this(
                 id,
                 event.findingId(),
@@ -55,7 +61,30 @@ public class FindingAuditEntity {
                 event.action(),
                 event.actor(),
                 event.occurredAt(),
-                event.requestId());
+                event.requestId(),
+                event.previousStatus(),
+                event.newStatus());
+    }
+
+    public FindingAuditEntity(
+            UUID id,
+            UUID findingId,
+            UUID organizationId,
+            AuditAction action,
+            String actor,
+            Instant occurredAt,
+            String requestId,
+            FindingStatus previousStatus,
+            FindingStatus newStatus) {
+        this.id = Objects.requireNonNull(id);
+        this.findingId = Objects.requireNonNull(findingId);
+        this.organizationId = Objects.requireNonNull(organizationId);
+        this.action = Objects.requireNonNull(action);
+        this.actor = Objects.requireNonNull(actor);
+        this.occurredAt = Objects.requireNonNull(occurredAt);
+        this.requestId = requestId;
+        this.previousStatus = previousStatus;
+        this.newStatus = newStatus;
     }
 
     public FindingAuditEntity(
@@ -66,14 +95,16 @@ public class FindingAuditEntity {
             String actor,
             Instant occurredAt,
             String requestId) {
-
-        this.id = Objects.requireNonNull(id);
-        this.findingId = Objects.requireNonNull(findingId);
-        this.organizationId = Objects.requireNonNull(organizationId);
-        this.action = Objects.requireNonNull(action);
-        this.actor = Objects.requireNonNull(actor);
-        this.occurredAt = Objects.requireNonNull(occurredAt);
-        this.requestId = requestId;
+        this(
+                id,
+                findingId,
+                organizationId,
+                action,
+                actor,
+                occurredAt,
+                requestId,
+                null,
+                null);
     }
 
     public FindingAuditEntity(
@@ -83,7 +114,6 @@ public class FindingAuditEntity {
             AuditAction action,
             String actor,
             Instant occurredAt) {
-
         this(
                 id,
                 findingId,
@@ -91,6 +121,8 @@ public class FindingAuditEntity {
                 action,
                 actor,
                 occurredAt,
+                null,
+                null,
                 null);
     }
 
@@ -121,5 +153,13 @@ public class FindingAuditEntity {
 
     public String getRequestId() {
         return requestId;
+    }
+
+    public FindingStatus getPreviousStatus() {
+        return previousStatus;
+    }
+
+    public FindingStatus getNewStatus() {
+        return newStatus;
     }
 }
