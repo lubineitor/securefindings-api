@@ -7,6 +7,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.securefindings.audit.domain.AuditAction;
 import com.securefindings.audit.persistence.FindingAuditEntity;
+import com.securefindings.finding.domain.FindingStatus;
 
 public record FindingAuditResponse(
         @JsonProperty("id") UUID id,
@@ -19,17 +20,21 @@ public record FindingAuditResponse(
 
         @JsonProperty("occurredAt") Instant occurredAt,
 
-        @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("requestId") String requestId) {
+        @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("requestId") String requestId,
 
-    public static FindingAuditResponse from(
-            FindingAuditEntity entity) {
+        @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("previousStatus") FindingStatus previousStatus,
 
+        @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("newStatus") FindingStatus newStatus) {
+
+    public static FindingAuditResponse from(FindingAuditEntity entity) {
         return new FindingAuditResponse(
                 entity.getId(),
                 entity.getFindingId(),
                 entity.getAction(),
                 entity.getActor(),
                 entity.getOccurredAt(),
-                entity.getRequestId());
+                entity.getRequestId(),
+                entity.getPreviousStatus(),
+                entity.getNewStatus());
     }
 }

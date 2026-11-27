@@ -18,6 +18,7 @@ import com.securefindings.audit.domain.AuditEvent;
 import com.securefindings.audit.persistence.FindingAuditEntity;
 import com.securefindings.audit.persistence.FindingAuditRepository;
 import com.securefindings.finding.application.FindingNotFoundException;
+import com.securefindings.finding.domain.FindingStatus;
 import com.securefindings.finding.persistence.FindingRepository;
 import com.securefindings.security.OrganizationContext;
 import com.securefindings.security.RequestCorrelationFilter;
@@ -414,5 +415,34 @@ public class AuditService {
                                 occurredFrom,
                                 occurredTo,
                                 pageable);
+        }
+
+        @Transactional
+        public void registerStatusChange(
+                        UUID findingId,
+                        FindingStatus previousStatus,
+                        FindingStatus newStatus,
+                        String actor) {
+
+                UUID organizationId = organizationContext.currentOrganizationId();
+
+                ensureFindingCanBeAudited(
+                                findingId,
+                                organizationId,
+                                AuditAction.STATUS_CHANGED);
+
+                AuditEvent event = new AuditEvent(
+                                findingId,
+                                organizationId,
+                                AuditAction.STATUS_CHANGED,
+                                actor,
+                                Instant.now(),
+                                RequestCorrelationFilter.currentRequestId(),
+                                previousStatus,
+                                newStatus);
+
+                auditRepository.save(new FindingAuditEntity(
+                                UUID.randomUUID(),
+                                event));
         }
 }

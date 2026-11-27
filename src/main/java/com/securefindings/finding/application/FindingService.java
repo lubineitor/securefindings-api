@@ -528,10 +528,20 @@ public class FindingService {
                 Finding updatedFinding = currentFinding.withStatus(status);
                 Finding savedFinding = save(updatedFinding, organizationId);
 
-                auditService.register(
-                                savedFinding.id(),
-                                AuditAction.UPDATED,
-                                currentActor());
+                String actor = currentActor();
+
+                if (currentFinding.status() == status) {
+                        auditService.register(
+                                        savedFinding.id(),
+                                        AuditAction.UPDATED,
+                                        actor);
+                } else {
+                        auditService.registerStatusChange(
+                                        savedFinding.id(),
+                                        currentFinding.status(),
+                                        status,
+                                        actor);
+                }
 
                 return savedFinding;
         }
@@ -896,15 +906,22 @@ public class FindingService {
                 List<Finding> updatedFindings = new ArrayList<>();
 
                 for (UUID id : orderedIds) {
-                        Finding updatedFinding = currentFindings.get(id)
-                                        .withStatus(targetStatus);
-
+                        Finding currentFinding = currentFindings.get(id);
+                        Finding updatedFinding = currentFinding.withStatus(targetStatus);
                         Finding savedFinding = save(updatedFinding, organizationId);
 
-                        auditService.register(
-                                        savedFinding.id(),
-                                        AuditAction.UPDATED,
-                                        actor);
+                        if (currentFinding.status() == targetStatus) {
+                                auditService.register(
+                                                savedFinding.id(),
+                                                AuditAction.UPDATED,
+                                                actor);
+                        } else {
+                                auditService.registerStatusChange(
+                                                savedFinding.id(),
+                                                currentFinding.status(),
+                                                targetStatus,
+                                                actor);
+                        }
 
                         updatedFindings.add(savedFinding);
                 }
