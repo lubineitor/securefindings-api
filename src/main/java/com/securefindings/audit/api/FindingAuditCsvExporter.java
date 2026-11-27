@@ -17,7 +17,8 @@ public class FindingAuditCsvExporter {
             "occurredAt",
             "requestId",
             "previousStatus",
-            "newStatus");
+            "newStatus",
+            "reason");
 
     public String toCsv(List<FindingAuditEntity> events) {
         StringBuilder csv = new StringBuilder();
@@ -36,7 +37,8 @@ public class FindingAuditCsvExporter {
                             : event.getPreviousStatus().name(),
                     event.getNewStatus() == null
                             ? ""
-                            : event.getNewStatus().name()));
+                            : event.getNewStatus().name(),
+                    event.getReason() == null ? "" : event.getReason()));
         }
 
         return csv.toString();
