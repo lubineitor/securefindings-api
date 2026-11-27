@@ -15,7 +15,11 @@ public record AuditEvent(
                 Instant occurredAt,
                 String requestId,
                 FindingStatus previousStatus,
-                FindingStatus newStatus) {
+                FindingStatus newStatus,
+                String reason) {
+
+        private static final int MIN_REASON_CODE_POINTS = 10;
+        private static final int MAX_REASON_CODE_POINTS = 500;
 
         private static final Pattern VALID_REQUEST_ID = Pattern.compile(
                         "[A-Za-z0-9][A-Za-z0-9._-]{0,63}");
@@ -37,6 +41,17 @@ public record AuditEvent(
                                 occurredAt,
                                 "La fecha del evento no puede ser nula");
 
+                reason = normalizeReason(reason);
+
+                if (reason != null) {
+                        int reasonLength = reason.codePointCount(0, reason.length());
+                        if (reasonLength < MIN_REASON_CODE_POINTS
+                                        || reasonLength > MAX_REASON_CODE_POINTS) {
+                                throw new IllegalArgumentException(
+                                                "El motivo debe tener entre 10 y 500 caracteres");
+                        }
+                }
+
                 if (requestId != null
                                 && !VALID_REQUEST_ID.matcher(requestId).matches()) {
                         throw new IllegalArgumentException(
@@ -56,10 +71,33 @@ public record AuditEvent(
                                 throw new IllegalArgumentException(
                                                 "La transición de estado no es válida");
                         }
-                } else if (previousStatus != null || newStatus != null) {
+                } else if (previousStatus != null
+                                || newStatus != null
+                                || reason != null) {
                         throw new IllegalArgumentException(
-                                        "Solo una transición de estado puede incluir estados");
+                                        "Solo una transición de estado puede incluir estados y motivo");
                 }
+        }
+
+        public AuditEvent(
+                        UUID findingId,
+                        UUID organizationId,
+                        AuditAction action,
+                        String actor,
+                        Instant occurredAt,
+                        String requestId,
+                        FindingStatus previousStatus,
+                        FindingStatus newStatus) {
+                this(
+                                findingId,
+                                organizationId,
+                                action,
+                                actor,
+                                occurredAt,
+                                requestId,
+                                previousStatus,
+                                newStatus,
+                                null);
         }
 
         public AuditEvent(
@@ -77,6 +115,16 @@ public record AuditEvent(
                                 occurredAt,
                                 requestId,
                                 null,
+                                null,
                                 null);
+        }
+
+        private static String normalizeReason(String reason) {
+                if (reason == null) {
+                        return null;
+                }
+
+                String normalized = reason.strip();
+                return normalized.isEmpty() ? null : normalized;
         }
 }

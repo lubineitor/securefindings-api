@@ -50,6 +50,9 @@ public class FindingAuditEntity {
     @Column(name = "new_status", length = 20, updatable = false)
     private FindingStatus newStatus;
 
+    @Column(name = "reason", length = 500, updatable = false)
+    private String reason;
+
     protected FindingAuditEntity() {
     }
 
@@ -63,7 +66,31 @@ public class FindingAuditEntity {
                 event.occurredAt(),
                 event.requestId(),
                 event.previousStatus(),
-                event.newStatus());
+                event.newStatus(),
+                event.reason());
+    }
+
+    public FindingAuditEntity(
+            UUID id,
+            UUID findingId,
+            UUID organizationId,
+            AuditAction action,
+            String actor,
+            Instant occurredAt,
+            String requestId,
+            FindingStatus previousStatus,
+            FindingStatus newStatus,
+            String reason) {
+        this.id = Objects.requireNonNull(id);
+        this.findingId = Objects.requireNonNull(findingId);
+        this.organizationId = Objects.requireNonNull(organizationId);
+        this.action = Objects.requireNonNull(action);
+        this.actor = Objects.requireNonNull(actor);
+        this.occurredAt = Objects.requireNonNull(occurredAt);
+        this.requestId = requestId;
+        this.previousStatus = previousStatus;
+        this.newStatus = newStatus;
+        this.reason = reason;
     }
 
     public FindingAuditEntity(
@@ -76,15 +103,17 @@ public class FindingAuditEntity {
             String requestId,
             FindingStatus previousStatus,
             FindingStatus newStatus) {
-        this.id = Objects.requireNonNull(id);
-        this.findingId = Objects.requireNonNull(findingId);
-        this.organizationId = Objects.requireNonNull(organizationId);
-        this.action = Objects.requireNonNull(action);
-        this.actor = Objects.requireNonNull(actor);
-        this.occurredAt = Objects.requireNonNull(occurredAt);
-        this.requestId = requestId;
-        this.previousStatus = previousStatus;
-        this.newStatus = newStatus;
+        this(
+                id,
+                findingId,
+                organizationId,
+                action,
+                actor,
+                occurredAt,
+                requestId,
+                previousStatus,
+                newStatus,
+                null);
     }
 
     public FindingAuditEntity(
@@ -104,6 +133,7 @@ public class FindingAuditEntity {
                 occurredAt,
                 requestId,
                 null,
+                null,
                 null);
     }
 
@@ -121,6 +151,7 @@ public class FindingAuditEntity {
                 action,
                 actor,
                 occurredAt,
+                null,
                 null,
                 null,
                 null);
@@ -161,5 +192,9 @@ public class FindingAuditEntity {
 
     public FindingStatus getNewStatus() {
         return newStatus;
+    }
+
+    public String getReason() {
+        return reason;
     }
 }
