@@ -296,7 +296,7 @@ public class FindingController {
         }
 
         @PatchMapping("/{id}/status")
-        @Operation(summary = "Actualizar el estado", description = "Cambia el estado de un hallazgo y registra la operación en auditoría")
+        @Operation(summary = "Actualizar el estado", description = "Cambia el estado de un hallazgo y registra en auditoría el motivo opcional (entre 10 y 500 caracteres)")
         @ApiResponses({
                         @ApiResponse(responseCode = "200", description = "Estado actualizado correctamente", content = @Content(mediaType = "application/json", schema = @Schema(implementation = Finding.class))),
                         @ApiResponse(responseCode = "400", description = "El estado enviado no es válido"),
@@ -316,9 +316,14 @@ public class FindingController {
 
                         @Valid @RequestBody UpdateFindingStatusRequest request) {
 
+                if (request.reason() == null) {
+                        return findingService.updateStatus(id, request.status());
+                }
+
                 return findingService.updateStatus(
                                 id,
-                                request.status());
+                                request.status(),
+                                request.reason());
         }
 
         @PatchMapping("/{id}/asset")

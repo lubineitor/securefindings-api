@@ -514,6 +514,14 @@ public class FindingService {
         public Finding updateStatus(
                         UUID id,
                         FindingStatus status) {
+                return updateStatus(id, status, null);
+        }
+
+        @Transactional
+        public Finding updateStatus(
+                        UUID id,
+                        FindingStatus status,
+                        String reason) {
 
                 UUID organizationId = organizationContext.currentOrganizationId();
                 Finding currentFinding = getById(id);
@@ -535,12 +543,19 @@ public class FindingService {
                                         savedFinding.id(),
                                         AuditAction.UPDATED,
                                         actor);
-                } else {
+                } else if (reason == null) {
                         auditService.registerStatusChange(
                                         savedFinding.id(),
                                         currentFinding.status(),
                                         status,
                                         actor);
+                } else {
+                        auditService.registerStatusChange(
+                                        savedFinding.id(),
+                                        currentFinding.status(),
+                                        status,
+                                        actor,
+                                        reason);
                 }
 
                 return savedFinding;
@@ -840,6 +855,14 @@ public class FindingService {
         public List<Finding> updateStatuses(
                         List<UUID> findingIds,
                         FindingStatus targetStatus) {
+                return updateStatuses(findingIds, targetStatus, null);
+        }
+
+        @Transactional
+        public List<Finding> updateStatuses(
+                        List<UUID> findingIds,
+                        FindingStatus targetStatus,
+                        String reason) {
 
                 if (findingIds == null || findingIds.isEmpty()) {
                         throw new IllegalArgumentException(
@@ -915,12 +938,19 @@ public class FindingService {
                                                 savedFinding.id(),
                                                 AuditAction.UPDATED,
                                                 actor);
-                        } else {
+                        } else if (reason == null) {
                                 auditService.registerStatusChange(
                                                 savedFinding.id(),
                                                 currentFinding.status(),
                                                 targetStatus,
                                                 actor);
+                        } else {
+                                auditService.registerStatusChange(
+                                                savedFinding.id(),
+                                                currentFinding.status(),
+                                                targetStatus,
+                                                actor,
+                                                reason);
                         }
 
                         updatedFindings.add(savedFinding);

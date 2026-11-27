@@ -423,6 +423,21 @@ public class AuditService {
                         FindingStatus previousStatus,
                         FindingStatus newStatus,
                         String actor) {
+                registerStatusChange(
+                                findingId,
+                                previousStatus,
+                                newStatus,
+                                actor,
+                                null);
+        }
+
+        @Transactional
+        public void registerStatusChange(
+                        UUID findingId,
+                        FindingStatus previousStatus,
+                        FindingStatus newStatus,
+                        String actor,
+                        String reason) {
 
                 UUID organizationId = organizationContext.currentOrganizationId();
 
@@ -439,7 +454,8 @@ public class AuditService {
                                 Instant.now(),
                                 RequestCorrelationFilter.currentRequestId(),
                                 previousStatus,
-                                newStatus);
+                                newStatus,
+                                reason);
 
                 auditRepository.save(new FindingAuditEntity(
                                 UUID.randomUUID(),
