@@ -198,6 +198,7 @@ Las operaciones importantes generan eventos de auditoría:
 
 - `CREATED`
 - `UPDATED`
+- `STATUS_CHANGED`
 - `DELETED`
 - `COMMENTED`
 
@@ -209,6 +210,7 @@ Cada evento registra:
 - Fecha y hora de la operación.
 - Organización asociada.
 - Identificador de la petición HTTP (`requestId`), cuando existe.
+- Estado anterior y estado nuevo cuando la acción es `STATUS_CHANGED`.
 
 El usuario se obtiene del claim `preferred_username` del token JWT. En operaciones técnicas o pruebas sin autenticación se utiliza el actor `system`.
 
@@ -234,7 +236,8 @@ GET /api/v1/organizations/current/audit/export
 
 Acepta los filtros `action`, `requestId`, `actor`, `occurredFrom` y
 `occurredTo`. El archivo UTF-8 `securefindings-finding-audit.csv` incluye las
-columnas `id`, `findingId`, `action`, `actor`, `occurredAt` y `requestId`.
+columnas `id`, `findingId`, `action`, `actor`, `occurredAt`, `requestId`,
+`previousStatus` y `newStatus`.
 Las celdas se escapan y neutralizan para evitar fórmulas en hojas de cálculo.
 La respuesta incluye `Cache-Control: no-store`.
 
@@ -261,6 +264,7 @@ Los valores permitidos para `action` son:
 ```text
 CREATED
 UPDATED
+STATUS_CHANGED
 DELETED
 COMMENTED
 ```
@@ -1007,6 +1011,10 @@ La respuesta paginada contiene:
 `PATCH /api/v1/findings/status/bulk` permite actualizar entre 1 y 100 hallazgos
 de la organización actual. El lote se procesa de forma atómica: si falta un
 hallazgo o alguna transición no está permitida, no se actualiza ninguno.
+
+Cada transición genera un evento `STATUS_CHANGED` con `previousStatus` y
+`newStatus`. Si el hallazgo ya tiene el estado solicitado, se conserva el evento
+`UPDATED` sin esos campos.
 
 ```json
 {
